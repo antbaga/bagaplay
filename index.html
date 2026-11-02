@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"><meta name="theme-color" content="#f8f4eb"><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icon-180.png"><link rel="icon" href="icon-192.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="apple-mobile-web-app-title" content="BagaPlay"><meta name="format-detection" content="telephone=no"><script src="i18n.js"></script><script src="pwa.js"></script><title>BagaPlay · Une petite pause, un grand sourire.</title><link rel="stylesheet" href="style.css"></head><body>
+<main id="home">
+  <header class="brand"><div class="brand-mark" aria-hidden="true"><i></i><b></b><span>✦</span></div><div>Baga<span>Play</span><small>LE PETIT ATELIER DU JEU</small></div><button id="settings" class="icon-btn" aria-label="Réglages" title="Réglages">⚙︎</button></header><button id="wallet" aria-label="Mes pièces et mes scores"></button>
+  
+  <section class="collection"><div class="section-title"><h2>À toi de jouer</h2><span id="game-count">10 petits bonheurs</span></div><nav class="filters" aria-label="Catégories"><button class="active" data-filter="all">Tous les jeux <span>13</span></button><button data-filter="duel">À deux</button><button data-filter="puzzle">Réflexion</button><button data-filter="arcade">Arcade</button></nav><div id="cards" class="cards"></div></section>
+  <footer><div class="footer-flower">✳</div><p>app créé par Kiara</p><small id="footer-version">BagaPlay · Sans pub, sans compte.</small></footer>
+</main>
+<main id="play" hidden><header class="play-header"><button id="back" class="icon-btn" aria-label="Retour à l’accueil">‹</button><div><small id="game-category"></small><h1 id="game-title"></h1></div><button id="restart" class="icon-btn" aria-label="Recommencer">↻</button><button id="pause" class="icon-btn" aria-label="Mettre en pause">Ⅱ</button></header><div class="scorebar"><div><small id="score-label">SCORE</small><strong id="score">0</strong></div><span id="run-coins" aria-label="Pièces récoltées">● 0</span><div><small id="best-label">RECORD</small><strong id="best">0</strong></div></div><p id="hint" class="hint"></p><section id="board" aria-label="Plateau de jeu"></section><div id="controls"></div></main>
+<main id="lobby" hidden><header class="play-header"><button id="lobby-back" class="icon-btn" aria-label="Retour à l’accueil">‹</button><div><h1 id="lobby-title"></h1></div></header>
+  <section id="lobby-on">
+    <div class="player-search" id="lobby-search"></div>
+    <p id="lobby-status" class="lobby-status" role="status"></p>
+    <div class="section-title"><h2>Mes parties</h2><button id="lobby-refresh" class="text-btn" aria-label="Actualiser">↻</button></div>
+    <div id="lobby-matches" class="score-list"></div>
+  </section>
+  <div id="lobby-off" class="muted-note">Le jeu en ligne n’est pas activé dans cette version.</div>
+  <button id="lobby-local" class="text-btn lobby-local">Jouer à deux sur ce téléphone</button>
+  <p id="lobby-rules" class="lobby-rules"></p>
+</main>
+<main id="scores" hidden><header class="play-header"><button id="scores-back" class="icon-btn" aria-label="Retour à l’accueil">‹</button><div><h1>Mes scores</h1></div></header>
+  <section class="scores-hero"><div id="scores-panda"></div><strong id="scores-coins">0</strong><small>PIÈCES</small></section>
+  <section class="pseudo"><label for="pseudo">Ton pseudo</label><div class="pseudo-row"><input id="pseudo" maxlength="16" autocomplete="off" autocapitalize="words" spellcheck="false" placeholder="Choisis un nom"><button id="pseudo-save" class="primary">OK</button></div><small id="online-status"></small></section>
+  <section class="score-section" id="scores-find"><div class="section-title"><h2>Joueurs</h2></div><div class="player-search" id="scores-search"></div></section>
+  <section id="profile" class="profile-card" hidden></section>
+  <section class="score-section"><div class="section-title"><h2>Mes records</h2></div><div id="score-list" class="score-list"></div></section>
+  <section id="ranking" class="score-section" hidden><div class="section-title"><h2>Classement</h2><select id="ranking-board" aria-label="Classement à afficher"></select></div><ol id="ranking-list" class="ranking-list"></ol></section>
+</main>
+<div id="overlay" class="overlay" hidden><section class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><div id="dialog-symbol">✦</div><h2 id="dialog-title"></h2><p id="dialog-text"></p><button id="dialog-primary" class="primary"></button><button id="dialog-secondary" class="text-btn"></button></section></div>
+<script type="module" src="app.js"></script></body></html>

@@ -1,0 +1,17 @@
+{
+  "name": "BagaPlay",
+  "short_name": "BagaPlay",
+  "description": "Petits jeux, échecs et dames à deux.",
+  "lang": "fr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f8f4eb",
+  "theme_color": "#f8f4eb",
+  "icons": [
+    {"src": "icon-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
+}
