@@ -26,3 +26,7 @@ export function makeSlide(){const b=Array.from({length:16},(_,i)=>(i+1)%16);let 
 export function sudokuCandidates(b,i){const seen=new Set();const r=Math.floor(i/9),c=i%9;for(let k=0;k<9;k++){seen.add(b[r*9+k]);seen.add(b[k*9+c]);seen.add(b[(Math.floor(r/3)*3+Math.floor(k/3))*9+Math.floor(c/3)*3+k%3])}return [1,2,3,4,5,6,7,8,9].filter(v=>!seen.has(v))}
 export function countSudoku(b,limit=2){let ix=-1,opts=[];for(let i=0;i<81;i++)if(!b[i]){const choices=sudokuCandidates(b,i);if(!choices.length)return 0;if(ix<0||choices.length<opts.length){ix=i;opts=choices;if(opts.length===1)break}}if(ix<0)return 1;let count=0;for(const v of opts){b[ix]=v;count+=countSudoku(b,limit-count);b[ix]=0;if(count>=limit)break}return count}
 export function makeSudoku(removals=42){const digits=shuffle([1,2,3,4,5,6,7,8,9]);const rows=shuffle([0,1,2]).flatMap(g=>shuffle([0,1,2]).map(r=>g*3+r));const cols=shuffle([0,1,2]).flatMap(g=>shuffle([0,1,2]).map(c=>g*3+c));const solution=rows.flatMap(r=>cols.map(c=>digits[(r*3+Math.floor(r/3)+c)%9]));const board=[...solution];let removed=0;for(const i of shuffle(Array.from({length:81},(_,i)=>i))){const v=board[i];board[i]=0;if(countSudoku([...board])!==1)board[i]=v;else removed++;if(removed>=removals)break}return {board,solution}}
+
+// Durée lisible : 45 s, 1 min 50 s, 2 min, 1 h 05 min.
+export function formatDuration(total){const s=Math.max(0,Math.round(total));if(s<60)return s+' s';const h=Math.floor(s/3600),m=Math.floor(s%3600/60),r=s%60;
+ if(h)return h+' h '+String(m).padStart(2,'0')+' min';return m+' min'+(r?' '+r+' s':'')}

@@ -101,3 +101,25 @@ body:has(.install-banner) footer{padding-bottom:120px}
 #settings{font-size:22px;margin-left:auto}
 .pseudo input:disabled{background:#f4f1e6;color:var(--ink);border-color:transparent;font-weight:700;opacity:1;-webkit-text-fill-color:var(--ink)}
 .pseudo .primary.edit{background:#fffaf2;color:#536e57;border:1px solid var(--line);font-size:18px}
+
+/* 1.5 — Sudoku : sélection, chiffres identiques, pavé avec restants, outils en icônes */
+#board .grid.sudoku{container-type:inline-size}
+.sudoku .cell{font-size:6.2cqw;position:relative;transition:background .12s}
+.sudoku .cell.peer{background:#f3eedb}
+.sudoku .cell.same{background:#e9d996;color:#4f6250;font-weight:800}
+.sudoku .cell.selected{background:#fbe9a9;box-shadow:inset 0 0 0 3px #c79b2e;z-index:1}
+.sudoku .cell.error{color:#b84850;background:#f6d8d2}.sudoku .cell.error.selected{box-shadow:inset 0 0 0 3px #b84850}
+.sudoku .notes{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);width:100%;height:100%;font-size:2.6cqw;font-weight:600;color:#7d877d;line-height:1}
+.sudoku .notes span{display:grid;place-items:center}.sudoku .notes span.hl{background:#e9d996;color:#4f6250;border-radius:3px;font-weight:800}
+#play #controls:has(.number){grid-template-columns:repeat(9,minmax(0,1fr));gap:5px}
+#controls .number{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:5px 0 4px;min-height:50px}
+#controls .number .num{font-size:20px;font-weight:700;line-height:1}#controls .number .left{font-size:10px;color:#8d9888;line-height:1;min-height:10px}
+#controls .number.current{background:#f3df9c;border-color:#e2c46f}
+#controls .number.done{opacity:.3;box-shadow:none}#controls .number.done .num{text-decoration:line-through}
+.sudoku-tools{grid-column:1/-1;display:flex;justify-content:center;gap:16px;margin-top:2px}
+#controls .tool{width:58px;min-height:46px;display:grid;place-items:center;position:relative;color:#7f8a7b;padding:0}
+#controls .tool svg{width:24px;height:24px}
+#controls .tool.on{background:#536e57;color:#fffaf2;border-color:#536e57;box-shadow:0 3px 0 #3d5341}
+#controls .tool[aria-pressed="false"]{background:#f1efe6;color:#a3aa9d}
+#controls .tool .badge{position:absolute;top:-6px;right:-6px;min-width:19px;height:19px;border-radius:10px;background:#c99d38;color:#fff;font-size:11px;font-weight:800;display:grid;place-items:center;padding:0 4px}
+#controls .tool:disabled .badge{background:#b5b9ad}

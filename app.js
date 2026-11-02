@@ -5,6 +5,7 @@ import * as online from './online.js';
 import {puzzles} from './puzzles.js';
 import {arcade} from './arcade.js';
 import {duel,DUEL_RULES,initialState} from './duel.js';
+import {formatDuration} from './engines.js';
 const $=s=>document.querySelector(s);
 const el=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e};
 const games=[
@@ -43,10 +44,13 @@ function icon(type){let s='';const rect=(x,y,w,h,c,rx=5)=>`<rect x="${x}" y="${y
  return `<svg viewBox="0 0 126 102" aria-hidden="true">${s}</svg>`;
 }
 const isDuel=id=>games.find(g=>g.id===id)?.cat==='duel';
+const TIMED=['mines','sudoku'];
+// Valeur affichée d'un record : durée lisible pour les jeux chronométrés, sinon nombre + unité.
+const fmt=(id,v)=>TIMED.includes(id)?formatDuration(v):v+unit(id,v);
 const unit=(id,v=2)=>isDuel(id)?(v>1?' victoires':' victoire'):['mines','sudoku'].includes(id)?' s':games.find(g=>g.id===id)?.lower?' coups':'';
-function renderCards(filter='all'){const selected=games.filter(g=>filter==='all'||g.cat===filter);$('#game-count').textContent=selected.length+' jeux';$('#wallet').textContent='● '+(saved.coins||0)+' ›';$('#cards').innerHTML=selected.map(g=>`<button class="game-card" data-game="${g.id}" aria-label="Jouer à ${g.title}"><div class="card-art" style="--tint:${g.color}"><span class="card-tag">${g.tag}</span>${icon(g.art)}</div><h3>${g.title}</h3><p>${g.desc}</p><span class="card-arrow">↗</span>${turns[g.id]?`<div class="card-turn">● À toi de jouer${turns[g.id]>1?' ('+turns[g.id]+')':''}</div>`:''}${saved[g.id]!=null?`<div class="card-record">${isDuel(g.id)?'✦ ':'✦ Record : '}${saved[g.id]}${unit(g.id,saved[g.id])}${isDuel(g.id)?' en ligne':''}</div>`:''}</button>`).join('');document.querySelectorAll('[data-game]').forEach(b=>b.onclick=()=>{const id=b.dataset.game;if(isDuel(id))return openLobby(id);if(['memory','snake','sudoku'].includes(id)){dialog('Difficulté','','Jouer',()=>{difficulty=+document.querySelector('#difficulty').value;launch(id)},'Annuler',()=>{});$('#dialog-text').innerHTML='<select id="difficulty" aria-label="Difficulté"><option value="0">Facile</option><option value="1" selected>Normal</option><option value="2">Difficile</option></select>'}else launch(id)})}
+function renderCards(filter='all'){const selected=games.filter(g=>filter==='all'||g.cat===filter);$('#game-count').textContent=selected.length+' jeux';$('#wallet').textContent='● '+(saved.coins||0)+' ›';$('#cards').innerHTML=selected.map(g=>`<button class="game-card" data-game="${g.id}" aria-label="Jouer à ${g.title}"><div class="card-art" style="--tint:${g.color}"><span class="card-tag">${g.tag}</span>${icon(g.art)}</div><h3>${g.title}</h3><p>${g.desc}</p><span class="card-arrow">↗</span>${turns[g.id]?`<div class="card-turn">● À toi de jouer${turns[g.id]>1?' ('+turns[g.id]+')':''}</div>`:''}${saved[g.id]!=null?`<div class="card-record">${isDuel(g.id)?'✦ ':'✦ Record : '}${fmt(g.id,saved[g.id])}${isDuel(g.id)?' en ligne':''}</div>`:''}</button>`).join('');document.querySelectorAll('[data-game]').forEach(b=>b.onclick=()=>{const id=b.dataset.game;if(isDuel(id))return openLobby(id);if(['memory','snake','sudoku'].includes(id)){dialog('Difficulté','','Jouer',()=>{difficulty=+document.querySelector('#difficulty').value;launch(id)},'Annuler',()=>{});$('#dialog-text').innerHTML='<select id="difficulty" aria-label="Difficulté"><option value="0">Facile</option><option value="1" selected>Normal</option><option value="2">Difficile</option></select>'}else launch(id)})}
 document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-filter]').forEach(x=>x.classList.toggle('active',x===b));renderCards(b.dataset.filter)});
-const VERSION='1.5.0';
+const VERSION='1.5.1';
 function setSound(on){sound=on;music(sound);saved.sound=sound;persist();tone()}
 function updateSound(){$('#footer-version').textContent=`BagaPlay ${VERSION} · Sans pub, sans compte.`}
 // Réglages : son, langue, version.
@@ -67,11 +71,11 @@ window.bagaPause=pause;window.bagaBack=()=>{if(!$('#scores').hidden||!$('#lobby'
 document.addEventListener('visibilitychange',()=>{if(document.hidden)pause();else if(sound&&!paused)music(true)});$('#pause').onclick=pause;$('#back').onclick=()=>{if(ended||onlineDuel)leave();else{paused=true;dialog('Retour aux jeux ?',current.id==='cookie'?'Ta partie sera sauvegardée.':isDuel(current.id)?'La partie en cours sera perdue.':'La partie en cours sera terminée. Ton record est conservé.','Quitter la partie',leave,'Continuer',()=>paused=false)}};$('#restart').onclick=()=>{paused=true;dialog('On recommence ?','Une nouvelle partie, une nouvelle chance.','Recommencer',()=>launch(current.id,true),'Continuer',()=>paused=false)};
 function leave(){const d=current&&isDuel(current.id)?current.id:null;goHome();if(d)openLobby(d)}
 let onlineDuel=false;
-function launch(id,fresh=false,duelOpts=null){stop();onlineDuel=!!duelOpts?.match;$('#restart').hidden=onlineDuel;document.querySelectorAll('.scorebar>div').forEach(d=>d.classList.remove('turn'));collected=0;$('#run-coins').textContent='● 0';current=games.find(g=>g.id===id);ended=false;paused=false;time=0;closeDialog();$('#home').hidden=true;$('#play').hidden=false;$('#game-title').textContent=current.title;$('#lobby').hidden=true;clearInterval(lobbyTimer);$('#game-category').textContent=current.cat==='arcade'?'PETITE DOSE D’ARCADE':'PAUSE RÉFLEXION';$('#hint').textContent=current.hint;$('#score').textContent='0';$('#score-label').textContent=['mines','sudoku'].includes(id)?'SECONDES':current.lower?'COUPS':id==='ttt'?'VICTOIRES':'SCORE';$('#best-label').textContent='RECORD';$('#best').textContent=saved[id]??'—';$('#board').innerHTML='';$('#controls').innerHTML='';window.scrollTo(0,0);
+function launch(id,fresh=false,duelOpts=null){stop();onlineDuel=!!duelOpts?.match;$('#restart').hidden=onlineDuel;document.querySelectorAll('.scorebar>div').forEach(d=>d.classList.remove('turn'));collected=0;$('#run-coins').textContent='● 0';current=games.find(g=>g.id===id);ended=false;paused=false;time=0;closeDialog();$('#home').hidden=true;$('#play').hidden=false;$('#game-title').textContent=current.title;$('#lobby').hidden=true;clearInterval(lobbyTimer);$('#game-category').textContent=current.cat==='arcade'?'PETITE DOSE D’ARCADE':'PAUSE RÉFLEXION';$('#hint').textContent=current.hint;$('#score').textContent='0';$('#score-label').textContent=TIMED.includes(id)?'TEMPS':current.lower?'COUPS':id==='ttt'?'VICTOIRES':'SCORE';$('#best-label').textContent='RECORD';$('#best').textContent=saved[id]==null?'—':TIMED.includes(id)?formatDuration(saved[id]):saved[id];$('#board').innerHTML='';$('#controls').innerHTML='';window.scrollTo(0,0);
  const ctx={difficulty,fresh,duel:duelOpts,dialog,closeDialog,leave,
   every:(fn,ms)=>{const t=setInterval(()=>{if(!document.hidden)fn()},ms);cleanups.push(()=>clearInterval(t))},
   setBar:(l,lv,r,rv,turn)=>{$('#score-label').textContent=l;$('#score').textContent=lv;$('#best-label').textContent=r;$('#best').textContent=rv;const d=document.querySelectorAll('.scorebar>div');d[0].classList.toggle('turn',turn==='l');d[1].classList.toggle('turn',turn==='r')},
- collect:n=>{collected+=n;$('#run-coins').textContent='● '+collected;tone(true)},board:$('#board'),controls:$('#controls'),hint:s=>$('#hint').textContent=s,score:(s,save=true)=>{ $('#score').textContent=s;if(save&&!current.lower&&s>0)record(s)},label:s=>$('#score-label').textContent=s,tone,
+ collect:n=>{collected+=n;$('#run-coins').textContent='● '+collected;tone(true)},board:$('#board'),controls:$('#controls'),hint:s=>$('#hint').textContent=s,score:(s,save=true)=>{ $('#score').textContent=TIMED.includes(id)?formatDuration(s):s;if(save&&!current.lower&&s>0)record(s)},label:s=>$('#score-label').textContent=s,tone,
   later:(fn,delay)=>tasks.push({fn,at:time+delay}),
   listen:(el,event,fn,options)=>{const handler=e=>{if(!paused&&!ended)fn(e)};el.addEventListener(event,handler,options);cleanups.push(()=>el.removeEventListener(event,handler,options))},
   button:(label,fn,cls='',aria=label)=>{const b=document.createElement('button');b.textContent=label;b.className=cls;b.setAttribute('aria-label',aria);$('#controls').append(b);ctx.listen(b,'click',fn);return b},
@@ -83,14 +87,14 @@ function launch(id,fresh=false,duelOpts=null){stop();onlineDuel=!!duelOpts?.matc
    else if(isDuel(id))dialog(o.title||'Partie terminée',text,'Rejouer',()=>launch(id,true),'Retour',leave);
    else dialog(win?'Bien joué !':'Partie terminée',text,'Rejouer',()=>launch(id,true),'Tous les jeux',goHome);
    if(reward)celebrate(reward,saved.coins);
-   if(!o.noRecord){const line=document.createElement('p');line.id='record-line';line.className='record-line'+(isNew?' new':'');line.textContent=best==null?'Pas encore de record':(isNew?'Nouveau record ! ':'Record : ')+best+unit(id);$('#dialog-text').after(line)}
+   if(!o.noRecord){const line=document.createElement('p');line.id='record-line';line.className='record-line'+(isNew?' new':'');line.textContent=best==null?'Pas encore de record':(isNew?'Nouveau record ! ':'Record : ')+fmt(id,best);$('#dialog-text').after(line)}
    online.syncAll(saved,games.map(g=>g.id))},
   grid:(n,cls='')=>{const grid=document.createElement('div');grid.className='grid '+cls;grid.style.gridTemplateColumns=`repeat(${n},1fr)`;$('#board').append(grid);return grid},
   cell:(grid,label,fn,cls='')=>{const b=document.createElement('button');b.className='cell '+cls;b.textContent=label;grid.append(b);if(fn)ctx.listen(b,'click',fn);return b},
   canvas:(height=450)=>{const c=document.createElement('canvas');c.width=360;c.height=height;c.dataset.w=360;c.dataset.h=height;c.setAttribute('aria-label',current.title+' : plateau tactile');$('#board').append(c);return [c,c.getContext('2d')]},
   swipe:fn=>{let start=null;ctx.listen($('#board'),'pointerdown',e=>{start=[e.clientX,e.clientY];e.currentTarget.setPointerCapture?.(e.pointerId)});ctx.listen($('#board'),'pointerup',e=>{if(!start)return;const x=e.clientX-start[0],y=e.clientY-start[1];start=null;if(Math.max(Math.abs(x),Math.abs(y))>18)fn(Math.abs(x)>Math.abs(y)?x>0?'right':'left':y>0?'down':'up')})}
  };
- function record(s,allow=true){if(!allow||!Number.isFinite(s))return;const old=saved[id];if(old==null||(current.lower?s<old:s>old)){saved[id]=s;$('#best').textContent=s;persist()}}
+ function record(s,allow=true){if(!allow||!Number.isFinite(s))return;const old=saved[id];if(old==null||(current.lower?s<old:s>old)){saved[id]=s;$('#best').textContent=TIMED.includes(id)?formatDuration(s):s;persist()}}
  runtime=(isDuel(id)?duel(id):id==='cookie'?cookie:id==='breakout'?breakoutNew:(puzzles[id]||arcade[id]))(ctx);fitBoard();let last=performance.now();function frame(now){const dt=Math.min((now-last)/1000,.05);last=now;if(!paused&&!ended){time+=dt*1000;const due=tasks.filter(t=>t.at<=time);tasks=tasks.filter(t=>t.at>time);due.forEach(t=>t.fn());if(!ended)runtime?.update?.(dt)}raf=requestAnimationFrame(frame)}raf=requestAnimationFrame(frame);
  ctx.listen(document,'keydown',e=>{if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key))e.preventDefault();runtime?.key?.(e.key)});
 }
@@ -104,7 +108,7 @@ function fitBoard(){const b=$('#board');if($('#play').hidden)return;const W=b.cl
 if(window.ResizeObserver)new ResizeObserver(()=>fitBoard()).observe($('#board'));else window.addEventListener('resize',fitBoard);
 
 // ---------------------------------------------------------------- profil, recherche de joueurs
-const recordText=(id,v)=>v!=null&&v!==0?v+unit(id,v):'—';
+const recordText=(id,v)=>v!=null&&v!==0?fmt(id,v):'—';
 // Boîte de recherche : propositions dès la première lettre, joueurs récents si vide.
 function playerSearch(box,placeholder,onPick){box.innerHTML='';const input=el('input');input.placeholder=placeholder;input.setAttribute('aria-label',placeholder);input.autocomplete='off';input.spellcheck=false;input.maxLength=16;
  const list=el('div','search-results');box.append(input,list);let timer=0,seq=0;
@@ -154,7 +158,7 @@ async function showProfile(r){const box=$('#profile');box.hidden=false;box.repla
 async function loadRanking(){const board=$('#ranking-board').value,list=$('#ranking-list');list.innerHTML='<li class="muted">Chargement…</li>';const rows=await online.top(board);if(board!==$('#ranking-board').value)return;
  if(!rows){list.innerHTML='<li class="muted">Classement indisponible (connexion ?).</li>';return}
  if(!rows.length){list.innerHTML='<li class="muted">Personne pour l’instant. À toi !</li>';return}
- const u=v=>board==='coins'?'':unit(board,v);list.replaceChildren(...rows.map((r,i)=>{const li=document.createElement('li');if(r.me)li.className='me';const rank=document.createElement('span');rank.textContent=i+1;const name=document.createElement('span');name.textContent=r.name;const sc=document.createElement('strong');sc.textContent=r.score+u(r.score);li.append(rank,name,sc);return li}))}
+ const u=v=>board==='coins'?String(v):fmt(board,v);list.replaceChildren(...rows.map((r,i)=>{const li=document.createElement('li');if(r.me)li.className='me';const rank=document.createElement('span');rank.textContent=i+1;const name=document.createElement('span');name.textContent=r.name;const sc=document.createElement('strong');sc.textContent=u(r.score);li.append(rank,name,sc);return li}))}
 $('#ranking-board').onchange=loadRanking;
 $('#wallet').onclick=showScores;$('#scores-back').onclick=goHome;
 async function savePseudo(){if($('#pseudo').disabled){pseudoEditing=true;pseudoMode();$('#pseudo').focus();$('#pseudo').select();return}

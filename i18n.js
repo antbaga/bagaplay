@@ -12,7 +12,7 @@
   // accueil, navigation
   'LE PETIT ATELIER DU JEU':'THE LITTLE GAME WORKSHOP','À toi de jouer':'Your turn to play','Tous les jeux':'All games','À deux':'Two players','Réflexion':'Puzzles','Arcade':'Arcade','Catégories':'Categories',
   'app créé par Kiara':'app made by Kiara','Mes pièces et mes scores':'My coins and scores','Retour à l’accueil':'Back to home','Mettre en pause':'Pause','Recommencer':'Restart','Pièces récoltées':'Coins collected','Plateau de jeu':'Game board',
-  'SCORE':'SCORE','RECORD':'BEST','COUPS':'MOVES','SECONDES':'SECONDS','VICTOIRES':'WINS','BLANCS':'WHITE','NOIRS':'BLACK','PIÈCES':'COINS',
+  'SCORE':'SCORE','RECORD':'BEST','COUPS':'MOVES','SECONDES':'SECONDS','TEMPS':'TIME','Notes':'Notes','Indice':'Hint','VICTOIRES':'WINS','BLANCS':'WHITE','NOIRS':'BLACK','PIÈCES':'COINS',
   'PETITE DOSE D’ARCADE':'A LITTLE ARCADE','PAUSE RÉFLEXION':'THINKING BREAK','Réglages':'Settings','Son':'Sound','Langue':'Language','Version':'Version','Fermer':'Close',
   'Activer le son':'Turn sound on','Désactiver le son':'Turn sound off',
   // jeux
@@ -124,8 +124,8 @@
   [/^La tuile 2048 est à toi !\n(\d+) points de douceur\.$/,function(m){return 'The 2048 tile is yours!\n'+m[1]+' sweet points.'}],
   [/^Plus de place sur le plateau\.\nTon score : (\d+) points\.$/,function(m){return 'No more room on the board.\nYour score: '+m[1]+' points.'}],
   [/^Paires réunies en (\d+) coups\.$/,function(m){return 'All pairs found in '+m[1]+' moves.'}],
-  [/^Terrain dégagé en (\d+) secondes !$/,function(m){return 'Field cleared in '+m[1]+' seconds!'}],
-  [/^Les 81 cases sont en harmonie\.\nTerminé en (\d+) secondes( avec un peu d’aide\.| !)$/,function(m){return 'All 81 squares are in harmony.\nFinished in '+m[1]+' seconds'+(m[2]===' !'?'!':' with a little help.')}],
+  [/^Terrain dégagé en (.+) !$/,function(m){return 'Field cleared in '+m[1]+'!'}],
+  [/^Les 81 cases sont en harmonie\.\nTerminé en (.+?)( avec un peu d’aide\.| !)$/,function(m){return 'All 81 squares are in harmony.\nFinished in '+m[1]+(m[2]===' !'?'!':' with a little help.')}],
   [/^Tout est à sa place !\nPuzzle terminé en (\d+) coups\.$/,function(m){return 'Everything is in its place!\nPuzzle solved in '+m[1]+' moves.'}],
   [/^(\d+) drapeaux restants · (\d+)\/54 cases sûres dévoilées\.$/,function(m){return m[1]+' flags left · '+m[2]+'/54 safe squares revealed.'}],
   [/^Indice · (\d+)$/,function(m){return 'Hint · '+m[1]}],
