@@ -64,3 +64,16 @@ export const getMatch=id=>rpc('get_match',{p_player:me(),p_id:id});
 export const myMatches=()=>rpc('my_matches',{p_player:me()});
 export const playMove=(id,ply,state,end)=>rpc('play_move',{p_player:me(),p_id:id,p_ply:ply,p_state:state,p_over:!!end,p_winner:end?.winner||null,p_reason:end?.reason||null});
 export const matchAction=(id,action)=>rpc('match_action',{p_player:me(),p_id:id,p_action:action});
+
+// Parties terminées déjà vues sur cet appareil : elles ne restent pas dans « Tes parties ».
+const SEEN_KEY='bagaplay-seen-ends';
+function seenEnds(){try{return JSON.parse(localStorage.getItem(SEEN_KEY)||'[]')}catch{return []}}
+export function markSeen(id){if(!id)return;const s=seenEnds();if(s.includes(id))return;s.push(id);try{localStorage.setItem(SEEN_KEY,JSON.stringify(s.slice(-200)))}catch{}}
+// Parties à montrer : en cours (défis compris) + résultats pas encore vus ici.
+export const visibleMatches=list=>{const s=seenEnds();return list.filter(m=>m.status==='active'||!s.includes(m.id))};
+
+// ---- même profil sur un autre appareil
+export const linkCode=()=>{named();return rpc('link_code',{p_player:me()})};
+// Remplace l'identité de cet appareil par celle du code. Les records locaux restent sur l'appareil.
+export async function redeemLink(code){const r=await rpc('link_redeem',{p_code:String(code||'').trim().slice(0,12)});
+ store({id:r.secret,name:r.name,pub:r.id,registered:true});nativeSession();return player()}

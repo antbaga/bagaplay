@@ -59,7 +59,7 @@ const fmt=(id,v)=>TIMED.includes(base(id))?formatDuration(v):v+unit(base(id),v);
 const unit=(id,v=2)=>isDuel(id)?(v>1?' victoires':' victoire'):['mines','sudoku'].includes(id)?' s':games.find(g=>g.id===id)?.lower?' coups':'';
 function renderCards(filter='all'){const selected=games.filter(g=>filter==='all'||g.cat===filter);$('#game-count').textContent=selected.length+' jeux';{const w=$('#wallet'),t='● '+(saved.coins||0)+' ›';if(w.textContent&&w.textContent!==t){w.classList.remove('bump');void w.offsetWidth;w.classList.add('bump')}w.textContent=t}$('#cards').innerHTML=selected.map(g=>`<button class="game-card" data-game="${g.id}" aria-label="Jouer à ${g.title}"><div class="card-art" style="--tint:${g.color}"><span class="card-tag">${g.tag}</span>${icon(g.art)}</div><h3>${g.title}</h3><p>${g.desc}</p><span class="card-arrow">↗</span>${turns[g.id]?`<div class="card-turn">● À toi de jouer${turns[g.id]>1?' ('+turns[g.id]+')':''}</div>`:''}${DIFF[g.id]?(()=>{const parts=[];for(let d=0;d<DIFF[g.id];d++){const v=saved[g.id+':'+d];if(v!=null)parts.push(LEVEL_SHORT[d]+' '+fmt(g.id,v))}return parts.length?`<div class="card-record">✦ ${parts.join(' · ')}</div>`:''})():saved[g.id]!=null?`<div class="card-record">${isDuel(g.id)?'✦ ':'✦ Record : '}${fmt(g.id,saved[g.id])}${isDuel(g.id)?' en ligne':''}</div>`:''}</button>`).join('');document.querySelectorAll('[data-game]').forEach(b=>b.onclick=()=>{const id=b.dataset.game;if(isDuel(id))return openLobby(id);if(DIFF[id]){dialog('Difficulté','','Jouer',()=>{difficulty=+document.querySelector('#difficulty').value;launch(id)},'Annuler',()=>{});$('#dialog-text').innerHTML='<select id="difficulty" aria-label="Difficulté"><option value="0">Facile</option><option value="1" selected>Normal</option><option value="2">Difficile</option>'+(DIFF[id]>3?'<option value="3">'+(id==='mines'?'Expert':'Extrême')+'</option>':'')+'</select>'}else launch(id)})}
 document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-filter]').forEach(x=>x.classList.toggle('active',x===b));renderCards(b.dataset.filter)});
-const VERSION='1.6.1';
+const VERSION='1.6.2';
 function setSound(on){sound=on;music(sound);saved.sound=sound;persist();tone()}
 function updateSound(){$('#footer-version').textContent=`BagaPlay ${VERSION} · Sans pub, sans compte.`}
 // Réglages : son, langue, version.
@@ -68,13 +68,25 @@ function openSettings(){dialog('Réglages','','Fermer',()=>{},'',null);const t=$
  const sw=el('button','switch'+(sound?' on':''));sw.setAttribute('role','switch');sw.setAttribute('aria-checked',String(sound));sw.setAttribute('aria-label','Son');sw.append(el('span','knob'));
  sw.onclick=()=>{setSound(!sound);sw.classList.toggle('on',sound);sw.setAttribute('aria-checked',String(sound))};row('Son',sw);
  const seg=el('div','segmented');for(const [code,label] of [['fr','Français'],['en','English']]){const b=el('button',window.bagaLang===code?'active':'',label);b.lang=code;b.onclick=()=>{if(window.bagaLang===code)return;saved.lang=code;persist();location.reload()};seg.append(b)}row('Langue',seg);
+ if(online.enabled()){const b=el('button','setting-link','Autre appareil ›');b.onclick=openLink;row('Mon profil',b)}
  const v=el('span','setting-value','BagaPlay '+VERSION);row('Version',v);
 }
+// Même profil sur un autre appareil (Android, iPhone…) : code court valable 10 minutes.
+function openLink(){dialog('Mon profil sur un autre appareil','','Fermer',()=>{},'',null);const t=$('#dialog-text');t.textContent='';
+ const p=online.player();
+ if(online.registered()){t.append(el('span','dialog-help',`Pour jouer en tant que ${p.name} sur un autre téléphone, crée un code ici puis tape-le là-bas (Réglages › Mon profil).`));
+  const show=el('button','link-btn','Créer un code'),code=el('div','link-code');show.onclick=async()=>{show.disabled=true;try{code.textContent=await online.linkCode();code.after(el('span','dialog-help','Valable 10 minutes, une seule fois.'));show.remove()}catch(e){show.disabled=false;toast(e.message)}};t.append(show,code)}
+ t.append(el('span','dialog-help link-sep','J’ai un code venant de mon autre appareil :'));
+ const input=el('input');input.className='dialog-input';input.maxLength=8;input.placeholder='Ex. K7P2QX';input.autocapitalize='characters';input.autocomplete='off';input.spellcheck=false;
+ const use=el('button','link-btn','Utiliser ce code'),err=el('span','dialog-error','');t.append(input,use,err);
+ use.onclick=()=>{const c=input.value.trim();if(!c)return;const go=async()=>{try{const np=await online.redeemLink(c);closeDialog();toast('Profil '+np.name+' activé.');setTimeout(()=>location.reload(),900)}catch(e){openLink();toast(e.message)}};
+  if(online.registered())dialog('Changer de profil ?',`Cet appareil n’utilisera plus le profil ${p.name}. Tes records enregistrés sur ce téléphone sont conservés.`,'Changer',go,'Annuler',()=>{});else go()};
+ input.addEventListener('keydown',e=>{if(e.key==='Enter')use.click()})}
 $('#settings').onclick=openSettings;
 function closeDialog(){$('#overlay').hidden=true;document.querySelector('#reward')?.remove();document.querySelector('#record-line')?.remove()}
 function dialog(title,desc,primary,onPrimary,secondary,onSecondary){$('#dialog-secondary').hidden=!secondary;$('#dialog-title').textContent=title;$('#dialog-text').textContent=desc;$('#dialog-primary').textContent=primary;$('#dialog-primary').onclick=()=>{closeDialog();onPrimary()};$('#dialog-secondary').textContent=secondary;$('#dialog-secondary').onclick=()=>{closeDialog();onSecondary()};$('#overlay').hidden=false;$('#dialog-primary').focus()}
 function stop(){cancelAnimationFrame(raf);runtime?.destroy?.();cleanups.forEach(f=>f());cleanups=[];tasks=[];runtime=null}
-function goHome(){stop();const wasPaused=paused;current=null;paused=false;closeDialog();if(wasPaused)music(sound);$('#play').hidden=true;$('#scores').hidden=true;$('#lobby').hidden=true;clearInterval(lobbyTimer);$('#home').hidden=false;renderCards(document.querySelector('[data-filter].active').dataset.filter);window.scrollTo(0,0)}
+function goHome(){stop();const wasPaused=paused;current=null;paused=false;closeDialog();if(wasPaused)music(sound);$('#play').hidden=true;$('#scores').hidden=true;$('#lobby').hidden=true;clearInterval(lobbyTimer);$('#home').hidden=false;renderCards(document.querySelector('[data-filter].active').dataset.filter);homeSig='';if(online.enabled())refreshTurns();window.scrollTo(0,0)}
 function pause(){if(!current||ended||paused)return;paused=true;runtime?.pause?.();music(false);dialog('Pause','','Reprendre',()=>{paused=false;music(sound)},'Retour aux jeux',leave)}
 window.bagaPause=pause;window.bagaBack=()=>{if(!$('#scores').hidden||!$('#lobby').hidden){goHome();return true}if(!current)return false;if(ended){goHome();return true}if(paused){closeDialog();paused=false;music(sound);return true}pause();return true};
 document.addEventListener('visibilitychange',()=>{if(document.hidden)pause();else if(sound&&!paused)music(true)});$('#pause').onclick=pause;$('#back').onclick=()=>{if(ended||onlineDuel)leave();else{paused=true;dialog('Retour aux jeux ?',current.id==='cookie'?'Ta partie sera sauvegardée.':isDuel(current.id)?'La partie en cours sera perdue.':'La partie en cours sera terminée. Ton record est conservé.','Quitter la partie',leave,'Continuer',()=>paused=false)}};$('#restart').onclick=()=>{paused=true;dialog('On recommence ?','Une nouvelle partie, une nouvelle chance.','Recommencer',()=>launch(current.id,true),'Continuer',()=>paused=false)};
@@ -186,20 +198,31 @@ function lobbyStatus(t){$('#lobby-status').textContent=t}
 function matchStatus(m){if(m.status==='declined')return 'Refusé';if(m.status==='finished')return !m.winner?'Nulle':m.winner===m.my_color?'Gagné':'Perdu';if(!m.my_turn)return 'Son tour';return !m.from_me&&m.ply<=1?'Nouveau défi':'À toi !'}
 async function loadMatches(loading){const box=$('#lobby-matches'),game=lobbyGame;if(!online.registered()){box.replaceChildren(el('div','muted-note','Tes parties apparaîtront ici.'));return}
  if(loading)box.replaceChildren(el('div','muted-note','Chargement…'));let list;
- try{list=(await online.myMatches()).filter(m=>m.game===game)}catch(e){if(loading||!box.children.length)box.replaceChildren(el('div','muted-note',e.message));return}
+ try{list=online.visibleMatches(await online.myMatches()).filter(m=>m.game===game)}catch(e){if(loading||!box.children.length)box.replaceChildren(el('div','muted-note',e.message));return}
  if(game!==lobbyGame||$('#lobby').hidden)return;
  if(!list.length){box.replaceChildren(el('div','muted-note','Aucune partie. Cherche un adversaire ci-dessus.'));return}
- box.replaceChildren(...list.map(m=>{const b=el('button','score-row match-row'+(m.my_turn?' my-turn':''));const opp=m.my_color==='w'?m.black_name:m.white_name;
-  b.append(el('span','avatar',(opp||'?').slice(0,1).toUpperCase()),el('span','score-name',opp||'…'),el('strong',null,matchStatus(m)));b.onclick=()=>openMatch(m.id);return b}))}
+ box.replaceChildren(...list.map(m=>matchRow(m,false)))}
+// Ligne d'une partie. withGame : nom du jeu sous l'adversaire (accueil).
+function matchRow(m,withGame){const st=matchStatus(m),b=el('button','score-row match-row'+(m.my_turn?' my-turn':'')+(m.status!=='active'?' match-over':''));const opp=m.my_color==='w'?m.black_name:m.white_name;
+ const who=el('span','score-name',opp||'…');if(withGame){who.append(el('small','match-game',games.find(g=>g.id===m.game)?.title||''))}
+ b.append(el('span','avatar',(opp||'?').slice(0,1).toUpperCase()),who,el('strong',null,st));b.onclick=()=>openMatch(m.id);return b}
 async function openMatch(id){lobbyStatus('Ouverture de la partie…');try{const v=await online.getMatch(id);lobbyStatus('');launch(v.game,false,{mode:'online',match:v})}catch(e){lobbyStatus(e.message);toast(e.message)}}
 $('#lobby-back').onclick=goHome;$('#lobby-local').onclick=()=>launch(lobbyGame,true);
 $('#lobby-ai').onclick=()=>{dialog('Contre l’ordinateur','','Jouer',()=>launch(lobbyGame,true,{mode:'ai',level:+document.querySelector('#ai-level').value}),'Annuler',()=>{});$('#dialog-text').innerHTML='<select id="ai-level" aria-label="Difficulté"><option value="0">Facile</option><option value="1" selected>Normal</option><option value="2">Difficile</option></select>'};$('#lobby-refresh').onclick=()=>loadMatches(true);
 
 // ---------------------------------------------------------------- démarrage en ligne, badges, notifications
-async function refreshTurns(){if(!online.registered())return;try{const list=await online.myMatches();const t={};for(const m of list)if(m.my_turn)t[m.game]=(t[m.game]||0)+1;
- if(JSON.stringify(t)!==JSON.stringify(turns)){turns=t;if(!$('#home').hidden)renderCards(document.querySelector('[data-filter].active').dataset.filter)}}catch{}}
+// Accueil : parties en cours de tous les jeux (défis reçus compris) + résultats pas encore vus.
+let homeSig='';
+async function refreshTurns(){if(!online.registered()){$('#home-matches').hidden=true;return}let list;try{list=await online.myMatches()}catch{return}
+ const t={};for(const m of list)if(m.my_turn)t[m.game]=(t[m.game]||0)+1;
+ if(JSON.stringify(t)!==JSON.stringify(turns)){turns=t;if(!$('#home').hidden)renderCards(document.querySelector('[data-filter].active').dataset.filter)}
+ const shown=online.visibleMatches(list),sig=JSON.stringify(shown.map(m=>[m.id,m.status,m.ply,m.my_turn,m.winner]));
+ $('#home-matches').hidden=!shown.length;if(sig===homeSig)return;homeSig=sig;
+ const mine=shown.filter(m=>m.my_turn).length;$('#home-matches-count').textContent=mine?(mine>1?mine+' à toi de jouer':'1 à toi de jouer'):shown.length+(shown.length>1?' parties':' partie');
+ $('#home-matches-list').replaceChildren(...shown.map(m=>matchRow(m,true)))}
+window.bagaResume=()=>{if(!online.enabled())return;if(!$('#home').hidden)refreshTurns();else if(!$('#lobby').hidden&&online.registered())loadMatches(false)};
 window.bagaOpenMatch=id=>{if(!online.enabled()||!id)return;closeDialog();if(current){stop();current=null;paused=false}openMatch(id)};
 try{window.BagaNative?.setLanguage?.(window.bagaLang)}catch{}
 if(online.enabled()){online.hello().then(()=>{if(!online.registered())askPseudo(()=>refreshTurns());else refreshTurns();
   let pending='';try{pending=window.BagaNative?.takePendingMatch?.()||''}catch{}if(pending)window.bagaOpenMatch(pending)});
- setInterval(()=>{if(!document.hidden&&!$('#home').hidden)refreshTurns()},20000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshTurns()})}
+ setInterval(()=>{if(!document.hidden&&!$('#home').hidden)refreshTurns()},8000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)window.bagaResume()})}

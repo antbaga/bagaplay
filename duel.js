@@ -129,7 +129,7 @@ export function duel(kind){return c=>{
  function endLocal(st){ended=true;render();
   if(vsAI){const won=st.winner&&st.winner!==aiColor;c.finish(won,0,st.winner?(won?'Tu as battu l’ordinateur':'L’ordinateur gagne')+(st.reason?' ('+st.reason+')':'')+'.':resultText(null,st.reason),{reward:won?[60,150,300][aiLevel]:st.winner?20:40,noRecord:true,title:won?'Victoire !':st.winner?'Défaite':'Partie nulle'});return}
   c.finish(true,0,resultText(st.winner,st.reason),{reward:0,noRecord:true,title:st.winner?`Victoire des ${COLOR_NAME[st.winner].toLowerCase()} !`:'Partie nulle'})}
- function endOnline(){if(ended)return;ended=true;sel=null;prefix=[];buildControls();render();
+ function endOnline(){if(ended)return;ended=true;online.markSeen(match.id);sel=null;prefix=[];buildControls();render();
   if(match.status==='declined'){c.finish(false,0,match.from_me?`${names()[myColor()==='w'?'b':'w']} a refusé ton défi.`:'Tu as refusé ce défi.',{reward:0,noRecord:true,title:'Défi refusé'});return}
   const mine=match.my_color,won=match.winner===mine,draw=!match.winner;
   c.finish(won,0,resultText(match.winner,match.reason),{reward:won?300:draw?150:50,once:'match:'+match.id,duelWin:won,noRecord:true,title:won?'Victoire !':draw?'Partie nulle':'Défaite'});

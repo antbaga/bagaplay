@@ -172,3 +172,13 @@ body:has(.install-banner) footer{padding-bottom:120px}
 @keyframes winPulse{50%{transform:scale(1.1)}}
 .profile-actions{flex-wrap:wrap}.profile-actions .primary{flex:1 1 30%}
 .lobby-ai{margin-top:14px}
+/* 1.6.2 : parties sur l'accueil, profil sur un autre appareil */
+.home-matches{margin-top:26px}.home-matches .section-title{margin-bottom:10px}
+.match-row .score-name{display:flex;flex-direction:column;min-width:0;flex:1}.match-game{font-size:10px;font-weight:400;color:var(--muted);margin-top:2px}
+.match-row.match-over{background:#f3f1e4}.match-row strong{white-space:nowrap}
+.setting-link{background:transparent;color:#4b7f55;font-weight:700;font-size:13px;padding:4px 0}
+.link-btn{display:block;width:100%;margin:10px 0 2px;padding:12px;border-radius:13px;background:var(--sage);font-weight:700;font-size:13px}
+.link-btn:disabled{opacity:.5}
+.link-code{font-size:34px;font-weight:800;letter-spacing:6px;margin:8px 0 2px;color:var(--ink);font-variant-numeric:tabular-nums}.link-code:empty{display:none}
+.link-sep{display:block;margin-top:18px;padding-top:14px;border-top:1px solid var(--line)}
+#dialog-text .dialog-help{display:block}
