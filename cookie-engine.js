@@ -18,7 +18,7 @@ class Game{
  restore(s){if(!s||s.version!==1||!Array.isArray(s.pieces)||s.pieces.length>100)throw Error('Invalid save');for(const p of s.pieces)if(!Number.isInteger(p.level)||p.level<0||p.level>=TIERS.length||!['x','y','vx','vy'].every(k=>Number.isFinite(p[k])))throw Error('Invalid piece');
   for(const k of ['phase','score','shots','highest','id','time','combo','maxCombo','settle','shotTime','launchX','pendingWin','undoState'])if(s[k]!==undefined)this[k]=s[k];this.pieces=s.pieces.map(p=>({...p,r:TIERS[p.level].radius}));this.events=[];this.acc=0;
  }
- launch(x,dx,dy,power){if(this.phase!=='ready'||!Number.isFinite(dx)||!Number.isFinite(dy)||dy>=-1||!Number.isFinite(power))return false;const angle=clamp(Math.atan2(dx,-dy),-1.15,1.15),v=clamp(power,180,780);
+ launch(x,dx,dy,power){if(this.phase!=='ready'||!Number.isFinite(dx)||!Number.isFinite(dy)||dy>=-1||!Number.isFinite(power))return false;const angle=clamp(Math.atan2(dx,-dy),-1.15,1.15),v=clamp(power,180,1100);
   this.undoState=this.snapshot(false);this.launchX=clamp(x,LEFT+18,RIGHT-18);this.add(0,this.launchX,LAUNCH,Math.sin(angle)*v,-Math.cos(angle)*v);this.phase='moving';this.shots++;this.combo=0;this.shotTime=0;this.settle=0;this.pendingWin=false;this.events.push({type:'launch'});return true;
  }
  undo(){if(!this.undoState)return false;const old=this.undoState;this.restore(old);this.undoState=null;this.phase='ready';this.events.push({type:'undo'});return true;}
@@ -44,7 +44,7 @@ class Game{
   if(this.settle>.34||this.shotTime>9){for(const p of this.pieces){p.vx=0;p.vy=0;p.spin=0;}if(this.pendingWin){this.phase='won';this.events.push({type:'win'});}else if(this.pieces.some(p=>p.y+p.r>LINE+.5)){this.phase='lost';this.events.push({type:'loss'});}else{this.phase='ready';this.events.push({type:'settled'});}this.acc=0;}
  }
 }
-function aim(dx,dy,duration){const distance=Math.hypot(dx,dy),flick=clamp(distance/Math.max(.08,duration),0,1500);return clamp(180+distance*2.2+flick*.045,180,780);}
+function aim(dx,dy,duration){const distance=Math.hypot(dx,dy),flick=clamp(distance/Math.max(.08,duration),0,1500);return clamp(180+distance*2.6+flick*.06,180,1100);}
 function predict(x,dx,dy,power,pieces=[]){const angle=clamp(Math.atan2(dx,-dy),-1.15,1.15),p={x:clamp(x,LEFT+18,RIGHT-18),y:LAUNCH,vx:Math.sin(angle)*power,vy:-Math.cos(angle)*power},points=[[p.x,p.y]];for(let i=0;i<170;i++){const v=Math.hypot(p.vx,p.vy),nv=Math.max(0,v*Math.exp(-1.1/90)-42/90),f=v?nv/v:0;p.vx*=f;p.vy*=f;p.x+=p.vx/90;p.y+=p.vy/90;if(p.x<LEFT+14){p.x=LEFT+14;p.vx*=-.65;}if(p.x>RIGHT-14){p.x=RIGHT-14;p.vx*=-.65;}if(p.y<TOP+14){p.y=TOP+14;p.vy*=-.65;}if(i%4===0)points.push([p.x,p.y]);if(pieces.some(b=>Math.hypot(b.x-p.x,b.y-p.y)<b.r+14)||nv<10)break;}return points;}
 root.CookiePhysics={Game,TIERS,W,H,LINE,LAUNCH,LEFT,RIGHT,TOP,BOTTOM,DT,aim,predict};if(typeof module!=='undefined')module.exports=root.CookiePhysics;
 })(typeof window!=='undefined'?window:globalThis);

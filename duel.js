@@ -2,6 +2,7 @@
 import * as Chess from './chess-engine.js';
 import * as Draughts from './draughts-engine.js';
 import * as online from './online.js';
+import {bestMove} from './draughts-ai.js';
 
 const GLYPH={k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'};
 const COLOR_NAME={w:'Blancs',b:'Noirs'};
@@ -16,7 +17,7 @@ export const initialState=kind=>(kind==='chess'?Chess:Draughts).initial();
 export function duel(kind){return c=>{
  const E=kind==='chess'?Chess:Draughts,size=kind==='chess'?8:10;
  const opts=c.duel||{mode:'local'};let match=opts.match||null;
- const isOnline=!!match;
+ const isOnline=!!match,vsAI=opts.mode==='ai'&&kind==='draughts',aiColor='b',aiLevel=opts.level??1;let thinking=false;
  let state=isOnline?match.state:E.initial(),ply=isOnline?match.ply:0,history=[];
  let sel=null,prefix=[],busy=false,ended=false,drawAsked=-1,errorText='';
  const myColor=()=>isOnline?match.my_color:null;
@@ -36,7 +37,7 @@ export function duel(kind){return c=>{
  }
 
  // ---- affichage
- const names=()=>isOnline?{w:match.white_name||'…',b:match.black_name||'…'}:{w:'BLANCS',b:'NOIRS'};
+ const names=()=>isOnline?{w:match.white_name||'…',b:match.black_name||'…'}:vsAI?{w:'TOI',b:'ORDINATEUR'}:{w:'BLANCS',b:'NOIRS'};
  function count(color){return kind==='chess'?state.board.filter(p=>Chess.pieceColor(p)===color).length:Draughts.count(state,color)}
  function legal(){return E.legalMoves(state)}
  function targets(){
@@ -73,12 +74,13 @@ export function duel(kind){return c=>{
   if(isOnline&&canDecline())return state.turn===myColor()?`${opp} te défie ! Joue ton premier coup, ou refuse le défi.`:`${opp} te défie et commence. Tu pourras jouer ensuite, ou refuser.`;
   const check=kind==='chess'&&Chess.inCheck(state)?'Échec ! ':'';
   const forced=kind==='draughts'&&legal()[0]?.captures.length?` Prise obligatoire (${legal()[0].captures.length}).`:'';
+  if(vsAI)return thinking||state.turn===aiColor?'L’ordinateur réfléchit…':`À toi de jouer.${forced}`;
   if(!isOnline)return `${check}Aux ${COLOR_NAME[state.turn].toLowerCase()} de jouer.${forced}`;
   if(state.turn===myColor())return `${check}À toi de jouer (${COLOR_NAME[myColor()].toLowerCase()}).${forced}`;
   return `${check}Au tour de ${names()[state.turn]}…`;
  }
  function canDecline(){return isOnline&&match.status==='active'&&!match.from_me&&((myColor()==='w'&&ply===0)||(myColor()==='b'&&ply<=1))}
- function canPlay(){return !ended&&!busy&&(!isOnline||(match.status==='active'&&state.turn===myColor()))}
+ function canPlay(){return !ended&&!busy&&!thinking&&(!vsAI||state.turn!==aiColor)&&(!isOnline||(match.status==='active'&&state.turn===myColor()))}
 
  // ---- jeu
  function own(i){const p=state.board[i];return p&&(kind==='chess'?Chess.pieceColor(p):Draughts.colorOf(p))===state.turn}
@@ -105,17 +107,21 @@ export function duel(kind){return c=>{
  async function commit(m){
   const before=state,next=E.apply(state,m),st=E.status(next);
   sel=null;prefix=[];c.tone();
-  if(!isOnline){history.push(state);state=next;ply++;render();if(st.over)endLocal(st);return}
+  if(!isOnline){history.push(state);state=next;ply++;render();if(st.over)return endLocal(st);if(vsAI&&state.turn===aiColor)aiTurn();return}
   state=next;busy=true;render();
   try{applyView(await online.playMove(match.id,ply,next,st.over?{winner:st.winner,reason:st.reason}:null))}
   catch(e){state=before;errorText='Coup non envoyé : '+e.message;render();refresh()}
   finally{busy=false;render()}
  }
- function undo(){if(!history.length||ended)return;state=history.pop();ply--;sel=null;prefix=[];render()}
+ function undo(){if(!history.length||ended||thinking)return;state=history.pop();ply--;if(vsAI&&state.turn===aiColor&&history.length){state=history.pop();ply--}sel=null;prefix=[];render()}
+ // tour de l'ordinateur : petit délai pour qu'on voie son coup arriver
+ function aiTurn(){thinking=true;render();c.later(()=>{const m=bestMove(state,aiLevel);thinking=false;commit(m)},450)}
 
  // ---- fin de partie
  function resultText(winner,reason){const n=names();return winner?`${isOnline?n[winner]:COLOR_NAME[winner]} gagne${reason?' ('+reason+')':''}.`:`Partie nulle${reason?' ('+reason+')':''}.`}
- function endLocal(st){ended=true;render();c.finish(true,0,resultText(st.winner,st.reason),{reward:0,noRecord:true,title:st.winner?`Victoire des ${COLOR_NAME[st.winner].toLowerCase()} !`:'Partie nulle'})}
+ function endLocal(st){ended=true;render();
+  if(vsAI){const won=st.winner&&st.winner!==aiColor;c.finish(won,0,st.winner?(won?'Tu as battu l’ordinateur':'L’ordinateur gagne')+(st.reason?' ('+st.reason+')':'')+'.':resultText(null,st.reason),{reward:won?[60,150,300][aiLevel]:st.winner?20:40,noRecord:true,title:won?'Victoire !':st.winner?'Défaite':'Partie nulle'});return}
+  c.finish(true,0,resultText(st.winner,st.reason),{reward:0,noRecord:true,title:st.winner?`Victoire des ${COLOR_NAME[st.winner].toLowerCase()} !`:'Partie nulle'})}
  function endOnline(){if(ended)return;ended=true;sel=null;prefix=[];buildControls();render();
   if(match.status==='declined'){c.finish(false,0,match.from_me?`${names()[myColor()==='w'?'b':'w']} a refusé ton défi.`:'Tu as refusé ce défi.',{reward:0,noRecord:true,title:'Défi refusé'});return}
   const mine=match.my_color,won=match.winner===mine,draw=!match.winner;

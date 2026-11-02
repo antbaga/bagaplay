@@ -45,7 +45,7 @@
   'Modifier le pseudo':'Edit username','Chercher un joueur…':'Search for a player…','Chercher un adversaire…':'Search for an opponent…','Joueurs récents':'Recent players','Recherche…':'Searching…','Chargement…':'Loading…','Chargement du profil…':'Loading profile…','Joueur introuvable.':'Player not found.',
   'Aucun autre joueur pour l’instant.':'No other players yet.','Classement indisponible (connexion ?).':'Leaderboard unavailable (connection?).','Personne pour l’instant. À toi !':'Nobody yet. Your turn!',
   // salon, défis
-  'Mes parties':'My games','Actualiser':'Refresh','Jouer à deux sur ce téléphone':'Two players on this phone','Le jeu en ligne n’est pas activé dans cette version.':'Online play is not enabled in this version.',
+  'Mes parties':'My games','Jouer contre l’ordinateur':'Play against the computer','Contre l’ordinateur':'Against the computer','TOI':'YOU','ORDINATEUR':'COMPUTER','L’ordinateur réfléchit…':'The computer is thinking…','Extrême':'Extreme','Actualiser':'Refresh','Jouer à deux sur ce téléphone':'Two players on this phone','Le jeu en ligne n’est pas activé dans cette version.':'Online play is not enabled in this version.',
   'Pour jouer en ligne, installe BagaPlay sur ton écran d’accueil : touche Partager puis « Sur l’écran d’accueil ».':'To play online, add BagaPlay to your home screen: tap Share, then “Add to Home Screen”.',
   'Choisis un pseudo pour jouer en ligne.':'Choose a username to play online.','Tes parties apparaîtront ici.':'Your games will appear here.','Aucune partie. Cherche un adversaire ci-dessus.':'No games yet. Search for an opponent above.',
   'Ouverture de la partie…':'Opening game…','Envoi du défi…':'Sending challenge…','Défier':'Challenge','Défier aux échecs':'Challenge to chess','Défier aux dames':'Challenge to checkers',
@@ -62,7 +62,7 @@
   'Ce pseudo est déjà pris.':'This username is already taken.','pseudo manquant':'missing username','joueur introuvable':'player not found','tu ne peux pas te défier toi-même':'you can’t challenge yourself','trop de défis en attente':'too many pending challenges','partie introuvable':'game not found','tu ne joues pas dans cette partie':'you’re not in this game','partie terminée ou pas commencée':'game over or not started','coup désynchronisé':'move out of sync','ce n\'est pas ton tour':'it’s not your turn','impossible de refuser cette partie':'this game can’t be declined','partie pas en cours':'game not in progress','pas de nulle proposée':'no draw offered',
   'Pas de connexion internet.':'No internet connection.','Choisis d’abord un pseudo.':'Choose a username first.','Le jeu en ligne n’est pas activé.':'Online play is not enabled.',
   // Cookie Curling
-  '↶ Annuler le lancer':'↶ Undo throw','Terminer la partie':'End game','Les huit pâtisseries à créer':'The eight pastries to create','TOUT DOUX':'GENTLY','Cookie':'Cookie','Tartelette':'Tartlet','Tarte citron':'Lemon tart','Moelleux chocolat':'Chocolate fondant','Fraisier':'Strawberry cake','Délice myrtille':'Blueberry delight','Gâteau de fête':'Party cake','Pièce montée':'Wedding tower',
+  '↶ Annuler le lancer':'↶ Undo throw','Terminer la partie':'End game','Les huit pâtisseries à créer':'The eight pastries to create','TOUT DOUX':'GENTLY','BIEN DOSÉ':'JUST RIGHT','ÉNERGIQUE':'POWERFUL','Cookie':'Cookie','Tartelette':'Tartlet','Tarte citron':'Lemon tart','Moelleux chocolat':'Chocolate fondant','Fraisier':'Strawberry cake','Délice myrtille':'Blueberry delight','Gâteau de fête':'Party cake','Pièce montée':'Wedding tower',
   'Tout commence par une pépite.':'It all starts with a chip.','Un cœur de confiture.':'A jam heart.','Un peu de soleil.':'A bit of sunshine.','Le chocolat, évidemment.':'Chocolate, of course.','La vie en rose.':'La vie en rose.','Une douceur bien ronde.':'A nicely round treat.','Il y a quelque chose à fêter.':'There’s something to celebrate.','Le grand chef-d’œuvre !':'The grand masterpiece!',
   // jeux d'arcade (canvas)
   'Glisse pour commencer':'Swipe to start','Glisse pour déplacer, touche pour tourner.':'Swipe to move, tap to rotate.','À SUIVRE':'NEXT','LIGNES':'LINES','NIVEAU':'LEVEL','Un petit envol':'Little Flight','Touche l’écran pour battre des ailes.':'Tap the screen to flap.','Prêt pour le rebond ?':'Ready to bounce?','Touche pour lancer, glisse pour guider.':'Tap to launch, slide to steer.','Touche pour lancer · Glisse pour guider':'Tap to launch · Slide to steer',
@@ -91,6 +91,9 @@
   [/^Défier (.+) \?$/,function(m){return 'Challenge '+m[1]+'?'}],
   [/^Une partie de (échecs|dames) commence\. (.+) reçoit une notification et joue quand il veut\.$/,function(m){return 'A game of '+(m[1]==='échecs'?'chess':'checkers')+' starts. '+m[2]+' gets a notification and plays whenever they like.'}],
   [/^BagaPlay ([\d.]+) · Sans pub, sans compte\.$/,function(m){return 'BagaPlay '+m[1]+' · No ads, no account.'}],
+ [/^(.+) · (Facile|Normal|Difficile|Extrême)$/,function(m){return (T(m[1])||m[1])+' · '+T(m[2])}],
+ [/^✦ ([FNDX] .+)$/,function(m){return '✦ '+m[1].split(' · ').map(function(part){var k=part.slice(0,1),v=part.slice(2);return ({F:'E',N:'N',D:'H',X:'X'})[k]+' '+(T(v)||v)}).join(' · ')}],
+ [/^Carte (.+) \(corail\)$/,function(m){return 'Card '+m[1]+' (coral)'}],
  [/^(\d+) jeux$/,function(m){return m[1]+' games'}],
   [/^Serveur indisponible \((\d+)\)\.$/,function(m){return 'Server unavailable ('+m[1]+').'}],
   [/^Coup non envoyé : (.+)$/,function(m){return 'Move not sent: '+(T(m[1])||m[1])}],
@@ -100,7 +103,9 @@
   [/^(Échec ! )?Au tour de (.+)…$/,function(m){return (m[1]?'Check! ':'')+m[2]+'’s turn…'}],
   [/^(.+) te défie ! Joue ton premier coup, ou refuse le défi\.$/,function(m){return m[1]+' challenges you! Make your first move, or decline.'}],
   [/^(.+) te défie et commence\. Tu pourras jouer ensuite, ou refuser\.$/,function(m){return m[1]+' challenges you and moves first. You can play next, or decline.'}],
-  [/^Partie nulle(?: \((.+)\))?\.$/,function(m){return 'Draw'+(m[1]?' ('+(T(m[1])||m[1])+')':'')+'.'}],
+  [/^(Tu as battu l’ordinateur|L’ordinateur gagne)(?: \((.+)\))?\.$/,function(m){return (m[1][0]==='T'?'You beat the computer':'The computer wins')+(m[2]?' ('+(T(m[2])||m[2])+')':'')+'.'}],
+ [/^À toi de jouer\.(?: Prise obligatoire \((\d+)\)\.)?$/,function(m){return 'Your turn.'+(m[1]?' Capture is mandatory ('+m[1]+').':'')}],
+ [/^Partie nulle(?: \((.+)\))?\.$/,function(m){return 'Draw'+(m[1]?' ('+(T(m[1])||m[1])+')':'')+'.'}],
   [/^(.+) gagne(?: \((.+)\))?\.$/,function(m){var w=m[1]==='Blancs'?'White':m[1]==='Noirs'?'Black':m[1];return w+' wins'+(m[2]?' ('+(T(m[2])||m[2])+')':'')+'.'}],
   [/^Victoire des (blancs|noirs) !$/,function(m){return (m[1]==='blancs'?'White':'Black')+' wins!'}],
   [/^(.+) a refusé ton défi\.$/,function(m){return m[1]+' declined your challenge.'}],
@@ -119,7 +124,7 @@
   [/^Tu as franchi (\d+) obstacles?\.\nUn nouveau départ t’attend !$/,function(m){return 'You cleared '+m[1]+(m[1]==='1'?' obstacle':' obstacles')+'.\nA fresh start awaits!'}],
   [/^Un peu trop près du bord !\n(\d+) obstacles franchis\.$/,function(m){return 'A bit too close to the edge!\n'+m[1]+' obstacles cleared.'}],
   [/^(\d+) points · Niveau (\d+)$/,function(m){return m[1]+' points · Level '+m[2]}],
-  [/^10 niveaux terminés · (\d+) points$/,function(m){return '10 levels complete · '+m[1]+' points'}],
+  [/^(\d+) niveaux terminés · (\d+) points$/,function(m){return m[1]+' levels complete · '+m[2]+' points'}],
   // réflexion
   [/^La tuile 2048 est à toi !\n(\d+) points de douceur\.$/,function(m){return 'The 2048 tile is yours!\n'+m[1]+' sweet points.'}],
   [/^Plus de place sur le plateau\.\nTon score : (\d+) points\.$/,function(m){return 'No more room on the board.\nYour score: '+m[1]+' points.'}],
