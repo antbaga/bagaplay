@@ -1,31 +1,36 @@
-// Jeux à deux (échecs, dames) : sur le même téléphone ou en ligne.
+// Jeux à deux (échecs, dames, puissance 4) : sur le même téléphone, contre l'ordinateur (dames, puissance 4) ou en ligne.
 import * as Chess from './chess-engine.js';
 import * as Draughts from './draughts-engine.js';
 import * as online from './online.js';
-import {bestMove} from './draughts-ai.js';
+import * as Connect4 from './connect4-engine.js';
+import {bestMove as draughtsAI} from './draughts-ai.js';
 
 const GLYPH={k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'};
-const COLOR_NAME={w:'Blancs',b:'Noirs'};
+const COLOR_NAMES={w:'Blancs',b:'Noirs'},C4_NAMES={w:'Rouges',b:'Jaunes'};
 const POLL_MS=1500;
 export const DUEL_RULES={
  chess:'Échecs : règles complètes. Touche une pièce puis sa case d’arrivée.',
- draughts:'Dames internationales 10×10 : prise obligatoire et majoritaire, dames volantes. Touche une pièce puis chaque case d’arrivée.'
+ draughts:'Dames internationales 10×10 : prise obligatoire et majoritaire, dames volantes. Touche une pièce puis chaque case d’arrivée.',
+ connect4:'Puissance 4 : aligne 4 jetons (ligne, colonne ou diagonale). Touche une colonne pour y lâcher ton jeton.'
 };
 
-export const initialState=kind=>(kind==='chess'?Chess:Draughts).initial();
+const ENGINES={chess:Chess,draughts:Draughts,connect4:Connect4};
+export const initialState=kind=>ENGINES[kind].initial();
+export const AI_GAMES=['draughts','connect4'];
 
 export function duel(kind){return c=>{
- const E=kind==='chess'?Chess:Draughts,size=kind==='chess'?8:10;
+ const E=ENGINES[kind],c4=kind==='connect4',cols=kind==='chess'?8:kind==='draughts'?10:7,rows=c4?6:cols,COLOR_NAME=c4?C4_NAMES:COLOR_NAMES;
+ const aiMove=(st,l)=>c4?Connect4.bestMove(st,l):draughtsAI(st,l);
  const opts=c.duel||{mode:'local'};let match=opts.match||null;
- const isOnline=!!match,vsAI=opts.mode==='ai'&&kind==='draughts',aiColor='b',aiLevel=opts.level??1;let thinking=false;
+ const isOnline=!!match,vsAI=opts.mode==='ai'&&AI_GAMES.includes(kind),aiColor='b',aiLevel=opts.level??1;let thinking=false;
  let state=isOnline?match.state:E.initial(),ply=isOnline?match.ply:0,history=[];
  let sel=null,prefix=[],busy=false,ended=false,drawAsked=-1,errorText='';
  const myColor=()=>isOnline?match.my_color:null;
- const flipped=()=>myColor()==='b';
- const grid=c.grid(size,'duel '+kind);
- const cells=[];
- for(let v=0;v<size*size;v++){const cell=c.cell(grid,'',()=>tap(+cell.dataset.i));cells.push(cell)}
- cells.forEach((cell,v)=>{const i=flipped()?size*size-1-v:v;cell.dataset.i=i;const r=Math.floor(i/size),col=i%size;cell.classList.add((r+col)%2?'dk':'lt')});
+ const flipped=()=>myColor()==='b'&&!c4;
+ const grid=c.grid(cols,'duel '+kind);if(c4)grid.dataset.aspect=String(cols/rows);
+ const cells=[],N=cols*rows;
+ for(let v=0;v<N;v++){const cell=c.cell(grid,'',()=>tap(+cell.dataset.i));cells.push(cell)}
+ cells.forEach((cell,v)=>{const i=flipped()?N-1-v:v;cell.dataset.i=i;const r=Math.floor(i/cols),col=i%cols;if(!c4)cell.classList.add((r+col)%2?'dk':'lt')});
 
  // ---- commandes
  let undoBtn,resignBtn,drawBtn,declineBtn;
@@ -37,8 +42,8 @@ export function duel(kind){return c=>{
  }
 
  // ---- affichage
- const names=()=>isOnline?{w:match.white_name||'…',b:match.black_name||'…'}:vsAI?{w:'TOI',b:'ORDINATEUR'}:{w:'BLANCS',b:'NOIRS'};
- function count(color){return kind==='chess'?state.board.filter(p=>Chess.pieceColor(p)===color).length:Draughts.count(state,color)}
+ const names=()=>isOnline?{w:match.white_name||'…',b:match.black_name||'…'}:vsAI?{w:'TOI',b:'ORDINATEUR'}:c4?{w:'ROUGES',b:'JAUNES'}:{w:'BLANCS',b:'NOIRS'};
+ function count(color){return kind==='chess'?state.board.filter(p=>Chess.pieceColor(p)===color).length:c4?Connect4.count(state,color):Draughts.count(state,color)}
  function legal(){return E.legalMoves(state)}
  function targets(){
   if(sel==null)return new Map();const m=new Map();
@@ -47,13 +52,14 @@ export function duel(kind){return c=>{
   return m;
  }
  function render(){
-  const t=targets(),last=state.last,lastSquares=new Set(last?(kind==='chess'?[last.from,last.to]:last.path):[]);
+  const t=c4?new Map():targets(),last=state.last,lastSquares=new Set(last?(kind==='chess'?[last.from,last.to]:c4?[]:last.path):[]),winLine=new Set(c4&&state.line||[]);
   const checkSq=kind==='chess'&&Chess.inCheck(state)?state.board.indexOf(state.turn==='w'?'K':'k'):-1;
   const forced=kind==='draughts'&&sel==null&&canPlay()?new Set(legal().filter(m=>m.captures.length).map(m=>m.path[0])):new Set();
   for(const cell of cells){const i=+cell.dataset.i,p=state.board[i];
    cell.classList.toggle('sel',i===sel||prefix.slice(1).includes(i));cell.classList.toggle('last',lastSquares.has(i));cell.classList.toggle('check',i===checkSq);
    cell.classList.toggle('target',t.has(i));cell.classList.toggle('capture',!!t.get(i));cell.classList.toggle('forced',forced.has(i));
    let html='';
+   if(c4){cell.classList.toggle('win',winLine.has(i));const drop=p&&last&&last.index===i&&cell._drop!==ply;if(p)html=`<span class="disc ${p}"></span>`;if(cell._html!==html){cell.innerHTML=html;cell._html=html;if(drop){cell._drop=ply;const r=Math.floor(i/cols)+1;cell.firstChild.animate([{transform:`translateY(${-r*110}%)`},{transform:'translateY(0)',offset:.75},{transform:'translateY(-8%)',offset:.87},{transform:'translateY(0)'}],{duration:180+r*45,easing:'ease-in'})}}cell.setAttribute('aria-label',(p?(p==='w'?'jeton rouge':'jeton jaune'):'case vide')+', colonne '+(i%cols+1));continue}
    if(p){if(kind==='chess')html=`<span class="piece ${Chess.pieceColor(p)}">${GLYPH[p.toLowerCase()]}︎</span>`;
     else html=`<span class="man ${Draughts.colorOf(p)}${Draughts.isKing(p)?' king':''}"></span>`}
    if(cell._html!==html){cell.innerHTML=html;cell._html=html}
@@ -87,6 +93,7 @@ export function duel(kind){return c=>{
  function tap(i){
   errorText='';
   if(!canPlay()){if(isOnline&&match.status==='active'&&!ended)c.hint(`Au tour de ${names()[state.turn]}…`);return}
+  if(c4){const m=legal().find(x=>x.col===i%cols);if(m)commit(m);return}
   const t=targets();
   if(sel!=null&&t.has(i)){
    if(kind==='chess'){const moves=legal().filter(m=>m.from===sel&&m.to===i);if(moves.length>1)return askPromotion(moves[0]);return commit(moves[0])}
@@ -115,7 +122,7 @@ export function duel(kind){return c=>{
  }
  function undo(){if(!history.length||ended||thinking)return;state=history.pop();ply--;if(vsAI&&state.turn===aiColor&&history.length){state=history.pop();ply--}sel=null;prefix=[];render()}
  // tour de l'ordinateur : petit délai pour qu'on voie son coup arriver
- function aiTurn(){thinking=true;render();c.later(()=>{const m=bestMove(state,aiLevel);thinking=false;commit(m)},450)}
+ function aiTurn(){thinking=true;render();c.later(()=>{const m=aiMove(state,aiLevel);thinking=false;commit(m)},450)}
 
  // ---- fin de partie
  function resultText(winner,reason){const n=names();return winner?`${isOnline?n[winner]:COLOR_NAME[winner]} gagne${reason?' ('+reason+')':''}.`:`Partie nulle${reason?' ('+reason+')':''}.`}

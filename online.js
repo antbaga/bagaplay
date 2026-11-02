@@ -9,7 +9,7 @@ export const CONFIG={
 // Tableaux où le plus petit score gagne (vérifié aussi côté serveur).
 export const LOWER=new Set(['memory','mines','sudoku','slide']);
 // Tableaux alimentés par le serveur (victoires en ligne), jamais envoyés par l'app.
-export const SERVER_BOARDS=new Set(['chess','draughts']);
+export const SERVER_BOARDS=new Set(['chess','draughts','connect4']);
 
 const PLAYER_KEY='bagaplay-player';
 function uuid(){try{return crypto.randomUUID()}catch{return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0;return(c==='x'?r:(r&3|8)).toString(16)})}}

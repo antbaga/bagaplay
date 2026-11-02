@@ -4,7 +4,7 @@ import {celebrate,music,PANDA} from './rewards.js';
 import * as online from './online.js';
 import {puzzles} from './puzzles.js';
 import {arcade} from './arcade.js';
-import {duel,DUEL_RULES,initialState} from './duel.js';
+import {duel,DUEL_RULES,initialState,AI_GAMES} from './duel.js';
 import {formatDuration} from './engines.js';
 const $=s=>document.querySelector(s);
 const el=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e};
@@ -12,6 +12,7 @@ const games=[
  {id:'cookie',title:'Cookie Curling',desc:'',cat:'arcade',color:'#f8deb9',tag:'',hint:'Glisse le cookie vers le haut. Deux pâtisseries identiques fusionnent.',art:'cookie'},
  {id:'chess',title:'Échecs',desc:'',cat:'duel',color:'#eadfca',tag:'',hint:'',art:'chess'},
  {id:'draughts',title:'Dames',desc:'',cat:'duel',color:'#e0ebd1',tag:'',hint:'',art:'draughts'},
+ {id:'connect4',title:'Puissance 4',desc:'',cat:'duel',color:'#d9e6f7',tag:'',hint:'',art:'connect4'},
  {id:'2048',title:'2048',desc:'Fusionne, encore et encore.',cat:'puzzle',color:'#f3e2c0',tag:'LES CHIFFRES S’ALIGNENT',hint:'Glisse pour fusionner les nombres identiques.',art:'numbers'},
  {id:'snake',title:'Snake',desc:'Un petit creux sans fin.',cat:'arcade',color:'#dceeca',tag:'LE GRAND CLASSIQUE',hint:'Glisse pour diriger le serpent. Évite les murs et ta queue.',art:'snake'},
  {id:'blocks',title:'Blocs pastel',desc:'Tout finit par s’emboîter.',cat:'arcade',color:'#ded6f6',tag:'UNE LIGNE À LA FOIS',hint:'Glisse à gauche ou à droite. Touche pour tourner, glisse vers le bas pour poser.',art:'blocks'},
@@ -24,7 +25,7 @@ const games=[
  {id:'slide',title:'Le taquin',desc:'Chaque pièce à sa place.',cat:'puzzle',color:'#e2d6f5',tag:'TOUT DANS L’ORDRE',hint:'Touche une case voisine du vide. Remets les nombres de 1 à 15 dans l’ordre.',art:'slide',lower:true}
 ];
 let saved={};try{saved=JSON.parse(localStorage.getItem('bagaplay-v1')||'{}')}catch{};
-for(const id of ['memory','snake','sudoku'])if(saved[id]!=null){if(saved[id+':1']==null)saved[id+':1']=saved[id];delete saved[id]}
+for(const id of ['memory','snake','sudoku','mines'])if(saved[id]!=null){if(saved[id+':1']==null)saved[id+':1']=saved[id];delete saved[id]}
 let turns={};let difficulty=1,collected=0;let sound=!!saved.sound,current=null,runtime=null,paused=false,ended=false,cleanups=[],tasks=[],time=0,raf=0;
 function persist(){try{localStorage.setItem('bagaplay-v1',JSON.stringify(saved))}catch{}}
 let audio;
@@ -42,22 +43,23 @@ function icon(type){let s='';const rect=(x,y,w,h,c,rx=5)=>`<rect x="${x}" y="${y
  if(type==='cookie')s='<circle cx="48" cy="57" r="29" fill="#fb9a2a"/><path d="M32 42l9-3 4 9-8 5ZM54 54l10-4 5 10-10 5ZM34 64l8-3 3 10-9 4Z" fill="#7b412d"/><circle cx="85" cy="35" r="24" fill="#f4a73a"/><circle cx="85" cy="35" r="18" fill="#e24750"/><path d="M72 25l26 20M77 20l25 20M70 37l23-18M77 49l23-18" stroke="#ffc86d" stroke-width="4"/>';
  if(type==='chess'){for(let y=0;y<4;y++)for(let x=0;x<4;x++)s+=rect(29+x*17,18+y*17,17,17,(x+y)%2?'#aed090':'#fff8e4',0);s+=txt(54,60,'♞\uFE0E','#314438',34)+txt(83,82,'♛\uFE0E','#fffdf6',26).replace('<text','<text stroke="#364d3f" stroke-width="1"')}
  if(type==='draughts'){for(let y=0;y<4;y++)for(let x=0;x<4;x++)s+=rect(29+x*17,18+y*17,17,17,(x+y)%2?'#aed090':'#fff8e4',0);for(const [x,y,c] of [[46,26,'#3c5543'],[80,26,'#3c5543'],[63,77,'#fffaf0'],[97,77,'#fffaf0']])s+=`<circle cx="${x-8}" cy="${y+1}" r="7" fill="${c}" stroke="#5e7854" stroke-width="1.5"/>`}
+ if(type==='connect4'){s=rect(26,14,74,66,'#3d7fd1',8);for(let y=0;y<4;y++)for(let x=0;x<5;x++){const col=y===3&&x<3?'#e5483b':y===2&&x===1?'#f5c430':y===3&&x===3?'#f5c430':y===2&&x===2?'#e5483b':'#eaf3ff';s+=`<circle cx="${36+x*13.5}" cy="${27+y*14}" r="5.2" fill="${col}"/>`}}
  return `<svg viewBox="0 0 126 102" aria-hidden="true">${s}</svg>`;
 }
 const isDuel=id=>games.find(g=>g.id===id)?.cat==='duel';
 const TIMED=['mines','sudoku'];
 // Records séparés par difficulté (clé « jeu:niveau »).
-const DIFF={memory:4,snake:3,sudoku:3},LEVELS=['Facile','Normal','Difficile','Extrême'],LEVEL_SHORT=['F','N','D','X'];
+const DIFF={memory:4,snake:3,sudoku:3,mines:4},LEVELS=['Facile','Normal','Difficile','Extrême'],levelName=(id,d)=>id==='mines'&&d===3?'Expert':LEVELS[d],LEVEL_SHORT=['F','N','D','X'];
 const base=k=>String(k).split(':')[0];
 const recordKey=id=>DIFF[id]?`${id}:${difficulty}`:id;
 // tous les tableaux de records : [{key, id, label}]
-function recordBoards(){const out=[];for(const g of games){if(DIFF[g.id])for(let d=0;d<DIFF[g.id];d++)out.push({key:`${g.id}:${d}`,id:g.id,label:`${g.title} · ${LEVELS[d]}`});else out.push({key:g.id,id:g.id,label:g.title})}return out}
+function recordBoards(){const out=[];for(const g of games){if(DIFF[g.id])for(let d=0;d<DIFF[g.id];d++)out.push({key:`${g.id}:${d}`,id:g.id,label:`${g.title} · ${levelName(g.id,d)}`});else out.push({key:g.id,id:g.id,label:g.title})}return out}
 // Valeur affichée d'un record : durée lisible pour les jeux chronométrés, sinon nombre + unité.
 const fmt=(id,v)=>TIMED.includes(base(id))?formatDuration(v):v+unit(base(id),v);
 const unit=(id,v=2)=>isDuel(id)?(v>1?' victoires':' victoire'):['mines','sudoku'].includes(id)?' s':games.find(g=>g.id===id)?.lower?' coups':'';
-function renderCards(filter='all'){const selected=games.filter(g=>filter==='all'||g.cat===filter);$('#game-count').textContent=selected.length+' jeux';{const w=$('#wallet'),t='● '+(saved.coins||0)+' ›';if(w.textContent&&w.textContent!==t){w.classList.remove('bump');void w.offsetWidth;w.classList.add('bump')}w.textContent=t}$('#cards').innerHTML=selected.map(g=>`<button class="game-card" data-game="${g.id}" aria-label="Jouer à ${g.title}"><div class="card-art" style="--tint:${g.color}"><span class="card-tag">${g.tag}</span>${icon(g.art)}</div><h3>${g.title}</h3><p>${g.desc}</p><span class="card-arrow">↗</span>${turns[g.id]?`<div class="card-turn">● À toi de jouer${turns[g.id]>1?' ('+turns[g.id]+')':''}</div>`:''}${DIFF[g.id]?(()=>{const parts=[];for(let d=0;d<DIFF[g.id];d++){const v=saved[g.id+':'+d];if(v!=null)parts.push(LEVEL_SHORT[d]+' '+fmt(g.id,v))}return parts.length?`<div class="card-record">✦ ${parts.join(' · ')}</div>`:''})():saved[g.id]!=null?`<div class="card-record">${isDuel(g.id)?'✦ ':'✦ Record : '}${fmt(g.id,saved[g.id])}${isDuel(g.id)?' en ligne':''}</div>`:''}</button>`).join('');document.querySelectorAll('[data-game]').forEach(b=>b.onclick=()=>{const id=b.dataset.game;if(isDuel(id))return openLobby(id);if(['memory','snake','sudoku'].includes(id)){dialog('Difficulté','','Jouer',()=>{difficulty=+document.querySelector('#difficulty').value;launch(id)},'Annuler',()=>{});$('#dialog-text').innerHTML='<select id="difficulty" aria-label="Difficulté"><option value="0">Facile</option><option value="1" selected>Normal</option><option value="2">Difficile</option>'+(id==='memory'?'<option value="3">Extrême</option>':'')+'</select>'}else launch(id)})}
+function renderCards(filter='all'){const selected=games.filter(g=>filter==='all'||g.cat===filter);$('#game-count').textContent=selected.length+' jeux';{const w=$('#wallet'),t='● '+(saved.coins||0)+' ›';if(w.textContent&&w.textContent!==t){w.classList.remove('bump');void w.offsetWidth;w.classList.add('bump')}w.textContent=t}$('#cards').innerHTML=selected.map(g=>`<button class="game-card" data-game="${g.id}" aria-label="Jouer à ${g.title}"><div class="card-art" style="--tint:${g.color}"><span class="card-tag">${g.tag}</span>${icon(g.art)}</div><h3>${g.title}</h3><p>${g.desc}</p><span class="card-arrow">↗</span>${turns[g.id]?`<div class="card-turn">● À toi de jouer${turns[g.id]>1?' ('+turns[g.id]+')':''}</div>`:''}${DIFF[g.id]?(()=>{const parts=[];for(let d=0;d<DIFF[g.id];d++){const v=saved[g.id+':'+d];if(v!=null)parts.push(LEVEL_SHORT[d]+' '+fmt(g.id,v))}return parts.length?`<div class="card-record">✦ ${parts.join(' · ')}</div>`:''})():saved[g.id]!=null?`<div class="card-record">${isDuel(g.id)?'✦ ':'✦ Record : '}${fmt(g.id,saved[g.id])}${isDuel(g.id)?' en ligne':''}</div>`:''}</button>`).join('');document.querySelectorAll('[data-game]').forEach(b=>b.onclick=()=>{const id=b.dataset.game;if(isDuel(id))return openLobby(id);if(DIFF[id]){dialog('Difficulté','','Jouer',()=>{difficulty=+document.querySelector('#difficulty').value;launch(id)},'Annuler',()=>{});$('#dialog-text').innerHTML='<select id="difficulty" aria-label="Difficulté"><option value="0">Facile</option><option value="1" selected>Normal</option><option value="2">Difficile</option>'+(DIFF[id]>3?'<option value="3">'+(id==='mines'?'Expert':'Extrême')+'</option>':'')+'</select>'}else launch(id)})}
 document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-filter]').forEach(x=>x.classList.toggle('active',x===b));renderCards(b.dataset.filter)});
-const VERSION='1.6.0';
+const VERSION='1.6.1';
 function setSound(on){sound=on;music(sound);saved.sound=sound;persist();tone()}
 function updateSound(){$('#footer-version').textContent=`BagaPlay ${VERSION} · Sans pub, sans compte.`}
 // Réglages : son, langue, version.
@@ -92,6 +94,7 @@ function launch(id,fresh=false,duelOpts=null){stop();onlineDuel=!!duelOpts?.matc
    saved.coins=(saved.coins||0)+reward;persist();
    if(onlineDuel)dialog(o.title||'Partie terminée',text,'Retour au salon',leave,'Voir le plateau',()=>{});
    else if(isDuel(id))dialog(o.title||'Partie terminée',text,'Rejouer',()=>launch(id,true,ctx.duel?.mode==='ai'?ctx.duel:null),'Retour',leave);
+   else if(o.viewBoard)dialog(win?'Bien joué !':'Partie terminée',text,'Rejouer',()=>launch(id,true),'Voir la grille',()=>{});
    else dialog(win?'Bien joué !':'Partie terminée',text,'Rejouer',()=>launch(id,true),'Tous les jeux',goHome);
    if(reward)celebrate(reward,saved.coins);
    if(!o.noRecord){const line=document.createElement('p');line.id='record-line';line.className='record-line'+(isNew?' new':'');line.textContent=best==null?'Pas encore de record':(isNew?'Nouveau record ! ':'Record : ')+fmt(id,best);$('#dialog-text').after(line)}
@@ -110,7 +113,7 @@ renderCards();updateSound();document.addEventListener('pointerdown',()=>{if(soun
 // Agrandit le plateau au maximum de l'espace libre, en gardant les proportions du jeu.
 function fitBoard(){const b=$('#board');if($('#play').hidden)return;const W=b.clientWidth,H=b.clientHeight;if(!W||!H)return;let changed=false;
  for(const el of b.children){if(el.tagName==='CANVAS'&&el.dataset.w){const w=+el.dataset.w,h=+el.dataset.h,s=Math.min(W/w,H/h),cw=Math.floor(w*s)+'px',ch=Math.floor(h*s)+'px';if(el.style.width!==cw||el.style.height!==ch){el.style.width=cw;el.style.height=ch;changed=true}}
-  else if(el.classList.contains('grid')){const side=Math.floor(Math.min(W,H))+'px';el.style.width=el.style.height=side}}
+  else if(el.classList.contains('grid')){const ar=+el.dataset.aspect||1,w=Math.floor(Math.min(W,H*ar));el.style.width=w+'px';el.style.height=Math.floor(w/ar)+'px'}}
  if(changed)window.dispatchEvent(new Event('resize'))}
 if(window.ResizeObserver)new ResizeObserver(()=>fitBoard()).observe($('#board'));else window.addEventListener('resize',fitBoard);
 
@@ -160,7 +163,7 @@ async function showProfile(r){const box=$('#profile');box.hidden=false;box.repla
  const head=el('div','profile-head');head.append(el('span','avatar big',pr.name.slice(0,1).toUpperCase()),el('h2',null,pr.name));const close=el('button','text-btn','Fermer');close.onclick=()=>{box.hidden=true;scoresSearch?.clear()};head.append(close);
  const coins=el('div','profile-coins');coins.append(el('strong',null,(pr.scores.coins||0).toLocaleString('fr-FR')),el('small',null,' PIÈCES'));
  const values={...pr.scores,...pr.wins};const list=el('div','score-list');list.innerHTML=recordsHtml(values);
- const actions=el('div','profile-actions');if(!pr.me)for(const g of games.filter(x=>x.cat==='duel')){const b=el('button','primary','Défier aux '+(g.id==='chess'?'échecs':'dames'));b.onclick=()=>offerChallenge(pr,g.id);actions.append(b)}
+ const actions=el('div','profile-actions');if(!pr.me)for(const g of games.filter(x=>x.cat==='duel')){const b=el('button','primary',({chess:'Défier aux échecs',draughts:'Défier aux dames',connect4:'Défier au puissance 4'})[g.id]);b.onclick=()=>offerChallenge(pr,g.id);actions.append(b)}
  box.replaceChildren(head,coins,actions,list)}
 async function loadRanking(){const board=$('#ranking-board').value,list=$('#ranking-list');list.innerHTML='<li class="muted">Chargement…</li>';const rows=await online.top(board);if(board!==$('#ranking-board').value)return;
  if(!rows){list.innerHTML='<li class="muted">Classement indisponible (connexion ?).</li>';return}
@@ -175,7 +178,7 @@ $('#pseudo-save').onclick=savePseudo;$('#pseudo').addEventListener('keydown',e=>
 // ---------------------------------------------------------------- salon des jeux à deux
 let lobbyGame=null,lobbyTimer=0,lobbySearch=null;
 function openLobby(id){lobbyGame=id;const g=games.find(x=>x.id===id);$('#lobby-title').textContent=g.title;$('#lobby-rules').textContent=DUEL_RULES[id];$('#home').hidden=true;$('#scores').hidden=true;$('#lobby').hidden=false;lobbyStatus('');
- $('#lobby-ai').hidden=id!=='draughts';const on=online.enabled();$('#lobby-on').hidden=!on;$('#lobby-off').hidden=on;if(!on&&globalThis.bagaWebNeedsInstall)$('#lobby-off').textContent='Pour jouer en ligne, installe BagaPlay sur ton écran d’accueil : touche Partager puis « Sur l’écran d’accueil ».';
+ $('#lobby-ai').hidden=!AI_GAMES.includes(id);const on=online.enabled();$('#lobby-on').hidden=!on;$('#lobby-off').hidden=on;if(!on&&globalThis.bagaWebNeedsInstall)$('#lobby-off').textContent='Pour jouer en ligne, installe BagaPlay sur ton écran d’accueil : touche Partager puis « Sur l’écran d’accueil ».';
  if(on){lobbySearch??=playerSearch($('#lobby-search'),'Chercher un adversaire…',r=>offerChallenge(r,lobbyGame));lobbySearch.clear();
   if(!online.registered())lobbyStatus('Choisis un pseudo pour jouer en ligne.');loadMatches(true)}
  clearInterval(lobbyTimer);lobbyTimer=setInterval(()=>{if(!$('#lobby').hidden&&!document.hidden&&online.registered())loadMatches(false)},5000);window.scrollTo(0,0)}

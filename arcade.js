@@ -10,11 +10,17 @@ function snake(c){const [canvas,g]=c.canvas(400);const N=18,vec={left:[-1,0],rig
  const delay=()=>Math.max(.065,[.2,.14,.095][c.difficulty]-score*.0004);
  // virages mis en file : un geste en angle (haut puis droite…) donne deux virages successifs, sans demi-tour
  function steer(d){started=true;const last=queue.length?queue[queue.length-1]:dir;if(d===last)return;const a=vec[d],b=vec[last];if(a[0]+b[0]===0&&a[1]+b[1]===0)return;if(queue.length<3)queue.push(d)}
- // direction lue pendant le glissé (pas au relâcher) : réaction immédiate ; l'ancre repart à chaque virage détecté
- let anchor=null;
- c.listen(c.board,'pointerdown',e=>{started=true;anchor=[e.clientX,e.clientY];c.board.setPointerCapture?.(e.pointerId)});
- c.listen(c.board,'pointermove',e=>{if(!anchor)return;const dx=e.clientX-anchor[0],dy=e.clientY-anchor[1],T=Math.max(14,canvas.getBoundingClientRect().width/24);if(Math.max(Math.abs(dx),Math.abs(dy))<T)return;steer(Math.abs(dx)>Math.abs(dy)?dx>0?'right':'left':dy>0?'down':'up');anchor=[e.clientX,e.clientY]});
- c.listen(c.board,'pointerup',()=>anchor=null);c.listen(c.board,'pointercancel',()=>anchor=null);
+ // direction lue pendant le glissé (pas au relâcher) : réaction immédiate.
+ // Après une première direction, un virage n'est compté que si le doigt part nettement à angle droit
+ // (écart perpendiculaire ≥ 1,6 seuil et nettement plus grand que l'avance dans l'axe) : un trait un peu penché ne tourne pas.
+ let gesture=null;
+ c.listen(c.board,'pointerdown',e=>{started=true;gesture={x:e.clientX,y:e.clientY,dir:null};c.board.setPointerCapture?.(e.pointerId)});
+ c.listen(c.board,'pointermove',e=>{if(!gesture)return;const dx=e.clientX-gesture.x,dy=e.clientY-gesture.y,T=Math.max(16,canvas.getBoundingClientRect().width/20);
+  if(!gesture.dir){if(Math.max(Math.abs(dx),Math.abs(dy))<T)return;const d=Math.abs(dx)>Math.abs(dy)?dx>0?'right':'left':dy>0?'down':'up';steer(d);Object.assign(gesture,{dir:d,x:e.clientX,y:e.clientY});return}
+  const horiz=gesture.dir==='left'||gesture.dir==='right',par=horiz?dx:dy,perp=horiz?dy:dx;
+  if(Math.abs(perp)>=1.6*T&&Math.abs(perp)>1.8*Math.abs(par)){const d=horiz?perp>0?'down':'up':perp>0?'right':'left';steer(d);Object.assign(gesture,{dir:d,x:e.clientX,y:e.clientY})}
+  else if(Math.abs(par)>T)Object.assign(gesture,{x:e.clientX,y:e.clientY})});
+ c.listen(c.board,'pointerup',()=>gesture=null);c.listen(c.board,'pointercancel',()=>gesture=null);
  function draw(){bg(g,400);for(let y=0;y<N;y++)for(let x=0;x<N;x++){g.fillStyle=(x+y)%2?'#e4f2cb':'#eaf7d6';g.fillRect(x*20,y*20+20,20,20)}
   const pul=1+Math.sin(time*8)*.12;box(g,food.x*20+10-7*pul,food.y*20+30-7*pul,14*pul,14*pul,'#ff4f31',6);g.fillStyle='#4aa137';g.fillRect(food.x*20+9,food.y*20+21,2,5);
   const t=Math.min(1,clock/delay()),smooth=body.map((s,i)=>{const p=previous[i]||s;return {x:p.x+(s.x-p.x)*t,y:p.y+(s.y-p.y)*t}});
