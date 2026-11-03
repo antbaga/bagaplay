@@ -117,7 +117,7 @@ export function localThrower(s,lastBy){if(s.nextThrower)return s.nextThrower;con
 
 // ---- ordinateur : vise le cochonnet, ou tire la boule adverse qui tient le point.
 // Imprécision par niveau (angle en radians, distance en proportion) : Facile, Normal, Difficile.
-const AI_ERR=[[.1,.18],[.06,.11],[.035,.06]],AI_SHOOT=[0,.1,.3];
+const AI_ERR=[[.17,.3],[.11,.19],[.06,.1]],AI_SHOOT=[0,.04,.2];
 export function aiThrow(s,level=1,rand=Math.random){
  const err=AI_ERR[level]??AI_ERR[1];const g=()=>(rand()+rand()-1);
  if(s.phase==='jack'){const d=7+rand()*2.5,x=(rand()-.5)*1.2;return {angle:Math.atan2(x,d)+g()*err[0],power:powerFor('jack',Math.hypot(x,d))*(1+g()*err[1]),loft:.6}}

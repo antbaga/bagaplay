@@ -3,8 +3,8 @@
 import * as P from './petanque-engine.js';
 import * as online from './online.js';
 
-export const PETANQUE_RULES='Pétanque : 2 à 6 joueurs, 2 équipes tirées au sort. Glisse sur le terrain pour tourner la vue (deux doigts pour zoomer). Pour lancer : glisse le pavé (gauche/droite, haut/bas) et relâche, puis appuie, maintiens et relâche pour la force. L’équipe qui n’a pas le point joue. Première équipe à 13 points.';
-const TEAMS=[{name:'bleue',metal:'#9db8d8'},{name:'corail',metal:'#e3a487'}];
+export const PETANQUE_RULES='Pétanque : 2 à 6 joueurs, 2 équipes tirées au sort. Glisse sur le terrain pour tourner la vue (deux doigts pour zoomer). Pour lancer : fais glisser la boule vers le haut d’un geste et relâche ; la direction du geste donne la direction, sa vitesse la force. Choisis avant la hauteur du lancer. L’équipe qui n’a pas le point joue. Première équipe à 13 points.';
+const TEAMS=[{name:'bleue',metal:'#aebfd2'},{name:'corail',metal:'#d4ae92'}];
 const W=360,F=680,NEAR=.08,POLL=1500,RETURN_MS=3000,VS=2; // VS : boules un peu grossies pour rester lisibles
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),lerp=(a,b,t)=>a+(b-a)*t;
 const LIGHT=(()=>{const v=[-.45,.82,-.36],l=Math.hypot(...v);return v.map(x=>x/l)})();
@@ -27,7 +27,7 @@ function ico(sub){const t=(1+Math.sqrt(5))/2;let V=[[-1,t,0],[1,t,0],[-1,-t,0],[
  for(let s=0;s<sub;s++){const mid={},m=(a,b)=>{const k=a<b?a+'_'+b:b+'_'+a;if(mid[k]!=null)return mid[k];const p=V[a].map((x,i)=>(x+V[b][i])/2),l=Math.hypot(...p);V.push(p.map(x=>x/l));return mid[k]=V.length-1};
   const nf=[];for(const [a,b,c] of Fc){const ab=m(a,b),bc=m(b,c),ca=m(c,a);nf.push([a,ab,ca],[b,bc,ab],[c,ca,bc],[ab,bc,ca])}Fc=nf}
  return Fc.map(f=>{let pts=f.map(i=>V[i]);let n=normal(pts);const c=pts.reduce((a,p)=>a.map((x,i)=>x+p[i]),[0,0,0]);if(n[0]*c[0]+n[1]*c[1]+n[2]*c[2]<0){pts=pts.slice().reverse();n=normal(pts)}return {v:pts,n}})}
-const SPHERE_HI=ico(1),SPHERE_LO=ico(0);
+const SPHERE_LO=ico(0);
 function mulberry(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
 
 // ---- décor (construit une fois)
@@ -71,7 +71,7 @@ export function petanque(c){
   <div class="pq-tools"><button class="pq-icon" data-act="view" aria-label="Vue de dessus">⊞</button><button class="pq-icon" data-act="home" aria-label="Vue du lanceur">◉</button></div>
   <div class="pq-banner" hidden></div>
   <div class="pq-bottom"><div class="pq-prompt" role="status"></div><div class="pq-actions"></div></div>
-  <div class="pq-pad" hidden aria-label="Pavé de visée"><i class="pq-pad-h"></i><i class="pq-pad-v"></i><b class="pq-knob"></b></div>`;
+  <div class="pq-throw" hidden><div class="pq-lofts" role="group" aria-label="Hauteur du lancer"><button data-loft="0.1" aria-label="Lancer bas (roulette)">⌒</button><button data-loft="0.55" aria-label="Lancer moyen (demi-portée)">◠</button><button data-loft="0.95" aria-label="Lancer haut (plombée)">∩</button></div><div class="pq-hand" aria-label="Boule à lancer : fais glisser vers le haut et relâche"><b></b></div></div>`;
  c.board.append(hud);const $h=s=>hud.querySelector(s);
  function placeHud(){const r=cv.getBoundingClientRect(),b=c.board.getBoundingClientRect();Object.assign(hud.style,{left:(r.left-b.left)+'px',top:(r.top-b.top)+'px',width:r.width+'px',height:r.height+'px'})}
  c.listen(window,'resize',()=>setTimeout(placeHud,0));setTimeout(placeHud,0);
@@ -112,18 +112,23 @@ export function petanque(c){
  const canThrow=()=>!ended&&!anim&&!busy&&state.phase!=='over'&&thrower&&(isOnline?thrower===me:human(thrower));
  const pName=id=>P.playerById(state,id)?.name||'?',pTeam=id=>P.playerById(state,id)?.team;
 
- // ---- pavé de visée : x = gauche/droite, y = haut/bas (hauteur du lancer). Relâcher, puis appui + maintien + relâcher = force.
- const pad=$h('.pq-pad'),knob=$h('.pq-knob');
- let stage='aim',angle=0,loft=.6,padStart=null,charge=null;
- function padRect(){return pad.getBoundingClientRect()}
- function showKnob(){const R=padRect().width/2-14;knob.style.transform=`translate(${(angle/.7)*R}px,${((.6-loft)/.6)*R*.9}px)`;pad.classList.toggle('power',stage==='power');pad.classList.toggle('charging',!!charge)}
- pad.addEventListener('pointerdown',e=>{if(!canThrow()||c.isPaused())return;e.stopPropagation();sfx?.wake();pad.setPointerCapture?.(e.pointerId);topLock=false;lastTouch=0;
-  if(stage==='aim')padStart={x:e.clientX,y:e.clientY,a:angle,l:loft};else charge={t:performance.now()};showKnob()});
- pad.addEventListener('pointermove',e=>{if(!padStart||stage!=='aim')return;const R=padRect().width/2;angle=clamp(padStart.a+(e.clientX-padStart.x)/R*.32,-.7,.7);loft=clamp(padStart.l-(e.clientY-padStart.y)/R*.55,0,1);showKnob()});
- pad.addEventListener('pointerup',()=>{if(stage==='aim'&&padStart){padStart=null;stage='power';showKnob();refreshHud();return}if(stage==='power'&&charge){const p=gauge();charge=null;showKnob();doThrow(p)}});
- pad.addEventListener('pointercancel',()=>{padStart=null;charge=null;showKnob()});
- const gauge=()=>{if(!charge)return 0;const t=(performance.now()-charge.t)/1300,u=t%2;return u<1?u:2-u};
- function resetAim(){stage='aim';padStart=null;charge=null;showKnob()}
+ // ---- tir au geste : on « lance » la boule du doigt. Direction du geste = direction du tir, vitesse du doigt = force.
+ // La hauteur du lancer (bas / moyen / haut) se choisit avant avec les petits boutons.
+ const throwBox=$h('.pq-throw'),hand=$h('.pq-hand');
+ let angle=0,loft=.55,flick=null,lastPower=0,powerFlash=0;
+ const baseAngle=()=>state.jack?Math.atan2(state.jack.x-P.CIRCLE.x,state.jack.z-P.CIRCLE.z):0;
+ for(const b of throwBox.querySelectorAll('[data-loft]'))b.onclick=e=>{e.stopPropagation();loft=+b.dataset.loft;refreshHud()};
+ hand.addEventListener('pointerdown',e=>{if(!canThrow()||c.isPaused())return;e.stopPropagation();e.preventDefault();sfx?.wake();hand.setPointerCapture?.(e.pointerId);topLock=false;lastTouch=0;
+  flick={x0:e.clientX,y0:e.clientY,pts:[[e.clientX,e.clientY,e.timeStamp]]};angle=baseAngle();hand.classList.add('held')});
+ hand.addEventListener('pointermove',e=>{if(!flick)return;flick.pts.push([e.clientX,e.clientY,e.timeStamp]);if(flick.pts.length>40)flick.pts.shift();
+  const dx=e.clientX-flick.x0,dy=e.clientY-flick.y0;hand.firstChild.style.transform=`translate(${dx}px,${dy}px)`;if(-dy>8)angle=clamp(baseAngle()+Math.atan2(dx,-dy)*.5,-.75,.75)});
+ hand.addEventListener('pointerup',e=>{if(!flick)return;flick.pts.push([e.clientX,e.clientY,e.timeStamp]);const pts=flick.pts,end=pts[pts.length-1];flick=null;hand.classList.remove('held');hand.firstChild.style.transform='';
+  // vitesse sur les ~90 dernières ms, en unités du terrain (360 de large)
+  let i=pts.length-1;while(i>0&&end[2]-pts[i-1][2]<90)i--;const st=pts[Math.max(0,i-1)],dt=Math.max(16,end[2]-st[2]),k=W/cv.getBoundingClientRect().width;
+  const vx=(end[0]-st[0])*k/dt*1000,vy=(end[1]-st[1])*k/dt*1000,up=-vy;
+  if(up<150||end[1]>=pts[0][1]-12){banner('Lance la boule vers le haut, d’un geste vif');return}
+  angle=clamp(baseAngle()+Math.atan2(vx,up)*.5,-.75,.75);const power=clamp((Math.hypot(vx,up)-150)/2600,0,1);/* ~1600 px/s : cochonnet à 8 m ; ~2750 px/s : force maximale */lastPower=power;powerFlash=1.2;doThrow(power)});
+ hand.addEventListener('pointercancel',()=>{flick=null;hand.classList.remove('held');hand.firstChild.style.transform=''});
 
  // ---- animation d'un lancer
  let anim=null;
@@ -133,8 +138,8 @@ export function petanque(c){
  function stepAnim(dt){const a=anim;a.t+=dt;const evs=a.res.events;while(a.ev<evs.length&&evs[a.ev].t<=a.t){const e=evs[a.ev++];if(e.type==='land')sfx?.land(e.kind,e.mode);else if(e.type==='hit')sfx?.hit(e.power,e.jack);else if(e.type==='out')sfx?.out()}
   if(a.t>=a.tp.T){const i=Math.floor((a.t-a.tp.T)*60),fr=a.res.frames,f0=fr[Math.max(0,Math.min(fr.length-1,i-3))],f1=fr[Math.min(fr.length-1,i)];let sp=0;f1.forEach((p,k)=>{if(p&&f0[k])sp=Math.max(sp,Math.hypot(p[0]-f0[k][0],p[1]-f0[k][1])*20)});sfx?.roll(sp)}
   if(a.t>=a.res.duration+.35){anim=null;sfx?.roll(0);a.after()}}
- function doThrow(power){if(!canThrow())return;const by=thrower,kind=state.phase==='jack'?'jack':'ball',tp=P.throwParams(kind,angle,power,loft);
-  const res=P.simulate(state,tp,by),s0=state,next=P.applyThrow(state,by,tp,res);resetAim();busy=isOnline;lastBy=by;
+ function doThrow(power){if(!canThrow())return;const by=thrower,kind=state.phase==='jack'?'jack':'ball',tp=P.throwParams(kind,angle,power,kind==='jack'?.55:loft);
+  const res=P.simulate(state,tp,by),s0=state,next=P.applyThrow(state,by,tp,res);busy=isOnline;lastBy=by;
   startAnim(s0,by,tp,res,()=>{if(isOnline)send(next);else settle(next)})}
  async function send(next){const end=next.phase==='over'?{winner:next.winner}:null;
   try{view=await online.partyThrow(view.id,view.ply,next,end);busy=false;errorText='';settle(view.state)}
@@ -162,15 +167,14 @@ export function petanque(c){
   for(const t of [0,1]){const el=$h('.pq-team.t'+t);el.querySelector('.pq-score').textContent=sc[t];el.querySelector('.pq-names').innerHTML=teamNames(t);el.classList.toggle('turn',state.turnTeam===t&&state.phase!=='over');el.classList.toggle('mine',isOnline&&view.my_team===t)}
   $h('.pq-mene').textContent=state.phase==='over'?'Fin':'Mène '+state.mene;
   $h('[data-act=view]').classList.toggle('on',topLock);$h('[data-act=view]').setAttribute('aria-label',topLock?'Quitter la vue de dessus':'Vue de dessus');
-  const mine=canThrow();pad.hidden=!mine||topLock;showKnob();
+  const mine=canThrow();throwBox.hidden=!mine||topLock;throwBox.querySelector('.pq-lofts').hidden=state.phase==='jack';for(const b of throwBox.querySelectorAll('[data-loft]'))b.classList.toggle('on',Math.abs(+b.dataset.loft-loft)<.01);
   const acts=$h('.pq-actions');acts.replaceChildren();const btn=(label,aria,fn,cls='')=>{const b=document.createElement('button');b.className='pq-icon '+cls;b.textContent=label;b.setAttribute('aria-label',aria);b.onclick=fn;acts.append(b);return b};
   let text='';const who=thrower?pName(thrower):'';
   if(state.phase==='over')text='Partie terminée';
   else if(anim)text=anim.by===me?'Tu lances…':pName(anim.by)+' lance…';
   else if(mine){const pre=isOnline||vsAI?'À toi':`${who} (${TEAMS[pTeam(thrower)].name})`;
    if(topLock)text=pre+' : quitte la vue de dessus pour lancer';
-   else if(stage==='aim')text=pre+(state.phase==='jack'?' : vise le cochonnet (6 à 10 m) avec le pavé, puis relâche':' : vise avec le pavé (gauche/droite, haut/bas), puis relâche');
-   else{text='Appuie sur le pavé, maintiens, relâche pour la force';btn('↺','Viser à nouveau',()=>{resetAim();refreshHud()})}}
+   else text=pre+(state.phase==='jack'?' : lance le cochonnet (6 à 10 m) : glisse la boule vers le haut et relâche':' : lance la boule d’un geste, la vitesse donne la force')}
   else if(isOnline){
    if(view.need_vote){text=`${view.ask_name} veut lancer`;btn('✕','Refuser',()=>act(()=>online.partyVote(view.id,false)),'no');btn('✓','Accepter',()=>act(()=>online.partyVote(view.id,true)),'yes')}
    else if(view.ask_by===me){text='Demande envoyée à ton équipe…';btn('✕','Annuler la demande',()=>act(()=>online.partyVote(view.id,false)),'no')}
@@ -179,7 +183,7 @@ export function petanque(c){
    else if(view.thrower)text='Au tour de '+view.thrower_name;
    else text=String(state.turnTeam)===String(view.my_team)?'Ton équipe choisit qui lance…':'L’équipe adverse joue…'}
   else if(vsAI&&thrower==='cpu')text='L’ordinateur réfléchit…';
-  $h('.pq-prompt').textContent=errorText||text;hud.classList.toggle('with-pad',!pad.hidden)}
+  $h('.pq-prompt').textContent=errorText||text;hud.classList.toggle('with-pad',!throwBox.hidden)}
 
  function gameOver(){if(ended)return;ended=true;sfx?.cheer();refreshHud();const w=state.winner,mineT=isOnline?view.my_team:vsAI?pTeam('me'):w,win=mineT===w;
   const names=state.players.filter(p=>p.team===w).map(p=>p.name).join(', '),score=`${state.score[w]} à ${state.score[1-w]}`;
@@ -188,7 +192,6 @@ export function petanque(c){
 
  // ---- dessin
  function sceneObjs(s=state){const out=[];if(s.jack)out.push({kind:'jack',x:s.jack.x,z:s.jack.z});for(const b of s.balls)out.push({kind:'ball',x:b.x,z:b.z,team:b.team});return out}
- const ballFill={};function ballFace(col,n){const k=col+n.join();return ballFill[k]??=shade(col,n,.5)}
  function draw(objs){g.setTransform(2,0,0,2,0,0);setCam(orb);
   const hz=H/2-F*Math.tan(orb.pitch);const sky=g.createLinearGradient(0,Math.min(hz,H)-260,0,Math.min(hz,H));sky.addColorStop(0,'#a9d6ec');sky.addColorStop(1,'#fbf0d6');g.fillStyle=sky;g.fillRect(0,0,W,H);
   if(hz<H){g.fillStyle='#bfd18f';g.fillRect(0,Math.max(0,hz),W,H)}
@@ -200,25 +203,29 @@ export function petanque(c){
   const ring=[];for(let i=0;i<24;i++){const a=i/24*Math.PI*2;ring.push([P.CIRCLE.x+Math.cos(a)*.35,.005,P.CIRCLE.z+Math.sin(a)*.35])}const rs=clipPoly(ring);if(rs){g.strokeStyle='#fffaf0';g.lineWidth=1.6;g.beginPath();rs.forEach((p,i)=>i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]));g.closePath();g.stroke()}
   // ombres
   for(const o of objs){const r=(o.kind==='jack'?P.R_JACK:P.R_BALL)*VS*1.1,pts=[];for(let i=0;i<10;i++){const a=i/10*Math.PI*2;pts.push([o.x+.012+Math.cos(a)*r,.006,o.z+Math.sin(a)*r])}const s=clipPoly(pts);if(s)fillPts(s,`rgba(70,55,30,${o.y>0?.16:.3})`)}
-  if(canThrow()&&!anim&&!topLock)drawAim();
+  if(canThrow()&&!anim&&!topLock&&flick)drawAim();
   // objets pleins triés par profondeur
   const items=[];
   for(const f of scene.solids){if(f.tree&&Math.hypot(cam.x-f.tree[0],cam.z-f.tree[1])<3.5)continue;if((cam.x-f.c[0])*f.n[0]+(cam.y-f.c[1])*f.n[1]+(cam.z-f.c[2])*f.n[2]<=0)continue;const d=toView(...f.c)[2];if(d<1.6)continue;/* la caméra traverse un arbre : on ne dessine pas ce qui la touche */const s=clipPoly(f.pts);if(s)items.push({d,s,fill:f.fill,st:'rgba(60,45,30,.16)'})}
   for(const o of objs){const jack=o.kind==='jack',r=(jack?P.R_JACK:P.R_BALL)*VS,cy=r+(o.y||0),cv0=toView(o.x,cy,o.z);if(cv0[2]<NEAR)continue;const px=F*r/cv0[2];
    const col=jack?'#ef6a3c':TEAMS[o.team??0].metal;
    if(px<1.4){items.push({d:cv0[2],s:null,dot:[...scr(cv0),Math.max(.8,px)],fill:col});continue}
-   const mesh=px>9?SPHERE_HI:SPHERE_LO;
-   for(const f of mesh){const n=f.n;if((cam.x-o.x-n[0]*r)*n[0]+(cam.y-cy-n[1]*r)*n[1]+(cam.z-o.z-n[2]*r)*n[2]<=0)continue;const pts=f.v.map(v=>[o.x+v[0]*r,cy+v[1]*r,o.z+v[2]*r]);const s=clipPoly(pts);if(s)items.push({d:toView(o.x+n[0]*r,cy+n[1]*r,o.z+n[2]*r)[2],s,fill:ballFace(col,n),st:jack?null:'rgba(40,40,50,.12)'})}}
-  items.sort((a,b)=>b.d-a.d);for(const i of items){if(i.dot){g.fillStyle=i.fill;g.beginPath();g.arc(i.dot[0],i.dot[1],i.dot[2],0,7);g.fill()}else fillPts(i.s,i.fill,i.st)}
-  if(stage==='power'&&canThrow()&&!anim)drawGauge()}
- // aperçu de la visée : direction au sol + forme de la trajectoire (pour une distance jusqu'au cochonnet)
- function drawAim(){const dx=Math.sin(angle),dz=Math.cos(angle),D=state.jack?P.dist(state.jack,P.CIRCLE):7.5,rr=P.rollRatio(loft),L=D/(1+rr),Hh=(.12+.88*loft)*(.6+.28*L);
-  const path=[];for(let i=0;i<=24;i++){const t=i/24;path.push([P.CIRCLE.x+dx*L*t,.6*(1-t)+4*Hh*t*(1-t),P.CIRCLE.z+dz*L*t])}
-  const roll=[];for(let i=0;i<=6;i++){const d=L+(D-L)*i/6;roll.push([P.CIRCLE.x+dx*d,.01,P.CIRCLE.z+dz*d])}
-  const line=(pts,w,col,dash)=>{g.strokeStyle=col;g.lineWidth=w;g.setLineDash(dash);g.beginPath();let on=false;for(const p of pts){const q=proj(...p);if(!q){on=false;continue}if(on)g.lineTo(q[0],q[1]);else{g.moveTo(q[0],q[1]);on=true}}g.stroke();g.setLineDash([])};
-  line(path,2.2,'rgba(255,250,235,.95)',[6,5]);line(roll,2,'rgba(255,240,200,.8)',[2,4]);
-  const end=proj(P.CIRCLE.x+dx*L,.01,P.CIRCLE.z+dz*L);if(end){g.strokeStyle='#fffaf0';g.lineWidth=1.5;g.beginPath();g.ellipse(end[0],end[1],Math.max(3,.18*F/end[2]),Math.max(1.5,.07*F/end[2]),0,0,7);g.stroke()}}
- function drawGauge(){const v=gauge(),x=W-30,y0=130,h=Math.min(300,H-300);g.fillStyle='rgba(255,250,240,.85)';round(x-3,y0-3,22,h+6,11);g.fill();
+   const [X,Y]=scr(cv0);items.push({d:cv0[2],ball:{o,X,Y,R:px,r,cy,col,jack}})}
+  items.sort((a,b)=>b.d-a.d);for(const i of items){if(i.ball){drawBall(i.ball);continue}if(i.dot){g.fillStyle=i.fill;g.beginPath();g.arc(i.dot[0],i.dot[1],i.dot[2],0,7);g.fill()}else fillPts(i.s,i.fill,i.st)}
+  if(powerFlash>0)drawGauge(lastPower)}
+ // boule lisse éclairée + stries : l'orientation suit la position (roulement sans glisser)
+ function drawBall(b){const {o,X,Y,R,r,cy,col,jack}=b;const gr=g.createRadialGradient(X-R*.38,Y-R*.42,R*.08,X,Y,R*1.05);
+  gr.addColorStop(0,'#ffffff');gr.addColorStop(.25,col);gr.addColorStop(1,jack?'#8f3216':'#4f5a64');g.fillStyle=gr;g.beginPath();g.arc(X,Y,R,0,7);g.fill();
+  if(R>3.5){const ax=o.z/r,az=-o.x/r,ca=Math.cos(ax),sa=Math.sin(ax),cb=Math.cos(az),sb=Math.sin(az);
+   const rot=(x,y,z)=>{const y1=y*ca-z*sa,z1=y*sa+z*ca;return [x*cb-y1*sb,x*sb+y1*cb,z1]};
+   const toCam=[cam.x-o.x,cam.y-cy,cam.z-o.z],tl=Math.hypot(...toCam);g.strokeStyle=jack?'rgba(120,40,20,.45)':o.team===1?'rgba(170,60,35,.75)':'rgba(40,80,150,.75)';g.lineWidth=Math.max(.6,R*.07);
+   for(const h of jack?[0]:[-.42,0,.42]){const rho=Math.sqrt(1-h*h);g.beginPath();let on=false;for(let k=0;k<=36;k++){const t=k/36*Math.PI*2,[px,py,pz]=rot(Math.cos(t)*rho,h,Math.sin(t)*rho);
+     if((px*toCam[0]+py*toCam[1]+pz*toCam[2])/tl<.05){on=false;continue}const q=proj(o.x+px*r,cy+py*r,o.z+pz*r);if(!q){on=false;continue}if(on)g.lineTo(q[0],q[1]);else{g.moveTo(q[0],q[1]);on=true}}g.stroke()}}
+  g.strokeStyle='rgba(40,40,40,.35)';g.lineWidth=.6;g.beginPath();g.arc(X,Y,R,0,7);g.stroke()}
+ // pendant le geste : direction au sol
+ function drawAim(){const dx=Math.sin(angle),dz=Math.cos(angle),pts=[];for(let d=.4;d<=6;d+=.2)pts.push([P.CIRCLE.x+dx*d,.01,P.CIRCLE.z+dz*d]);
+  g.strokeStyle='rgba(255,250,235,.95)';g.lineWidth=2.4;g.setLineDash([6,5]);g.beginPath();let on=false;for(const p of pts){const q=proj(...p);if(!q){on=false;continue}if(on)g.lineTo(q[0],q[1]);else{g.moveTo(q[0],q[1]);on=true}}g.stroke();g.setLineDash([])}
+ function drawGauge(v){const x=W-30,y0=130,h=Math.min(300,H-300);g.fillStyle='rgba(255,250,240,.85)';round(x-3,y0-3,22,h+6,11);g.fill();
   const gr=g.createLinearGradient(0,y0+h,0,y0);gr.addColorStop(0,'#86c06c');gr.addColorStop(.6,'#f3c34e');gr.addColorStop(1,'#e2603f');g.fillStyle=gr;round(x,y0+h*(1-v),16,h*v,8);g.fill();
   g.fillStyle='#5b6b50';g.font='bold 9px ui-rounded,Arial';g.textAlign='center';g.fillText('FORCE',x+8,y0+h+16)}
  function round(x,y,w,h,r){g.beginPath();g.roundRect?g.roundRect(x,y,w,Math.max(0,h),Math.min(r,Math.max(0,h)/2)):g.rect(x,y,w,h)}
@@ -235,8 +242,8 @@ export function petanque(c){
    else{const C=center();orb.cx=lerp(orb.cx,C.x,k);orb.cz=lerp(orb.cz,state.jack?C.z:orb.cz,k)}
    if(anim)stepAnim(dt);if(bannerT>0){bannerT-=dt;if(bannerT<=0)$h('.pq-banner').hidden=true}
    draw(anim?animObjs():sceneObjs());
-   if(charge)showKnob();
-   const r=cv.getBoundingClientRect().width;if(r!==hudW){hudW=r;placeHud();showKnob()}},
+   if(powerFlash>0)powerFlash-=dt;
+   const r=cv.getBoundingClientRect().width;if(r!==hudW){hudW=r;placeHud()}},
   destroy(){sfx?.stop();if(isOnline&&(ended||state.phase==='over'))online.hideParty(view.id).catch(()=>{})}
  };
 }
@@ -257,8 +264,9 @@ function makeAudio(c){let A;try{A=c.audio()}catch{}if(!A)return null;
   whoosh(p){noise({freq:420,to:1500+900*p,q:.9,dur:.38,gain:.07+.08*p,attack:.08})},
   land(kind,mode){if(kind==='jack'){noise({type:'highpass',freq:2600,dur:.09,gain:.08});tone(320,.08,.06,'triangle');return}
    tone(95,.18,.28,'sine',0,55);noise({type:'lowpass',freq:500,dur:.16,gain:.22});noise({type:'highpass',freq:2800,dur:mode==='shoot'?.22:.14,gain:.12})},
-  hit(power,jack){const k=Math.min(1,power/3+.25);if(jack){tone(1650,.07,.12*k,'triangle');tone(2480,.05,.06*k,'triangle');return}
-   tone(2330,.16,.16*k);tone(3490,.12,.09*k);tone(5200,.07,.05*k);noise({type:'highpass',freq:4000,dur:.03,gain:.15*k})},
+  // boules d'acier pleines : « clac » court et mat (pas de résonance) ; cochonnet en bois : « toc »
+  hit(power,jack){const k=Math.min(1,power/3+.3);if(jack){noise({freq:950,q:3,dur:.05,gain:.22*k});tone(620,.045,.08*k,'triangle',0,480);return}
+   noise({freq:2100,q:1.6,dur:.045,gain:.45*k,attack:.001});noise({freq:5200,q:2.5,dur:.02,gain:.12*k,attack:.001});tone(1180,.04,.09*k,'triangle',0,880);tone(260,.05,.12*k,'sine',0,180)},
   out(){tone(130,.12,.12,'sine',0,80);noise({type:'lowpass',freq:300,dur:.12,gain:.1})},
   roll(sp){rg.gain.setTargetAtTime(Math.min(.09,sp*.035),A.currentTime,.05)},
   cheer(){[523,659,784,1047].forEach((f,i)=>tone(f,.35,.1,'triangle',i*.11))},
