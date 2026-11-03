@@ -22,17 +22,21 @@ export const eligible=(s,t=s.turnTeam)=>s.players.filter(p=>p.team===t&&(s.left[
 export const playerById=(s,id)=>s.players.find(p=>p.id===id);
 
 // ---- lancer
-// Paramètres réels d'un lancer à partir de la visée (angle, radians) et de la puissance (0..1).
-// mode : 'point' (lob, roule un peu) ou 'shoot' (tir tendu, frappe fort). Le bruit rend chaque lancer un peu différent.
-export function throwParams(kind,angle,power,mode='point',rand=Math.random){
- const p=Math.max(0,Math.min(1,power)),shoot=kind==='ball'&&mode==='shoot';
- const noise=(a)=>(rand()+rand()-1)*a;
- const a=angle+noise(.008+.012*p),L=(shoot?1+11*p:.8+11.2*p)*(1+noise(.02));
- const roll=kind==='jack'?.22:shoot?.85:.28,R=L*roll*(1+noise(.07)),D=kind==='jack'?DECEL.jack:DECEL.ball;
- return {kind,mode:shoot?'shoot':'point',dir:[Math.sin(a),Math.cos(a)],L,vL:Math.sqrt(2*D*R),
-  T:shoot?.32+.035*L:.5+.075*L,H:shoot?.25+.03*L:.45+.2*L,start:{x:CIRCLE.x,z:CIRCLE.z}}}
-// Puissance nécessaire pour atteindre une distance totale (pour l'ordinateur).
-export function powerFor(kind,dist,mode='point'){const shoot=kind==='ball'&&mode==='shoot',roll=kind==='jack'?.22:shoot?.85:.28,L=dist/(1+roll);return shoot?(L-1)/11:(L-.8)/11.2}
+// Visée : angle (radians, gauche/droite) et hauteur (0 = roulette rasante, 1 = plombée haute), puis puissance (0..1).
+// La puissance règle la distance totale ; la hauteur partage cette distance entre vol et roulé :
+// lancer bas = atterrit tôt et roule loin (et frappe fort), lancer haut = tombe près du but et roule peu.
+export const rollRatio=loft=>.72-.64*clampLoft(loft);
+const clampLoft=l=>typeof l==='string'?(l==='shoot'?.05:.6):Math.max(0,Math.min(1,l??.6));
+export const distanceFor=power=>1+13*Math.max(0,Math.min(1,power));
+export function throwParams(kind,angle,power,loft=.6,rand=Math.random){
+ const u=clampLoft(loft),noise=a=>(rand()+rand()-1)*a,p=Math.max(0,Math.min(1,power));
+ const a=angle+noise(.008+.012*p),D=distanceFor(p)*(1+noise(.02)),rr=rollRatio(u),L=D/(1+rr),R=L*rr*(1+noise(.07));
+ const H=(.12+.88*u)*(.6+.28*L);
+ return {kind,loft:u,mode:u<.25?'shoot':'point',dir:[Math.sin(a),Math.cos(a)],L,vL:Math.sqrt(2*(kind==='jack'?DECEL.jack:DECEL.ball)*R),
+  T:2*Math.sqrt(2*Math.max(H,.2)/9.81)+.08,H,start:{x:CIRCLE.x,z:CIRCLE.z}}}
+// Puissance pour une distance totale donnée, et pour atterrir à une distance donnée avec une hauteur donnée.
+export const powerFor=(kind,dist)=>(dist-1)/13;
+export const landPowerFor=(dist,loft)=>(dist*(1+rollRatio(loft))-1)/13;
 
 const objects=s=>[...(s.jack?[{key:'jack',x:s.jack.x,z:s.jack.z,r:R_JACK,m:M_JACK,kind:'jack'}]:[]),...s.balls.map((b,i)=>({key:'b'+i,x:b.x,z:b.z,r:R_BALL,m:M_BALL,kind:'ball',team:b.team,by:b.by}))];
 const outside=o=>Math.abs(o.x)>FIELD.w/2||o.z>FIELD.l||o.z<0;
@@ -111,12 +115,14 @@ function endMene(s,team,points,why,pick){
 export function localThrower(s,lastBy){if(s.nextThrower)return s.nextThrower;const e=eligible(s);if(!e.length)return null;
  const max=Math.max(...e.map(p=>s.left[p.id]));const c=e.filter(p=>s.left[p.id]===max);const i=c.findIndex(p=>p.id===lastBy);return c[(i+1)%c.length].id}
 
-// ---- ordinateur : vise le cochonnet, ou tire la boule adverse qui tient le point (niveaux 1 et 2).
+// ---- ordinateur : vise le cochonnet, ou tire la boule adverse qui tient le point.
+// Imprécision par niveau (angle en radians, distance en proportion) : Facile, Normal, Difficile.
+const AI_ERR=[[.1,.18],[.06,.11],[.035,.06]],AI_SHOOT=[0,.1,.3];
 export function aiThrow(s,level=1,rand=Math.random){
- const err=[[.05,.09],[.028,.05],[.014,.028]][level];const g=()=>(rand()+rand()-1);
- if(s.phase==='jack'){const d=7+rand()*2.5,x=(rand()-.5)*1.2;return {angle:Math.atan2(x,d)+g()*err[0],power:powerFor('jack',Math.hypot(x,d))*(1+g()*err[1]),mode:'point'}}
+ const err=AI_ERR[level]??AI_ERR[1];const g=()=>(rand()+rand()-1);
+ if(s.phase==='jack'){const d=7+rand()*2.5,x=(rand()-.5)*1.2;return {angle:Math.atan2(x,d)+g()*err[0],power:powerFor('jack',Math.hypot(x,d))*(1+g()*err[1]),loft:.6}}
  const me=playerById(s,s.nextThrower)?.team??1,st=standing(s);
- if(level>0&&st&&st.team===1-me){const target=s.balls.filter(b=>b.team===1-me).sort((a,b)=>dist(a,s.jack)-dist(b,s.jack))[0];
-  if(target&&dist(target,s.jack)<.35&&rand()<.35+.2*level){const dx=target.x-CIRCLE.x,dz=target.z-CIRCLE.z,d=Math.hypot(dx,dz);
-   return {angle:Math.atan2(dx,dz)+g()*err[0]*.5,power:Math.min(1,(d-1)/11+.04),mode:'shoot'}}}
- const dx=s.jack.x-CIRCLE.x,dz=s.jack.z-CIRCLE.z;return {angle:Math.atan2(dx,dz)+g()*err[0],power:powerFor('ball',Math.hypot(dx,dz))*(1+g()*err[1]),mode:'point'}}
+ if(st&&st.team===1-me&&rand()<(AI_SHOOT[level]??0)){const target=s.balls.filter(b=>b.team===1-me).sort((a,b)=>dist(a,s.jack)-dist(b,s.jack))[0];
+  if(target&&dist(target,s.jack)<.3){const dx=target.x-CIRCLE.x,dz=target.z-CIRCLE.z,d=Math.hypot(dx,dz);
+   return {angle:Math.atan2(dx,dz)+g()*err[0]*.6,power:Math.min(1,landPowerFor(d,.05)*(1+g()*err[1]*.5)),loft:.05}}}
+ const dx=s.jack.x-CIRCLE.x,dz=s.jack.z-CIRCLE.z;return {angle:Math.atan2(dx,dz)+g()*err[0],power:powerFor('ball',Math.hypot(dx,dz))*(1+g()*err[1]),loft:.55+rand()*.2}}

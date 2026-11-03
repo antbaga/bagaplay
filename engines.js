@@ -25,7 +25,43 @@ export const slideSolved=b=>b.every((v,i)=>v===(i+1)%16);
 export function makeSlide(){const b=Array.from({length:16},(_,i)=>(i+1)%16);let prev=-1;for(let n=0;n<180;n++){const e=b.indexOf(0),moves=[e-4,e+4,e-1,e+1].filter(i=>i>=0&&i<16&&i!==prev&&Math.abs(e%4-i%4)+Math.abs(Math.floor(e/4)-Math.floor(i/4))===1);const i=moves[rand(moves.length)];slideMove(b,i);prev=e}if(slideSolved(b))slideMove(b,14);return b}
 export function sudokuCandidates(b,i){const seen=new Set();const r=Math.floor(i/9),c=i%9;for(let k=0;k<9;k++){seen.add(b[r*9+k]);seen.add(b[k*9+c]);seen.add(b[(Math.floor(r/3)*3+Math.floor(k/3))*9+Math.floor(c/3)*3+k%3])}return [1,2,3,4,5,6,7,8,9].filter(v=>!seen.has(v))}
 export function countSudoku(b,limit=2){let ix=-1,opts=[];for(let i=0;i<81;i++)if(!b[i]){const choices=sudokuCandidates(b,i);if(!choices.length)return 0;if(ix<0||choices.length<opts.length){ix=i;opts=choices;if(opts.length===1)break}}if(ix<0)return 1;let count=0;for(const v of opts){b[ix]=v;count+=countSudoku(b,limit-count);b[ix]=0;if(count>=limit)break}return count}
-export function makeSudoku(removals=42){const digits=shuffle([1,2,3,4,5,6,7,8,9]);const rows=shuffle([0,1,2]).flatMap(g=>shuffle([0,1,2]).map(r=>g*3+r));const cols=shuffle([0,1,2]).flatMap(g=>shuffle([0,1,2]).map(c=>g*3+c));const solution=rows.flatMap(r=>cols.map(c=>digits[(r*3+Math.floor(r/3)+c)%9]));const board=[...solution];let removed=0;for(const i of shuffle(Array.from({length:81},(_,i)=>i))){const v=board[i];board[i]=0;if(countSudoku([...board])!==1)board[i]=v;else removed++;if(removed>=removals)break}return {board,solution}}
+// ---- Sudoku : génération notée par un solveur « humain »
+const SU_UNITS=(()=>{const u=[];for(let k=0;k<9;k++){u.push(Array.from({length:9},(_,j)=>k*9+j));u.push(Array.from({length:9},(_,j)=>j*9+k));u.push(Array.from({length:9},(_,j)=>(Math.floor(k/3)*3+Math.floor(j/3))*9+(k%3)*3+j%3))}return u})();
+const SU_PEERS=Array.from({length:81},(_,i)=>{const s=new Set();for(const u of SU_UNITS)if(u.includes(i))for(const j of u)if(j!==i)s.add(j);return [...s]});
+const bits=m=>{let n=0;while(m){m&=m-1;n++}return n},digitOf=m=>31-Math.clz32(m);
+// Difficulté d'une grille selon les techniques nécessaires :
+// 0 singletons nus, 1 singletons cachés, 2 paires/triplets nus, pointage, boîte-ligne, 3 au-delà (X-wing, chaînes, essais).
+export function rateSudoku(b0){const b=[...b0],cand=new Array(81).fill(0);
+ for(let i=0;i<81;i++)if(!b[i])for(const v of sudokuCandidates(b,i))cand[i]|=1<<v;
+ const place=(i,v)=>{b[i]=v;cand[i]=0;for(const j of SU_PEERS[i])cand[j]&=~(1<<v)};
+ let level=0;
+ for(let guard=0;guard<400;guard++){
+  if(b.every(Boolean))return level;
+  if(b.some((v,i)=>!v&&!cand[i]))return 3;
+  let i=cand.findIndex((m,k)=>!b[k]&&bits(m)===1);if(i>=0){place(i,digitOf(cand[i]));continue}
+  let done=false;
+  for(const u of SU_UNITS){for(let v=1;v<=9&&!done;v++){const spots=u.filter(k=>!b[k]&&cand[k]&1<<v);if(spots.length===1){place(spots[0],v);done=true}}if(done)break}
+  if(done){level=Math.max(level,1);continue}
+  let changed=false;
+  // paires et triplets nus
+  for(const u of SU_UNITS){const empty=u.filter(k=>!b[k]);for(const size of [2,3]){const pick=(start,chosen,mask)=>{if(changed)return;if(chosen.length===size){if(bits(mask)===size)for(const k of empty)if(!chosen.includes(k)&&cand[k]&mask){cand[k]&=~mask;changed=true}return}
+    for(let x=start;x<empty.length;x++){const m=cand[empty[x]];if(bits(m)>size)continue;pick(x+1,[...chosen,empty[x]],mask|m)}};pick(0,[],0)}}
+  // pointage (chiffre d'un carré limité à une ligne/colonne) et boîte-ligne (chiffre d'une ligne/colonne limité à un carré)
+  if(!changed)for(let ui=0;ui<27&&!changed;ui++){const u=SU_UNITS[ui];for(let v=1;v<=9;v++){const spots=u.filter(k=>!b[k]&&cand[k]&1<<v);if(spots.length<2)continue;
+   for(const w of SU_UNITS){if(w===u)continue;if(spots.every(k=>w.includes(k))){for(const k of w)if(!spots.includes(k)&&!b[k]&&cand[k]&1<<v){cand[k]&=~(1<<v);changed=true}}}}}
+  if(changed){level=Math.max(level,2);continue}
+  return 3}
+ return 3}
+function sudokuSolution(){const digits=shuffle([1,2,3,4,5,6,7,8,9]);const rows=shuffle([0,1,2]).flatMap(g=>shuffle([0,1,2]).map(r=>g*3+r));const cols=shuffle([0,1,2]).flatMap(g=>shuffle([0,1,2]).map(c=>g*3+c));
+ const flip=Math.random()<.5;return Array.from({length:81},(_,i)=>{let r=Math.floor(i/9),c=i%9;if(flip)[r,c]=[c,r];const R=rows[r],C=cols[c];return digits[(R*3+Math.floor(R/3)+C)%9]})}
+function carve(solution,removals){const board=[...solution];let removed=0;for(const i of shuffle(Array.from({length:81},(_,i)=>i))){if(removed>=removals)break;const v=board[i];board[i]=0;if(countSudoku([...board])!==1)board[i]=v;else removed++}return board}
+// Niveaux : 0 facile (~38 indices, singletons nus), 1 normal (~30, singletons cachés),
+// 2 difficile (grille minimale, demande paires / pointage), 3 expert (grille minimale, au-delà).
+export function makeSudoku(level=1,budgetMs=2500){const want=[0,1,2,3][level]??1,removals=[43,51,81,81][want],t0=Date.now();let best=null;
+ do{const solution=sudokuSolution(),board=carve(solution,removals),rating=rateSudoku(board);
+  const score=rating===want?100:rating<want?rating:want-(rating-want)*2;
+  if(!best||score>best.score)best={board,solution,rating,score};if(rating===want)break}while(Date.now()-t0<budgetMs);
+ return {board:best.board,solution:best.solution,rating:best.rating}}
 
 // Durée lisible : 45 s, 1 min 50 s, 2 min, 1 h 05 min.
 export function formatDuration(total){const s=Math.max(0,Math.round(total));if(s<60)return s+' s';const h=Math.floor(s/3600),m=Math.floor(s%3600/60),r=s%60;

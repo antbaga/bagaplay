@@ -67,15 +67,23 @@ const ICON={
  eraser:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 19.5h11M4.6 14.6l8.8-8.8a2 2 0 0 1 2.8 0l2.9 2.9a2 2 0 0 1 0 2.8l-7.7 7.7a1 1 0 0 1-.7.3H9.2a1 1 0 0 1-.7-.3l-3.9-3.9a.5.5 0 0 1 0-.7z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/><path d="M9 10l5.5 5.5" stroke="currentColor" stroke-width="2"/></svg>',
  bulb:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>'
 };
-function sudoku(c){const {board,solution}=makeSudoku([32,42,53][c.difficulty]),given=board.map(Boolean);let selected=board.findIndex(v=>!v),elapsed=0,hints=3,usedHint=false,notesMode=false,notes=Array.from({length:81},()=>new Set());
- const grid=c.grid(9,'sudoku');const cells=board.map((_,i)=>c.cell(grid,'',()=>{selected=i;render()}));
+// Grille en cours sauvegardée en continu : on la retrouve après avoir quitté l'app ou éteint l'écran.
+export const SUDOKU_KEY='bagaplay-sudoku';
+export function savedSudoku(){try{const r=JSON.parse(localStorage.getItem(SUDOKU_KEY)||'null');return r&&Array.isArray(r.board)&&r.board.length===81?r:null}catch{return null}}
+function sudoku(c){const run=c.duel?.resume?savedSudoku():null;
+ const made=run?{board:run.board,solution:run.solution}:makeSudoku(c.difficulty),board=[...made.board],solution=made.solution,given=run?run.given:board.map(Boolean);
+ let selected=run?.selected??board.findIndex(v=>!v),elapsed=run?.elapsed||0,hints=run?.hints??3,usedHint=!!run?.usedHint,notesMode=false,notes=run?run.notes.map(a=>new Set(a)):Array.from({length:81},()=>new Set()),finished=false,saveT=0;
+ const level=run?.level??c.difficulty;
+ function save(){if(finished)return;try{localStorage.setItem(SUDOKU_KEY,JSON.stringify({level,board,solution,given,notes:notes.map(n=>[...n]),elapsed,hints,usedHint,selected,at:Date.now()}))}catch{}}
+ c.listen(document,'visibilitychange',()=>{if(document.hidden)save()});c.listen(window,'pagehide',save);
+ const grid=c.grid(9,'sudoku');const cells=board.map((_,i)=>c.cell(grid,'',()=>{selected=i;render();save()}));
  // pavé : chiffre + nombre restant à placer
  const nums=[];for(let n=1;n<=9;n++){const b=c.button('',()=>enter(n),'number',String(n));b.innerHTML=`<span class="num">${n}</span><span class="left"></span>`;nums.push(b)}
  const tools=document.createElement('div');tools.className='sudoku-tools';c.controls.append(tools);
  const tool=(icon,label,fn)=>{const b=c.button('',fn,'tool',label);b.innerHTML=ICON[icon];tools.append(b);return b};
  const noteBtn=tool('pencil','Notes',()=>{notesMode=!notesMode;render()});
  tool('eraser','Effacer',()=>enter(0));
- const help=tool('bulb','Indice',()=>{if(hints&&!given[selected]&&board[selected]!==solution[selected]){usedHint=true;hints--;board[selected]=solution[selected];notes[selected].clear();render();check()}});
+ const help=tool('bulb','Indice',()=>{if(hints&&!given[selected]&&board[selected]!==solution[selected]){usedHint=true;hints--;board[selected]=solution[selected];notes[selected].clear();render();save();check()}});
  const badge=document.createElement('span');badge.className='badge';help.append(badge);
  const box=i=>Math.floor(Math.floor(i/9)/3)*3+Math.floor(i%9/3);
  function render(){const v=board[selected];
@@ -87,11 +95,12 @@ function sudoku(c){const {board,solution}=makeSudoku([32,42,53][c.difficulty]),g
   noteBtn.classList.toggle('on',notesMode);noteBtn.setAttribute('aria-pressed',String(notesMode));
   badge.textContent=hints;help.disabled=!hints;
  }
- function check(){if(board.every((v,i)=>v===solution[i])){const t=formatDuration(Math.max(1,Math.floor(elapsed)));c.finish(true,Math.max(1,Math.floor(elapsed)),'Les 81 cases sont en harmonie.\nTerminé en '+t+(usedHint?' avec un peu d’aide.':' !'))}}
+ function check(){if(board.every((v,i)=>v===solution[i])){finished=true;try{localStorage.removeItem(SUDOKU_KEY)}catch{};const t=formatDuration(Math.max(1,Math.floor(elapsed)));c.finish(true,Math.max(1,Math.floor(elapsed)),'Les 81 cases sont en harmonie.\nTerminé en '+t+(usedHint?' avec un peu d’aide.':' !'))}}
  function enter(n){if(given[selected])return;if(notesMode&&n){if(!board[selected]){if(notes[selected].has(n))notes[selected].delete(n);else notes[selected].add(n)}}else{board[selected]=n;notes[selected].clear();
    // un chiffre juste retire ce chiffre des notes de sa ligne, colonne et carré
    if(n&&n===solution[selected])for(let i=0;i<81;i++)if(Math.floor(i/9)===Math.floor(selected/9)||i%9===selected%9||box(i)===box(selected))notes[i].delete(n)}
-  render();if(n&&!notesMode){const el=cells[selected];el.classList.add('fill');setTimeout(()=>el.classList.remove('fill'),300)}check()}
+  render();save();if(n&&!notesMode){const el=cells[selected];el.classList.add('fill');setTimeout(()=>el.classList.remove('fill'),300)}check()}
  render();
- return {update:dt=>{elapsed+=dt;c.score(Math.floor(elapsed),false)},key:k=>{if(/^[1-9]$/.test(k))enter(+k);if(k==='Backspace'||k==='Delete')enter(0);if(k==='n'||k==='N'){notesMode=!notesMode;render()}const d={ArrowLeft:-1,ArrowRight:1,ArrowUp:-9,ArrowDown:9}[k];if(d){selected=Math.max(0,Math.min(80,selected+d));render()}}}}
+ save();
+ return {destroy:save,update:dt=>{elapsed+=dt;c.score(Math.floor(elapsed),false);if((saveT+=dt)>5){saveT=0;save()}},key:k=>{if(/^[1-9]$/.test(k))enter(+k);if(k==='Backspace'||k==='Delete')enter(0);if(k==='n'||k==='N'){notesMode=!notesMode;render()}const d={ArrowLeft:-1,ArrowRight:1,ArrowUp:-9,ArrowDown:9}[k];if(d){selected=Math.max(0,Math.min(80,selected+d));render()}}}}
 export const puzzles={'2048':game2048,memory,mines,ttt,slide,sudoku};
