@@ -10,12 +10,13 @@ export function mulberry(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a
 // ---------------------------------------------------------------- nouvelle partie
 export function newGame(){
  const s=D.START,S={v:1,d:1,hour:D.HOURS.open,open:false,cash:s.cash,loan:{left:s.loan,monthly:s.loanMonthly},rep:s.rep,
-  b:{x0:s.x0,y0:s.y0,x1:s.x1,y1:s.y1},ent:s.entrance,wall:new Array(N).fill(0),zone:new Array(N).fill(0),items:[],nid:1,
+  b:{x0:s.x0,y0:s.y0,x1:s.x1,y1:s.y1},fy:s.y1-1,ent:s.entrance,built:new Array(N).fill(0),wall:new Array(N).fill(0),zone:new Array(N).fill(0),items:[],nid:1,
   reserve:{},staff:{},staffDays:{},budget:4000,alloc:{},margin:{},ads:{until:0,boost:0},extraLoans:0,
   month:blankMonth(),dayStats:blankDay(),last:null,history:[],sold:{},over:false};
  for(const c of D.CATS){S.reserve[c.id]=0;S.margin[c.id]=c.ref;S.sold[c.id]=0}
  S.alloc=defaultAlloc();
  for(const r of D.ROLES){S.staff[r.id]=0;S.staffDays[r.id]=0}
+ for(let y=s.y0;y<s.y1;y++)for(let x=s.x0;x<s.x1;x++)S.built[idx(x,y)]=1;S.monthCat={};S.catHist=[];
  // réserve au nord, séparée par un mur avec une porte au milieu
  for(let y=s.y0;y<s.y0+s.reserveRows;y++)for(let x=s.x0;x<s.x1;x++)S.zone[idx(x,y)]=1;
  const wy=s.y0+s.reserveRows;for(let x=s.x0;x<s.x1;x++)S.wall[idx(x,wy)]=1;
@@ -29,10 +30,11 @@ export function defaultAlloc(weights){const w={};let t=0;for(const c of D.CATS){
 // répartition selon les ventes (en valeur d'achat) depuis le début du mois
 export function allocFromSales(S){const w={};for(const c of D.CATS)w[c.id]=(S.sold[c.id]||0)*c.cost;return defaultAlloc(Object.values(w).some(v=>v>0)?w:null)}
 function blankMonth(){return {rev:0,cogs:0,buy:0,build:0,ads:0,loss:0,theft:0,customers:0,sat:0,salaries:0,elec:0,loan:0,interest:0}}
-function blankDay(){return {waitPen:0,dirtPen:0,rev:0,cogs:0,customers:0,sat:0,rupture:0,notSold:0,expensive:0,angry:0,theft:0,loss:0,buy:0,units:0}}
+function blankDay(){return {cats:{},ads:0,build:0,waitPen:0,dirtPen:0,rev:0,cogs:0,customers:0,sat:0,rupture:0,notSold:0,expensive:0,angry:0,theft:0,loss:0,buy:0,units:0}}
 
 // ---------------------------------------------------------------- géométrie
-export const inside=(S,x,y)=>x>=S.b.x0&&x<S.b.x1&&y>=S.b.y0&&y<S.b.y1;
+export const inside=(S,x,y)=>x>=0&&y>=0&&x<W&&y<H&&S.built[y*W+x]===1;
+export function bounds(S){let x0=W,y0=H,x1=0,y1=0;for(let i=0;i<N;i++)if(S.built[i]){const x=i%W,y=i/W|0;if(x<x0)x0=x;if(y<y0)y0=y;if(x+1>x1)x1=x+1;if(y+1>y1)y1=y+1}S.b={x0,y0,x1,y1};return S.b}
 export const inLot=(x,y)=>x>=0&&y>=0&&x<W&&y<H;
 export const def=t=>D.ITEM[t];
 export function size(it){const d=def(it.t);return it.r%2?[d.d,d.w]:[d.w,d.d]}
@@ -51,10 +53,11 @@ function back(it){const [w,d]=size(it),o=[];
  if(it.r===1)for(let j=0;j<d;j++)o.push([it.x+w,it.y+j]);
  if(it.r===3)for(let j=0;j<d;j++)o.push([it.x-1,it.y+j]);
  return o}
-export const area=S=>(S.b.x1-S.b.x0)*(S.b.y1-S.b.y0);
-export function salesArea(S){let n=0;for(let y=S.b.y0;y<S.b.y1;y++)for(let x=S.b.x0;x<S.b.x1;x++){const i=idx(x,y);if(!S.zone[i]&&!S.wall[i])n++}return n}
-const entCells=S=>[[S.ent,S.b.y1-1],[S.ent+1,S.b.y1-1]];
-const isEntrance=(S,x,y)=>y===S.b.y1-1&&(x===S.ent||x===S.ent+1);
+export function area(S){let n=0;for(let i=0;i<N;i++)n+=S.built[i];return n}
+export function salesArea(S){let n=0;for(let i=0;i<N;i++)if(S.built[i]&&!S.zone[i]&&!S.wall[i])n++;return n}
+const entCells=S=>[[S.ent,S.fy],[S.ent+1,S.fy]];
+const isEntrance=(S,x,y)=>y===S.fy&&(x===S.ent||x===S.ent+1);
+const nearEntrance=(S,x,y)=>isEntrance(S,x,y)||(y===S.fy-1&&(x===S.ent||x===S.ent+1));
 
 // ---------------------------------------------------------------- grille de passage et champs de distance
 // mode 'c' : clients (pas la réserve), 's' : employés.
@@ -69,7 +72,7 @@ export const dirty=S=>{S._L=null};
 function canStep(S,P,x,y,nx,ny){if(!inLot(nx,ny)||!P[idx(nx,ny)])return false;
  const a=inside(S,x,y),b=inside(S,nx,ny);if(a===b)return true;
  // on n'entre et ne sort que par la porte d'entrée (façade sud)
- return nx===x&&(x===S.ent||x===S.ent+1)&&Math.max(y,ny)===S.b.y1&&Math.min(y,ny)===S.b.y1-1}
+ return nx===x&&(x===S.ent||x===S.ent+1)&&Math.max(y,ny)===S.fy+1&&Math.min(y,ny)===S.fy}
 export function field(S,key,mode){const L=layout(S),k=mode+key;let f=L.fields.get(k);if(f)return f;
  const P=mode==='c'?L.pc:L.ps;f=new Int16Array(N).fill(-1);const q=[];
  for(const [x,y] of targets(S,key))if(inLot(x,y)&&P[idx(x,y)]&&f[idx(x,y)]<0){f[idx(x,y)]=0;q.push(idx(x,y))}
@@ -89,8 +92,8 @@ export function canPlace(S,t,x,y,r){const d=def(t),it={t,x,y,r},L=layout(S);
   if(S.wall[c])return 'Il y a un mur.';
   if(L.occ[c])return 'Place déjà prise.';
   if(S.zone[c]!==d.zone)return d.zone?'À placer dans la réserve.':'À placer dans le magasin, pas dans la réserve.';
-  if(isEntrance(S,cx,cy)||(cy===S.b.y1-2&&(cx===S.ent||cx===S.ent+1)))return 'Laisse l’entrée libre.'}
- if(d.kind==='dock'){if(!back(it).every(([bx,by])=>!inside(S,bx,by)&&by<S.b.y1))return 'Le quai se place contre un mur extérieur (pas la façade).'}
+  if(nearEntrance(S,cx,cy))return 'Laisse l’entrée libre.'}
+ if(d.kind==='dock'){if(!back(it).every(([bx,by])=>!inside(S,bx,by)&&by<=S.fy))return 'Le quai se place contre un mur extérieur (pas la façade).'}
  if(d.kind!=='decor'){const f=front(it);
   if(!f.some(([fx,fy])=>inside(S,fx,fy)&&!S.wall[idx(fx,fy)]&&!L.occ[idx(fx,fy)]&&(d.zone||!S.zone[idx(fx,fy)])))return 'Il faut une case libre devant.'}
  // ne pas couper l'accès aux autres meubles
@@ -112,11 +115,11 @@ export function removeItem(S,id){const k=S.items.findIndex(o=>o.id===id);if(k<0)
  if(it.cat&&it.stock)S.reserve[it.cat]+=it.stock;S.items.splice(k,1);S.cash+=Math.round(def(it.t).price*D.REFUND);S.month.build-=Math.round(def(it.t).price*D.REFUND);dirty(S)}
 export function rotateItem(S,id){const it=S.items.find(o=>o.id===id);if(!it)return 'Introuvable.';const k=S.items.indexOf(it);S.items.splice(k,1);dirty(S);
  const r=(it.r+1)%4,why=canPlace(S,it.t,it.x,it.y,r);S.items.splice(k,0,why?it:Object.assign(it,{r}));dirty(S);return why}
-function pay(S,v,k){S.cash-=v;S.month[k]+=v}
+function pay(S,v,k){S.cash-=v;S.month[k]+=v;if(S.dayStats&&k in S.dayStats)S.dayStats[k]+=v}
 
 // murs : ligne droite entre deux cases
 export function lineCells(a,b){const o=[];if(Math.abs(a[0]-b[0])>=Math.abs(a[1]-b[1])){const y=a[1],s=Math.sign(b[0]-a[0])||1;for(let x=a[0];x!==b[0]+s;x+=s)o.push([x,y])}else{const x=a[0],s=Math.sign(b[1]-a[1])||1;for(let y=a[1];y!==b[1]+s;y+=s)o.push([x,y])}return o}
-export function wallPlan(S,a,b){const L=layout(S);return lineCells(a,b).filter(([x,y])=>inside(S,x,y)&&!S.wall[idx(x,y)]&&!L.occ[idx(x,y)]&&!isEntrance(S,x,y)&&!(y===S.b.y1-2&&(x===S.ent||x===S.ent+1)))}
+export function wallPlan(S,a,b){const L=layout(S);return lineCells(a,b).filter(([x,y])=>inside(S,x,y)&&!S.wall[idx(x,y)]&&!L.occ[idx(x,y)]&&!nearEntrance(S,x,y))}
 export function buildWall(S,a,b){const c=wallPlan(S,a,b);if(!c.length)return 'Rien à construire ici.';const cost=c.length*D.WALL_COST;
  for(const [x,y] of c)S.wall[idx(x,y)]=1;dirty(S);const bad=reachProblem(S);if(bad){for(const [x,y] of c)S.wall[idx(x,y)]=0;dirty(S);return bad}
  pay(S,cost,'build');return null}
@@ -127,25 +130,25 @@ export function eraseAt(S,x,y){const i=idx(x,y),L=layout(S);
  return 'Rien à démolir ici.'}
 export function paintZone(S,a,b,z){const L=layout(S);let n=0;
  for(let y=Math.min(a[1],b[1]);y<=Math.max(a[1],b[1]);y++)for(let x=Math.min(a[0],b[0]);x<=Math.max(a[0],b[0]);x++){const i=idx(x,y);
-  if(!inside(S,x,y)||isEntrance(S,x,y)||(y===S.b.y1-2&&(x===S.ent||x===S.ent+1))||S.zone[i]===z)continue;
+  if(!inside(S,x,y)||nearEntrance(S,x,y)||S.zone[i]===z)continue;
   if(L.occ[i]&&def(S.items.find(o=>o.id===L.occ[i]).t).zone!==z)continue;S.zone[i]=z;n++}
  dirty(S);const bad=reachProblem(S);if(bad){return bad}return n?null:'Rien à changer ici.'}
 
-// agrandissement : 'N', 'E' ou 'W' (jamais au sud, côté façade)
-export function extendInfo(S,side){const e=D.EXTEND,b=S.b,len=side==='N'?b.x1-b.x0:b.y1-b.y0,m2=len*e.depth;
- const ok=side==='N'?b.y0-e.depth>=e.margin:side==='E'?b.x1+e.depth<=W-e.margin:b.x0-e.depth>=e.margin;
- return {ok,m2,cost:Math.round(m2*e.perM2+e.fixed)}}
-export function extend(S,side){const inf=extendInfo(S,side);if(!inf.ok)return 'Le terrain s’arrête ici.';
- if(S.cash-inf.cost<D.BANKRUPTCY/2)return 'Pas assez d’argent.';const e=D.EXTEND.depth,b=S.b;
- // la nouvelle surface prend la zone voisine (réserve si on agrandit la réserve)
- if(side==='N'){for(let x=b.x0;x<b.x1;x++)for(let k=1;k<=e;k++)S.zone[idx(x,b.y0-k)]=S.zone[idx(x,b.y0)];b.y0-=e}
- if(side==='E'){for(let y=b.y0;y<b.y1;y++)for(let k=0;k<e;k++)S.zone[idx(b.x1+k,y)]=S.zone[idx(b.x1-1,y)];b.x1+=e}
- if(side==='W'){for(let y=b.y0;y<b.y1;y++)for(let k=1;k<=e;k++)S.zone[idx(b.x0-k,y)]=S.zone[idx(b.x0,y)];b.x0-=e}
- // un mur intérieur qui touchait le bord continue dans l'extension
- if(side==='E')for(let y=b.y0;y<b.y1;y++)if(S.wall[idx(b.x1-e-1,y)]===1)for(let k=0;k<e;k++)S.wall[idx(b.x1-e+k,y)]=1;
- if(side==='W')for(let y=b.y0;y<b.y1;y++)if(S.wall[idx(b.x0+e,y)]===1)for(let k=0;k<e;k++)S.wall[idx(b.x0+k,y)]=1;
- if(side==='N')for(let x=b.x0;x<b.x1;x++)if(S.wall[idx(x,b.y0+e)]===1)for(let k=0;k<e;k++)S.wall[idx(x,b.y0+k)]=1;
- pay(S,inf.cost,'build');dirty(S);return null}
+// agrandissement : rectangle tracé hors du bâtiment, collé à lui, jamais devant la façade. Prix au m².
+export function extendPlan(S,a,b){const m=D.EXTEND.margin,cells=[];let why=null,touch=false;
+ for(let y=Math.min(a[1],b[1]);y<=Math.max(a[1],b[1]);y++)for(let x=Math.min(a[0],b[0]);x<=Math.max(a[0],b[0]);x++){
+  if(inside(S,x,y))continue;
+  if(x<m||y<m||x>=W-m)why='Le terrain s’arrête ici.';else if(y>S.fy)why='Pas devant la façade.';
+  cells.push([x,y]);for(const [dx,dy] of DIRS)if(inside(S,x+dx,y+dy))touch=true}
+ if(!cells.length)why=why||'Trace la zone hors du magasin.';else if(!touch&&!why)why='La zone doit toucher le magasin.';
+ return {cells,m2:cells.length,cost:cells.length*D.EXTEND.perM2,why}}
+export function extendRect(S,a,b){const p=extendPlan(S,a,b);if(p.why)return p.why;if(S.cash-p.cost<D.BANKRUPTCY/2)return 'Pas assez d’argent.';
+ // la nouvelle surface prend la zone (magasin ou réserve) de la case voisine
+ const set=new Set(p.cells.map(([x,y])=>idx(x,y))),q=[];
+ for(const i of set){const x=i%W,y=i/W|0;for(const [dx,dy] of DIRS)if(inside(S,x+dx,y+dy)){S.zone[i]=S.zone[idx(x+dx,y+dy)];q.push(i);break}}
+ const seen=new Set(q);for(let h=0;h<q.length;h++){const i=q[h],x=i%W,y=i/W|0;for(const [dx,dy] of DIRS){const j=idx(x+dx,y+dy);if(set.has(j)&&!seen.has(j)){seen.add(j);S.zone[j]=S.zone[i];q.push(j)}}}
+ for(const i of set)S.built[i]=1;
+ bounds(S);pay(S,p.cost,'build');dirty(S);return null}
 
 // ---------------------------------------------------------------- personnel, prêts, publicité
 export function hire(S,role,delta){const r=D.ROLE[role];if(!r)return 'Poste inconnu.';
@@ -219,7 +222,7 @@ function spawnCustomer(S,R){const r=R.rnd,x=S.ent-8+Math.floor(r()*18);
  const want=[],n=3+Math.floor(Math.pow(r(),1.3)*14),tot=D.CATS.reduce((a,c)=>a+c.demand,0);
  for(let k=0;k<n;k++){let v=r()*tot;for(const c of D.CATS){v-=c.demand;if(v<=0){if(!want.some(w=>w.cat===c.id))want.push({cat:c.id,q:1+(r()<.35)+(r()<.1)});break}}}
  const pal=[[.85,.35,.35],[.35,.55,.85],[.95,.75,.3],[.45,.7,.45],[.7,.45,.75],[.95,.55,.3],[.3,.3,.35],[.9,.9,.85]];
- R.agents.push({id:R.nid++,k:'c',x:x+.5,y:H-.5,c:idx(x,H-1),nx:-1,st:'in',goal:'ent',want,basket:{units:0,value:0,cost:0,cats:{}},sat:72,t:0,wait:0,
+ R.agents.push({id:R.nid++,k:'c',x:x+.5,y:H-.5,c:idx(x,H-1),nx:-1,st:'in',goal:'ent',want,cart:want.length>=7,basket:{units:0,value:0,cost:0,cats:{}},sat:72,t:0,wait:0,
   shirt:pal[Math.floor(r()*pal.length)],pants:pal[Math.floor(r()*pal.length)],skin:[[.98,.84,.7],[.85,.65,.5],[.6,.42,.3],[.45,.3,.22]][Math.floor(r()*4)],retry:0,dirt:0,steps:0})}
 
 function spawnStaff(S,R){R.staffDay=S.d;R.agents=R.agents.filter(a=>a.k==='c');
@@ -289,7 +292,8 @@ function payAt(S,R,a,it){const b=a.basket,wp=Math.min(30,Math.max(0,a.wait-8)*1.
  let theft=D.CUSTOMER.theft*(1-security(S))*(it&&it.t==='self'?2:1);let f=0,u=0;for(const c in b.cats){f+=(D.CAT[c].theft||1)*b.cats[c];u+=b.cats[c]}theft*=u?f/u:1;
  if(R.rnd()<theft){S.dayStats.theft+=b.cost;S.month.theft+=b.cost}
  else{S.cash+=b.value;S.dayStats.rev+=b.value;S.month.rev+=b.value;ev(R,{t:'pay',x:a.x,y:a.y,v:b.value})}
- S.dayStats.cogs+=b.cost;S.month.cogs+=b.cost;S.dayStats.units+=b.units;for(const c in b.cats)S.sold[c]=(S.sold[c]||0)+b.cats[c];b.paid=true}
+ S.dayStats.cogs+=b.cost;S.month.cogs+=b.cost;S.dayStats.units+=b.units;
+ for(const c in b.cats){S.sold[c]=(S.sold[c]||0)+b.cats[c];S.dayStats.cats[c]=(S.dayStats.cats[c]||0)+b.cats[c];S.monthCat=S.monthCat||{};S.monthCat[c]=(S.monthCat[c]||0)+b.cats[c]*price(S,c)}b.paid=true}
 function returnGoods(S,a){for(const c in a.basket.cats)S.reserve[c]+=a.basket.cats[c];a.basket={units:0,value:0,cost:0,cats:{}}}
 function leaveNow(S,R,a){finishCustomer(S,R,a,false)}
 function finishCustomer(S,R,a,forced){if(forced&&a.basket.units&&!a.basket.paid){unqueue(R,a);payAt(S,R,a,null)}else unqueue(R,a);
@@ -317,7 +321,7 @@ function stocker(S,R,a,dt){const sp=D.STAFF.speed;
   if(f&&f.cat===a.carry.cat){const room=def(f.t).cap-f.stock,n=Math.min(room,a.carry.n);f.stock+=n;S.reserve[a.carry.cat]+=a.carry.n-n}else S.reserve[a.carry.cat]+=a.carry.n;
   a.carry=null;dropTask(S,a);a.st='idle';a.t=.3}}
 function dropTask(S,a){if(!a.task)return;const f=S.items.find(o=>o.id===a.task.f);if(f)f.inc=Math.max(0,(f.inc||0)-a.task.n);a.task=null}
-function randomFloor(S,R,zoneOk){for(let k=0;k<30;k++){const x=S.b.x0+Math.floor(R.rnd()*(S.b.x1-S.b.x0)),y=S.b.y0+Math.floor(R.rnd()*(S.b.y1-S.b.y0)),i=idx(x,y);if(layout(S).ps[i]&&(zoneOk||!S.zone[i]))return i}return idx(S.ent,S.b.y1-1)}
+function randomFloor(S,R,zoneOk){for(let k=0;k<60;k++){const x=S.b.x0+Math.floor(R.rnd()*(S.b.x1-S.b.x0)),y=S.b.y0+Math.floor(R.rnd()*(S.b.y1-S.b.y0)),i=idx(x,y);if(S.built[i]&&layout(S).ps[i]&&(zoneOk||!S.zone[i]))return i}return idx(S.ent,S.b.y1-1)}
 
 // ---- agent d'entretien
 function cleaner(S,R,a,dt){const sp=D.STAFF.speed*.9;if(!S.dirt)return;
@@ -360,7 +364,12 @@ export function night(S,R){const ds=S.dayStats,r=R.rnd;
  const avg=ds.customers?ds.sat/ds.customers:null;S.lastSat=avg;
  if(avg!=null)S.rep=clamp(S.rep+(avg-S.rep)*.25,0,100);else S.rep=clamp(S.rep+(40-S.rep)*.05,0,100);
  for(const role in S.staff)S.staffDays[role]=(S.staffDays[role]||0)+S.staff[role];
- S.last={d:S.d,...ds,avgSat:avg};S.history.push({d:S.d,rev:Math.round(ds.rev),customers:ds.customers,sat:avg==null?null:Math.round(avg)});if(S.history.length>60)S.history.shift();
+ const fixed=(salaries(S)+electricity(S)+(S.loan.left>0?S.loan.monthly:0))/D.DAYS_PER_MONTH;
+ S.last={d:S.d,...ds,avgSat:avg};
+ S.history.push({d:S.d,rev:Math.round(ds.rev),buy:Math.round(ds.buy),fixed:Math.round(fixed),ads:Math.round(ds.ads),build:Math.round(ds.build),profit:Math.round(ds.rev-ds.buy-fixed-ds.ads),cash:Math.round(S.cash),
+  customers:ds.customers,sat:avg==null?null:Math.round(avg),units:ds.units,rupture:ds.rupture,expensive:ds.expensive,angry:ds.angry,notSold:ds.notSold,waitPen:Math.round(ds.waitPen),dirtPen:Math.round(ds.dirtPen),loss:Math.round(ds.loss),theft:Math.round(ds.theft)});
+ if(S.history.length>60)S.history.shift();
+ S.catHist=(S.catHist||[]).concat([ds.cats]).slice(-14);
  ev(R,{t:'night',day:S.last,delivered,dock:hasDock});
  S.dayStats=blankDay();S.d++;S.hour=D.HOURS.open;R.agents=[];R.queues.clear();R.acc=0;
  if((S.d-1)%D.DAYS_PER_MONTH===0)monthEnd(S,R);
@@ -373,14 +382,32 @@ export function monthEnd(S,R){const m=S.month;
  const op=m.rev-m.buy-m.salaries-m.elec-m.loan-m.interest-m.ads;
  const rep={month:monthOf(S)-1,...m,result:Math.round(op),cash:Math.round(S.cash),avgSat:m.customers?m.sat/m.customers:null};
  S.reports=(S.reports||[]).concat([rep]).slice(-12);
- for(const r in S.staffDays)S.staffDays[r]=0;S.month=blankMonth();
+ for(const r in S.staffDays)S.staffDays[r]=0;S.month=blankMonth();S.monthCat={};
  if(S.cash<D.BANKRUPTCY)S.over=true;
  ev(R,{t:'month',report:rep,over:S.over})}
 
 // ---------------------------------------------------------------- sauvegarde
 const pack=a=>{let s='';for(const v of a)s+=v;return s};
 export function serialize(S){const o={};for(const k in S)if(!k.startsWith('_')&&k!=='dirt')o[k]=S[k];
- o.level=1;o.wall=pack(S.wall);o.zone=pack(S.zone);o.items=S.items.map(({inc,...it})=>it);return o}
+ o.level=1;o.built=pack(S.built);o.wall=pack(S.wall);o.zone=pack(S.zone);o.items=S.items.map(({inc,...it})=>it);return o}
 export function load(o){if(!o||o.v!==1)return null;const S={...o,wall:[...o.wall].map(Number),zone:[...o.zone].map(Number),items:o.items.map(it=>({...it,inc:0}))};
+ if(o.built)S.built=[...o.built].map(Number);else{S.built=new Array(N).fill(0);for(let y=o.b.y0;y<o.b.y1;y++)for(let x=o.b.x0;x<o.b.x1;x++)S.built[idx(x,y)]=1}
+ if(S.fy==null)S.fy=o.b.y1-1;S.monthCat=S.monthCat||{};S.catHist=S.catHist||[];bounds(S);
  if(S.hour>D.HOURS.open)S.hour=D.HOURS.open;S.dayStats=blankDay();S.dirt=new Float32Array(N);return S}
 export function withDirt(S){S.dirt=S.dirt||new Float32Array(N);return S}
+
+// ---------------------------------------------------------------- statistiques
+// popularité sur les 7 derniers jours : ventes comparées à la demande attendue
+export function popularity(S){const off=offered(S),h=(S.catHist||[]).slice(-7),sold={};let tot=0,dem=0;
+ for(const d of h)for(const c in d){sold[c]=(sold[c]||0)+d[c]}
+ for(const c of off){tot+=sold[c]||0;dem+=D.CAT[c].demand}
+ const o={};for(const c of D.CATS){const shelf=S.items.reduce((t,it)=>t+(it.cat===c.id?it.stock:0),0);
+  const r={perDay:h.length?(sold[c.id]||0)/h.length:0,shelf,reserve:S.reserve[c.id],tag:null};
+  if(off.has(c.id)){if(!shelf&&!S.reserve[c.id])r.tag='empty';else if(tot>50&&h.length>=2){const ratio=((sold[c.id]||0)/tot)/(c.demand/dem);r.tag=ratio>1.25?'hot':ratio<.6?'cold':null}}
+  o[c.id]=r}return o}
+// moyennes sur les n derniers jours de l'historique
+export function stats(S,n=7){const h=S.history.slice(-n).filter(d=>d.customers>0),k=h.length||1,sum=f=>h.reduce((t,d)=>t+(d[f]||0),0),c=sum('customers')||1;
+ const cap=capacity(S);let shelf=0,shelfCap=0;for(const it of S.items){const d=def(it.t);if(d.cap&&d.kind!=='reserve'){shelf+=it.stock;shelfCap+=d.cap}}
+ return {days:h.length,customers:sum('customers')/k,sat:h.length?h.reduce((t,d)=>t+(d.sat||0)*d.customers,0)/c:null,basket:sum('rev')/c,items:sum('units')/c,units:sum('units')/k,
+  rupture:sum('rupture')/c*100,expensive:sum('expensive')/c*100,angry:sum('angry')/c*100,notSold:sum('notSold')/c*100,wait:sum('waitPen')/c,dirt:sum('dirtPen')/c,loss:sum('loss')/k,theft:sum('theft')/k,
+  shelf,shelfCap,cap}}

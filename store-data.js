@@ -4,7 +4,7 @@
 // Terrain et bâtiment de départ (grosse supérette de 400 m², façade au sud, réserve au nord).
 export const LOT_W=60,LOT_H=48;
 export const START={x0:20,y0:18,x1:40,y1:38,entrance:29,reserveRows:5,cash:140000,loan:420000,loanMonthly:4450,rep:50};
-export const EXTEND={depth:4,perM2:750,fixed:10000,margin:2};
+export const EXTEND={perM2:900,margin:2};
 export const HOURS={open:8,close:20,realSecPerHour:20};       // 12 h d'ouverture = 4 min en ×1
 export const DAYS_PER_MONTH=30;
 export const BANKRUPTCY=-40000;

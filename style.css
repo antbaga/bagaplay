@@ -325,3 +325,21 @@ body:has(.install-banner) footer{padding-bottom:120px}
 #controls .st-tool{flex:1;min-width:0!important;padding:5px 2px!important;display:flex;flex-direction:column;align-items:center;gap:1px;font-size:17px!important;min-height:48px!important}
 #controls .st-tool small{font-size:9px;font-weight:700;color:var(--ink)}#controls .st-tool.on{background:var(--sage)}
 #controls:has(.st-tool){flex-wrap:nowrap;gap:5px}
+/* BagaStore 2.1 */
+.st-head{padding:12px 14px 4px}.st-head>b{flex:1;font-size:16px}
+.st-sheet>.st-tabs{padding:4px 12px 6px;flex-shrink:0}
+.st-pop{position:absolute;transform:translate(-50%,-100%);display:flex;gap:6px;padding:5px;background:#fffaf1f2;border-radius:16px;box-shadow:0 4px 10px #1b322740;z-index:3}
+.st-pop:after{content:'';position:absolute;left:50%;bottom:-6px;margin-left:-6px;border:6px solid transparent;border-top-color:#fffaf1f2;border-bottom:0}
+.st-pop button{width:42px;height:38px;border-radius:12px;font-size:18px;font-weight:800}.st-pop-no{background:#f1ecdf;color:#b2443a}.st-pop-ok{background:#406c47;color:#fffaf1}.st-pop-ok:disabled{background:#c9c3b3;color:#fffaf1;opacity:1}
+.st-pbtn.done{width:auto;padding:0 14px;font-size:13px}
+.st-tiles{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:8px 0}
+.st-tile{background:#fffaf1;border:1px solid var(--line);border-radius:12px;padding:7px 10px;display:flex;flex-direction:column}.st-tile small{font-size:9px;color:var(--muted);font-weight:700;letter-spacing:.3px}.st-tile b{font-size:15px;margin-top:2px}.st-tile i{font-size:9px;font-style:normal;color:var(--muted)}
+.st-chart{background:#fffaf1;border:1px solid var(--line);border-radius:12px;padding:8px 10px 6px;margin:8px 0}.st-chart>b{font-size:11px;display:block;margin-bottom:4px}
+.st-chart svg{width:100%;height:96px;display:block}.st-chart-leg{display:flex;justify-content:space-between;font-size:9px;color:var(--muted);margin-top:3px}.st-chart-empty{font-size:10px;color:var(--muted)}
+.st-hbars{display:flex;flex-direction:column;gap:5px;margin:4px 0}.st-hbar{display:grid;grid-template-columns:90px 1fr 78px;gap:8px;align-items:center;font-size:11px}
+.st-hbar i{height:9px;border-radius:5px;background:#ece7da;overflow:hidden}.st-hbar u{display:block;height:100%;border-radius:5px}.st-hbar b{text-align:right;font-size:11px}
+.st-tag{font-style:normal;font-size:8px;font-weight:800;padding:2px 5px;border-radius:6px;margin-left:5px;vertical-align:1px;text-transform:uppercase;letter-spacing:.3px}
+.st-tag.hot{background:#ffe3c2;color:#c2611c}.st-tag.cold{background:#e2e8f3;color:#5a6b8a}.st-tag.empty{background:#ffd4cf;color:#c62f2f}
+.st-note.warn{color:#b2443a;font-weight:700}
+.st-lines .st-total.neg b{color:#b2443a}.st-lines .st-total.pos b{color:#2f8a45}
+.st-info{font-size:12px}

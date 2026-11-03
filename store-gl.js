@@ -1,22 +1,30 @@
 // BagaStore : petit moteur 3D WebGL (sans librairie). Caméra orthographique en vue 3/4, quatre angles,
 // faces ombrées selon l'angle de vue (style « maquette »), sélection d'une case au doigt.
-const VS=`attribute vec3 p;attribute vec3 c;uniform mat4 m;uniform vec4 tint;varying vec3 v;
-void main(){gl_Position=m*vec4(p,1.);v=mix(c,tint.rgb,tint.a);}`;
+const VS=`attribute vec3 p;attribute vec3 c;uniform mat4 m;uniform vec4 tint;uniform vec2 off;varying vec3 v;
+void main(){gl_Position=m*vec4(p,1.);gl_Position.xy+=off*gl_Position.w;v=mix(c,tint.rgb,tint.a);}`;
 const FS=`precision mediump float;varying vec3 v;void main(){gl_FragColor=vec4(v,1.);}`;
 
 export function createRenderer(canvas){
- const gl=canvas.getContext('webgl',{antialias:true,alpha:false,preserveDrawingBuffer:true})||canvas.getContext('experimental-webgl');if(!gl)return null;
+ const gl=canvas.getContext('webgl',{antialias:true,alpha:false,preserveDrawingBuffer:true,stencil:true})||canvas.getContext('experimental-webgl');if(!gl)return null;
  const sh=(t,s)=>{const o=gl.createShader(t);gl.shaderSource(o,s);gl.compileShader(o);return o};
  const pr=gl.createProgram();gl.attachShader(pr,sh(gl.VERTEX_SHADER,VS));gl.attachShader(pr,sh(gl.FRAGMENT_SHADER,FS));gl.linkProgram(pr);gl.useProgram(pr);
- const aP=gl.getAttribLocation(pr,'p'),aC=gl.getAttribLocation(pr,'c'),uM=gl.getUniformLocation(pr,'m'),uT=gl.getUniformLocation(pr,'tint');
+ const aP=gl.getAttribLocation(pr,'p'),aC=gl.getAttribLocation(pr,'c'),uM=gl.getUniformLocation(pr,'m'),uT=gl.getUniformLocation(pr,'tint'),uO=gl.getUniformLocation(pr,'off');
  gl.enableVertexAttribArray(aP);gl.enableVertexAttribArray(aC);gl.enable(gl.DEPTH_TEST);
  const meshes=new Map();
  function upload(name,data,count){let m=meshes.get(name);if(!m){m={buf:gl.createBuffer(),n:0};meshes.set(name,m)}
   gl.bindBuffer(gl.ARRAY_BUFFER,m.buf);gl.bufferData(gl.ARRAY_BUFFER,data.subarray(0,count*6),gl.DYNAMIC_DRAW);m.n=count}
  function draw(name,tint=[0,0,0,0]){const m=meshes.get(name);if(!m||!m.n)return;gl.bindBuffer(gl.ARRAY_BUFFER,m.buf);
   gl.vertexAttribPointer(aP,3,gl.FLOAT,false,24,0);gl.vertexAttribPointer(aC,3,gl.FLOAT,false,24,12);gl.uniform4fv(uT,tint);gl.drawArrays(gl.TRIANGLES,0,m.n)}
- function frame(vp,list,bg=[.62,.78,.86]){gl.viewport(0,0,canvas.width,canvas.height);gl.clearColor(bg[0],bg[1],bg[2],1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
-  gl.uniformMatrix4fv(uM,false,vp);for(const [name,tint] of list)draw(name,tint)}
+ // outline : maillage dont on trace le contour (silhouette) en couleur, au pochoir
+ function frame(vp,list,outline=null,ocol=[1,.82,.2,1],bg=[.62,.78,.86]){gl.viewport(0,0,canvas.width,canvas.height);gl.clearColor(bg[0],bg[1],bg[2],1);gl.clearStencil(0);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT|gl.STENCIL_BUFFER_BIT);
+  gl.uniformMatrix4fv(uM,false,vp);gl.uniform2f(uO,0,0);for(const [name,tint] of list)draw(name,tint);
+  const m=outline&&meshes.get(outline);if(!m||!m.n)return;
+  gl.enable(gl.STENCIL_TEST);gl.disable(gl.DEPTH_TEST);gl.depthMask(false);gl.colorMask(false,false,false,false);
+  gl.stencilFunc(gl.ALWAYS,1,255);gl.stencilOp(gl.KEEP,gl.KEEP,gl.REPLACE);draw(outline);
+  gl.colorMask(true,true,true,true);gl.stencilFunc(gl.NOTEQUAL,1,255);gl.stencilOp(gl.KEEP,gl.KEEP,gl.KEEP);
+  const px=3*(canvas.width/Math.max(1,canvas.clientWidth||canvas.width));
+  for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1],[.7,.7],[-.7,.7],[.7,-.7],[-.7,-.7]]){gl.uniform2f(uO,dx*px*2/canvas.width,dy*px*2/canvas.height);draw(outline,ocol)}
+  gl.uniform2f(uO,0,0);gl.disable(gl.STENCIL_TEST);gl.enable(gl.DEPTH_TEST);gl.depthMask(true)}
  return {gl,upload,frame,lost:()=>gl.isContextLost()}}
 
 // ---------------------------------------------------------------- caméra
