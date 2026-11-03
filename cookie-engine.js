@@ -18,10 +18,12 @@ class Game{
  restore(s){if(!s||s.version!==1||!Array.isArray(s.pieces)||s.pieces.length>100)throw Error('Invalid save');for(const p of s.pieces)if(!Number.isInteger(p.level)||p.level<0||p.level>=TIERS.length||!['x','y','vx','vy'].every(k=>Number.isFinite(p[k])))throw Error('Invalid piece');
   for(const k of ['phase','score','shots','highest','id','time','combo','maxCombo','settle','shotTime','launchX','pendingWin','undoState'])if(s[k]!==undefined)this[k]=s[k];this.pieces=s.pieces.map(p=>({...p,r:TIERS[p.level].radius}));this.events=[];this.acc=0;
  }
- launch(x,dx,dy,power){if(this.phase!=='ready'||!Number.isFinite(dx)||!Number.isFinite(dy)||dy>=-1||!Number.isFinite(power))return false;const angle=clamp(Math.atan2(dx,-dy),-1.15,1.15),v=clamp(power,180,1100);
+ // On peut relancer sans attendre l'arrêt : dès que la zone de lancer est libre (les gâteaux en mouvement sont plus haut).
+ canLaunch(){if(this.phase==='ready')return true;return this.phase==='moving'&&this.shotTime>.25&&this.pieces.every(p=>p.y+p.r<LINE-4);}
+ launch(x,dx,dy,power){if(!this.canLaunch()||!Number.isFinite(dx)||!Number.isFinite(dy)||dy>=-1||!Number.isFinite(power))return false;const angle=clamp(Math.atan2(dx,-dy),-1.15,1.15),v=clamp(power,180,1100);
   this.undoState=this.snapshot(false);this.launchX=clamp(x,LEFT+18,RIGHT-18);this.add(0,this.launchX,LAUNCH,Math.sin(angle)*v,-Math.cos(angle)*v);this.phase='moving';this.shots++;this.combo=0;this.shotTime=0;this.settle=0;this.pendingWin=false;this.events.push({type:'launch'});return true;
  }
- undo(){if(!this.undoState)return false;const old=this.undoState;this.restore(old);this.undoState=null;this.phase='ready';this.events.push({type:'undo'});return true;}
+ undo(){if(!this.undoState)return false;const old=this.undoState;this.restore(old);this.undoState=null;this.phase=old.phase==='moving'?'moving':'ready';this.events.push({type:'undo'});return true;}
  advance(dt){if(this.phase!=='moving')return;this.acc+=clamp(dt,0,.1);while(this.acc+1e-10>=DT&&this.phase==='moving'){this.step(DT);this.acc-=DT;}if(this.acc<0)this.acc=0;}
  wall(p){let hit=false;if(p.x-p.r<LEFT){p.x=LEFT+p.r;if(p.vx<0){p.vx*=-.65;hit=true;}}if(p.x+p.r>RIGHT){p.x=RIGHT-p.r;if(p.vx>0){p.vx*=-.65;hit=true;}}if(p.y-p.r<TOP){p.y=TOP+p.r;if(p.vy<0){p.vy*=-.65;hit=true;}}if(p.y+p.r>BOTTOM){p.y=BOTTOM-p.r;if(p.vy>0){p.vy*=-.45;hit=true;}}if(hit&&Math.hypot(p.vx,p.vy)>70)this.events.push({type:'bounce',x:p.x,y:p.y});}
  merge(a,b){

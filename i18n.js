@@ -76,10 +76,39 @@
   'Le petit adversaire réfléchit…':'Your little opponent is thinking…','Les croix ont gagné !':'Crosses win!','Les ronds gagnent cette fois. Tente une nouvelle stratégie !':'Noughts win this time. Try a new strategy!','Les ronds ont gagné !':'Noughts win!','Mode : 2 joueurs':'Mode: 2 players','Mode : solo':'Mode: solo','À toi ! Tu joues les croix.':'Your turn! You play crosses.','Égalité ! Vous avez bien défendu votre place.':'Tie! You both held your ground.','Au tour des croix.':'Crosses to play.','Au tour des ronds.':'Noughts to play.',
   'Une petite mine se cachait ici.\nLe premier clic est toujours sans danger.':'A little mine was hiding here.\nThe first tap is always safe.','⌕ Dévoiler une case':'⌕ Reveal a square','⚑ Poser un drapeau':'⚑ Place a flag','✎ Notes':'✎ Notes','Effacer':'Erase','Case vide':'Empty square','Espace vide':'Empty space','drapeau':'flag','mine':'mine','case cachée':'hidden square',
   // version web / installation
-  'Installe BagaPlay':'Install BagaPlay'
+  'Installe BagaPlay':'Install BagaPlay',
+  // 1.9 : bataille navale, binero, mots croisés et fléchés
+  'Bataille navale':'Battleship','Binero':'Binairo','Mots croisés':'Crossword','Mots fléchés':'Arrow words',
+  'Des 0, des 1, de la logique.':'Zeros, ones and logic.','ZÉRO OU UN':'ZERO OR ONE','Une définition, un mot.':'One clue, one word.','LE PLAISIR DES MOTS':'THE JOY OF WORDS','Suis les flèches.':'Follow the arrows.','À LA FLÈCHE':'ON TARGET',
+  'Bataille navale : place tes 5 bateaux (touche un bateau puis une case pour le déplacer, touche-le encore pour le tourner), valide, puis tirez chacun votre tour sur la grille adverse. Le premier qui coule toute la flotte gagne.':'Battleship: place your 5 ships (tap a ship then a square to move it, tap it again to rotate it), confirm, then take turns firing at the other grid. The first to sink the whole fleet wins.',
+  'Je suis prêt':'I’m ready','✓ Valider ma flotte':'✓ Confirm my fleet','Tourner le bateau':'Rotate ship','Placer au hasard':'Random placement','Pas de place ici.':'No room here.',
+  'Touché !':'Hit!','À l’eau.':'Miss.','JOUEUR 1':'PLAYER 1','JOUEUR 2':'PLAYER 2','L’ordinateur vise…':'The computer is aiming…',
+  'À toi de tirer : touche une case de la grille adverse.':'Your shot: tap a square on the enemy grid.',
+  'Flotte du joueur 1 en place. Passe le téléphone au joueur 2 pour qu’il place la sienne.':'Player 1’s fleet is ready. Hand the phone to player 2 to place theirs.',
+  'Le joueur 1 commence. Passe-lui le téléphone.':'Player 1 goes first. Hand them the phone.',
+  'Au tour du joueur 1. Passe-lui le téléphone.':'Player 1’s turn. Hand them the phone.','Au tour du joueur 2. Passe-lui le téléphone.':'Player 2’s turn. Hand them the phone.',
+  'Tu as coulé toute la flotte de l’ordinateur !':'You sank the computer’s whole fleet!','L’ordinateur a coulé toute ta flotte.':'The computer sank your whole fleet.','Tu as abandonné.':'You resigned.',
+  'Ton défi a été refusé.':'Your challenge was declined.','Défier à la bataille navale':'Challenge to Battleship',
+  'Porte-avions':'Carrier','Croiseur':'Battleship','Contre-torpilleur':'Cruiser','Torpilleur':'Destroyer',
+  'Touche une case : vide → 0 → 1. Pas trois pareils à la suite, autant de 0 que de 1, pas deux lignes identiques.':'Tap a square: empty → 0 → 1. No three in a row, as many 0s as 1s, no two identical lines.',
+  'Touche une case, tape le mot. Les définitions sont dans les cases fléchées.':'Tap a square and type the word. Clues are in the arrow squares (French words).',
+  'Touche une case (deux fois pour changer de sens) et tape le mot.':'Tap a square (twice to switch direction) and type the word (French words).',
  };
  var T=function(s){return translate(s)};
  var P=[
+  [/^(Joueur [12]) : place ta flotte\. (.+)$/,function(m){return m[1].replace('Joueur','Player')+': '+T('place ta flotte. '+m[2])}],
+  [/^place ta flotte\. Touche un bateau puis une case, touche-le encore pour le tourner\. 🎲 pour placer au hasard\.$/,function(){return 'place your fleet. Tap a ship then a square, tap it again to rotate it. 🎲 for random placement.'}],
+  [/^((?:Ordinateur|.+) : )?Coulé ! (.+)\.$/,function(m){return (m[1]?(m[1]==='Ordinateur : '?'Computer: ':m[1]):'')+'Sunk! '+(T(m[2])||m[2])+'.'}],
+  [/^(Ordinateur|.+) : (Touché !|À l’eau\.)$/,function(m){return (m[1]==='Ordinateur'?'Computer':m[1])+': '+T(m[2])}],
+  [/^(.+) \((\d) cases\) : touche une case pour le déplacer\.$/,function(m){return (T(m[1])||m[1])+' ('+m[2]+' squares): tap a square to move it.'}],
+  [/^Ta flotte est prête\. En attente de celle de (.+)…$/,function(m){return 'Your fleet is ready. Waiting for '+m[1]+'’s…'}],
+  [/^Tu as coulé toute la flotte de (.+) !$/,function(m){return 'You sank '+m[1]+'’s whole fleet!'}],
+  [/^(.+) a coulé toute ta flotte\.$/,function(m){return m[1]+' sank your whole fleet.'}],
+  [/^(.+) abandonne\.$/,function(m){return m[1]+' resigned.'}],
+  [/^Le joueur ([12]) a coulé toute la flotte adverse\.$/,function(m){return 'Player '+m[1]+' sank the whole enemy fleet.'}],
+  [/^Victoire du joueur ([12]) !$/,function(m){return 'Player '+m[1]+' wins!'}],
+  [/^Grille (\d+)×(\d+) terminée en (.+?)( avec un peu d’aide\.| !)$/,function(m){return m[1]+'×'+m[2]+' grid solved in '+(T(m[3])||m[3])+(m[4]===' !'?'!':' with a little help.')}],
+  [/^(\d+) mots trouvés en (.+?)( avec un peu d’aide\.| !)$/,function(m){return m[1]+' words found in '+(T(m[2])||m[2])+(m[3]===' !'?'!':' with a little help.')}],
   [/^(\d+) coups?$/,function(m){return m[1]+(m[1]==='1'?' move':' moves')}],
   [/^(\d+) victoires?$/,function(m){return m[1]+(m[1]==='1'?' win':' wins')}],
   [/^(\d+) s$/,function(m){return m[0]}],
@@ -110,15 +139,15 @@
   [/^Joueur (\d+) \((bleue|corail)\) : (quitte la vue de dessus pour lancer|vise le cochonnet \(6 à 10 m\) avec le pavé, puis relâche|vise avec le pavé \(gauche\/droite, haut\/bas\), puis relâche)$/,function(m){var r={'quitte la vue de dessus pour lancer':'leave top view to throw','vise le cochonnet (6 à 10 m) avec le pavé, puis relâche':'aim the jack (6 to 10 m) with the pad, then release','vise avec le pavé (gauche/droite, haut/bas), puis relâche':'aim with the pad (left/right, up/down), then release'};return 'Player '+m[1]+' ('+(m[2]==='bleue'?'blue':'coral')+'): '+r[m[3]]}],
   [/^Inviter \((\d+) joueurs\)$/,function(m){return 'Invite ('+m[1]+' players)'}],
   [/^Retirer (.+)$/,function(m){return 'Remove '+m[1]}],
-  [/^Défi (aux échecs|aux dames|au puissance 4)\. (.+) l’accepte ou le refuse\.$/,function(m){return ({'aux échecs':'Chess','aux dames':'Checkers','au puissance 4':'Connect Four'})[m[1]]+' challenge. '+m[2]+' can accept or decline.'}],
+  [/^Défi (aux échecs|aux dames|au puissance 4|à la bataille navale)\. (.+) l’accepte ou le refuse\.$/,function(m){return ({'aux échecs':'Chess','aux dames':'Checkers','au puissance 4':'Connect Four','à la bataille navale':'Battleship'})[m[1]]+' challenge. '+m[2]+' can accept or decline.'}],
   [/^Défi envoyé à (.+)$/,function(m){return 'Challenge sent to '+m[1]}],
   [/^En attente (\d+)\/(\d+)$/,function(m){return 'Waiting '+m[1]+'/'+m[2]}],
   [/^(.+) veut lancer$/,function(m){return m[1]+' wants to throw'}],
   [/^(.+) demande à lancer$/,function(m){return m[1]+' asks to throw'}],
   [/^(.+) demande$/,function(m){return m[1]+' is asking'}],
   [/^Au tour de (.+)$/,function(m){return m[1]+'’s turn'}],
-  [/^(.+) te défie (aux échecs|aux dames|au puissance 4|à la pétanque)\.?$/,function(m){return m[1]+' challenges you to '+({'aux échecs':'chess','aux dames':'checkers','au puissance 4':'Connect Four','à la pétanque':'pétanque'})[m[2]]}],
-  [/^(.+) t’invite (aux échecs|aux dames|au puissance 4|à la pétanque)\.?$/,function(m){return m[1]+' invites you to '+({'aux échecs':'chess','aux dames':'checkers','au puissance 4':'Connect Four','à la pétanque':'pétanque'})[m[2]]}],
+  [/^(.+) te défie (aux échecs|aux dames|au puissance 4|à la pétanque|à la bataille navale)\.?$/,function(m){return m[1]+' challenges you to '+({'aux échecs':'chess','aux dames':'checkers','au puissance 4':'Connect Four','à la pétanque':'pétanque','à la bataille navale':'Battleship'})[m[2]]}],
+  [/^(.+) t’invite (aux échecs|aux dames|au puissance 4|à la pétanque|à la bataille navale)\.?$/,function(m){return m[1]+' invites you to '+({'aux échecs':'chess','aux dames':'checkers','au puissance 4':'Connect Four','à la pétanque':'pétanque','à la bataille navale':'Battleship'})[m[2]]}],
   [/^(.+) n’a pas encore répondu\.$/,function(m){return m[1]+' hasn’t answered yet.'}],
   [/^(\d+) joueurs$/,function(m){return m[1]+' players'}],
   [/^Joueur (\d+)$/,function(m){return 'Player '+m[1]}],
@@ -191,7 +220,10 @@
  if(lang==='fr')return;
 
  var ATTRS=['aria-label','placeholder','title'];
+ // zones en français par nature (mots croisés, mots fléchés) : jamais traduites
+ function keep(n){var e=n.nodeType===1?n:n.parentNode;return !!(e&&e.closest&&e.closest('[translate="no"]'))}
  function fixNode(n){
+  if(keep(n))return;
   if(n.nodeType===3){var t=translate(n.nodeValue);if(t!=null&&t!==n.nodeValue)n.nodeValue=t;return}
   if(n.nodeType!==1)return;
   if(n.tagName==='SCRIPT'||n.tagName==='STYLE')return;
@@ -200,7 +232,7 @@
  }
  new MutationObserver(function(list){for(var i=0;i<list.length;i++){var m=list[i];
   if(m.type==='characterData')fixNode(m.target);
-  else if(m.type==='attributes'){var v=m.target.getAttribute(m.attributeName),t=translate(v);if(t!=null&&t!==v)m.target.setAttribute(m.attributeName,t)}
+  else if(m.type==='attributes'){if(keep(m.target))continue;var v=m.target.getAttribute(m.attributeName),t=translate(v);if(t!=null&&t!==v)m.target.setAttribute(m.attributeName,t)}
   else for(var j=0;j<m.addedNodes.length;j++)fixNode(m.addedNodes[j]);}})
   .observe(document.documentElement,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:ATTRS});
  document.addEventListener('DOMContentLoaded',function(){fixNode(document.body);document.title='BagaPlay · A little break, a big smile.'});

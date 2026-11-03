@@ -230,3 +230,54 @@ body:has(.install-banner) footer{padding-bottom:120px}
 .pq-lofts button.on{background:#406c47;color:#fffaf1}
 .pq-hud.with-pad .pq-bottom{bottom:168px}
 .pq-hand.locked{background:radial-gradient(circle,rgba(255,236,170,.7) 0 55%,rgba(255,236,170,0) 70%)}
+/* ---- Binero */
+#board .grid.binero{gap:3px;padding:6px;background:#efd7c6;border-color:#e4c4ae;container-type:inline-size}
+.binero .cell{border-radius:6px;font-size:7cqw;color:#c2694c;background:#fffaf0;box-shadow:0 2px 0 #d9b9a3;transition:background .12s}
+.binero.n10 .cell,.binero.n12 .cell{border-radius:4px;font-size:5.6cqw}
+.binero .cell.given{color:#5a4136;background:#f7e8da}
+.binero .cell.zero:not(.given){background:#e6f1dc;color:#4f7a49}.binero .cell.one:not(.given){background:#fde1d4}
+.binero .cell.error{background:#ffc9bf!important;color:#b8242e!important}
+.binero .cell.fill{transform:scale(.9)}
+/* ---- Mots croisés / fléchés */
+#board .grid.words{gap:2px;padding:4px;background:#3e5a49;border-color:#33503f;border-radius:10px;container-type:inline-size}
+#board .grid.words.arrow{background:#c9ddd5;border-color:#b4cdc3}
+.words .cell{border-radius:3px;box-shadow:none;min-height:0;overflow:hidden;position:relative}
+.words .cell.void{background:transparent}
+.words.arrow .cell.void{background:#9fbfb3}
+.words .cell.letter{background:#fffdf6;color:#27453c;font-size:5.6cqw;text-transform:uppercase}
+.words.s8 .cell.letter{font-size:7cqw}.words.s13 .cell.letter{font-size:4.6cqw}
+.words .cell.letter.inword{background:#fff1bf}.words .cell.letter.selected{background:#ffd76a}.words .cell.letter.ok{color:#3b8a4f}
+.words .cell .num{position:absolute;top:1px;left:2px;font-size:2.1cqw;font-weight:700;color:#7c8a76;line-height:1}
+.words .cell.clue{background:#dcefe7;display:flex;flex-direction:column;padding:1px;gap:1px;align-items:stretch;justify-content:stretch}
+.clue-text{flex:1;display:flex;align-items:center;justify-content:center;text-align:center;font-size:1.75cqw;line-height:1.05;font-weight:600;color:#2f5a4b;overflow:hidden;word-break:break-word;hyphens:auto;border-radius:2px;position:relative;padding:0 1px}
+.clue-text+.clue-text{border-top:1px solid #b5d1c6}
+.clue-text.h::after{content:'▸';position:absolute;right:0;bottom:0;font-size:1.8cqw;color:#5f9a83}
+.clue-text.v::after{content:'▾';position:absolute;right:0;bottom:0;font-size:1.8cqw;color:#5f9a83}
+.clue-text.on{background:#ffd76a;color:#27453c}
+.word-clue{width:100%;display:flex;align-items:baseline;gap:6px;background:#fffaf1;border:1px solid var(--line);border-radius:12px;padding:9px 12px;font-size:14px;min-height:40px}
+.word-clue b{color:#5f9a83;font-size:13px;flex-shrink:0}.word-clue small{color:var(--muted);flex-shrink:0}
+.word-keys{width:100%;display:flex;flex-direction:column;gap:5px}
+.word-row{display:flex;gap:4px;justify-content:center}
+#controls .word-keys button.key{flex:1;min-width:0;min-height:42px;padding:0;font-size:16px;font-weight:700;border-radius:9px;max-width:40px}
+#controls .word-keys button.wide-key{max-width:58px;flex:1.5;font-size:18px;position:relative}
+/* ---- Bataille navale */
+.bs-wrap{position:relative;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
+.bs-grid{display:grid;grid-template-columns:repeat(10,1fr);grid-template-rows:repeat(10,1fr);gap:2px;padding:4px;border-radius:12px;background:#8cbfdd;border:2px solid #74abcd;container-type:inline-size;flex-shrink:0;box-shadow:0 4px 0 #d3e3ea}
+.bs-small{opacity:.95;gap:1px;padding:3px;border-radius:9px}
+.bs-grid .cell{border-radius:3px;background:#d6ecf7;box-shadow:none;font-size:6cqw;color:#2d5d79;aspect-ratio:auto;min-height:0;transition:background .15s}
+.bs-big.aim .cell:not(.hit):not(.miss):not(.sunk){background:#e6f4fb}
+.bs-big.aim .cell:not(.hit):not(.miss):not(.sunk):active{background:#ffe08a}
+.bs-grid .cell.ship{background:#6d8795;color:#fffaf0}
+.bs-grid .cell.ship.end-l{border-radius:45% 3px 3px 45%}.bs-grid .cell.ship.end-r{border-radius:3px 45% 45% 3px}
+.bs-grid .cell.ship.end-t{border-radius:45% 45% 3px 3px}.bs-grid .cell.ship.end-b{border-radius:3px 3px 45% 45%}
+.bs-grid .cell.ship.sel{background:#e9a23b;box-shadow:inset 0 0 0 2px #fff4d0}
+.bs-grid .cell.miss{background:#bcdcec;color:#5c8aa6}
+.bs-grid .cell.hit{background:#f08a64;color:#fffaf0}
+.bs-grid .cell.sunk{background:#a83f35;color:#ffd8cc}
+.bs-grid .cell.flash{animation:bs-flash .7s ease-out}
+@keyframes bs-flash{0%{transform:scale(1.5);box-shadow:0 0 0 4px #ffe08a}100%{transform:none}}
+.bs-grid.hidden-grid{visibility:hidden}
+.bs-banner{min-height:22px;font-size:14px;font-weight:800;color:#2d5d79;text-align:center;transition:opacity .4s}
+.bs-banner.hit{color:#d4603e}.bs-banner.sunk{color:#a83f35}.bs-banner.bad{color:#b8242e}.bs-banner.fade{opacity:.35}
+.bs-curtain{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:24px;text-align:center;background:#d6ecf7;border-radius:18px;font-size:15px;color:#2d5d79}
+.bs-curtain p{margin:0;line-height:1.6}.bs-curtain .primary{max-width:240px}

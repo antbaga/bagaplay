@@ -4,6 +4,8 @@ import * as Draughts from './draughts-engine.js';
 import * as online from './online.js';
 import * as Connect4 from './connect4-engine.js';
 import {bestMove as draughtsAI} from './draughts-ai.js';
+import {bestMove as chessAI} from './chess-ai.js';
+import * as Battleship from './battleship-engine.js';
 
 const GLYPH={k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'};
 const COLOR_NAMES={w:'Blancs',b:'Noirs'},C4_NAMES={w:'Rouges',b:'Jaunes'};
@@ -11,16 +13,17 @@ const POLL_MS=1500;
 export const DUEL_RULES={
  chess:'Échecs : règles complètes. Touche une pièce puis sa case d’arrivée.',
  draughts:'Dames internationales 10×10 : prise obligatoire et majoritaire, dames volantes. Touche une pièce puis chaque case d’arrivée.',
- connect4:'Puissance 4 : aligne 4 jetons (ligne, colonne ou diagonale). Touche une colonne pour y lâcher ton jeton.'
+ connect4:'Puissance 4 : aligne 4 jetons (ligne, colonne ou diagonale). Touche une colonne pour y lâcher ton jeton.',
+ battleship:'Bataille navale : place tes 5 bateaux (touche un bateau puis une case pour le déplacer, touche-le encore pour le tourner), valide, puis tirez chacun votre tour sur la grille adverse. Le premier qui coule toute la flotte gagne.'
 };
 
-const ENGINES={chess:Chess,draughts:Draughts,connect4:Connect4};
+const ENGINES={chess:Chess,draughts:Draughts,connect4:Connect4,battleship:Battleship};
 export const initialState=kind=>ENGINES[kind].initial();
-export const AI_GAMES=['draughts','connect4'];
+export const AI_GAMES=['chess','draughts','connect4','battleship'];
 
 export function duel(kind){return c=>{
  const E=ENGINES[kind],c4=kind==='connect4',cols=kind==='chess'?8:kind==='draughts'?10:7,rows=c4?6:cols,COLOR_NAME=c4?C4_NAMES:COLOR_NAMES;
- const aiMove=(st,l)=>c4?Connect4.bestMove(st,l):draughtsAI(st,l);
+ const aiMove=(st,l)=>c4?Connect4.bestMove(st,l):kind==='chess'?chessAI(st,l):draughtsAI(st,l);
  const opts=c.duel||{mode:'local'};let match=opts.match||null;
  const isOnline=!!match,vsAI=opts.mode==='ai'&&AI_GAMES.includes(kind),aiColor='b',aiLevel=opts.level??1;let thinking=false;
  let state=isOnline?match.state:E.initial(),ply=isOnline?match.ply:0,history=[];

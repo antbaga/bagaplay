@@ -80,3 +80,5 @@ export function status(s){
  return {over:false,winner:null,reason:''};
 }
 export const pieceColor=colorOf;
+// Pour l'ordinateur : applique un coup déjà tiré de legalMoves (sans revérifier).
+export const playLegal=(s,m)=>play(s,m);

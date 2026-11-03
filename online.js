@@ -7,9 +7,9 @@ export const CONFIG={
 };
 
 // Tableaux où le plus petit score gagne (vérifié aussi côté serveur).
-export const LOWER=new Set(['memory','mines','sudoku','slide']);
+export const LOWER=new Set(['memory','mines','sudoku','slide','binero','crossword','arrowword']);
 // Tableaux alimentés par le serveur (victoires en ligne), jamais envoyés par l'app.
-export const SERVER_BOARDS=new Set(['chess','draughts','connect4']);
+export const SERVER_BOARDS=new Set(['chess','draughts','connect4','battleship']);
 
 const PLAYER_KEY='bagaplay-player';
 function uuid(){try{return crypto.randomUUID()}catch{return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0;return(c==='x'?r:(r&3|8)).toString(16)})}}
@@ -63,6 +63,9 @@ export const challenge=(pub,game,state)=>rpc('challenge',{p_player:me(),p_name:n
 export const getMatch=id=>rpc('get_match',{p_player:me(),p_id:id});
 export const myMatches=()=>rpc('my_matches',{p_player:me()});
 export const playMove=(id,ply,state,end)=>rpc('play_move',{p_player:me(),p_id:id,p_ply:ply,p_state:state,p_over:!!end,p_winner:end?.winner||null,p_reason:end?.reason||null});
+// Bataille navale : les flottes passent par le serveur, qui les garde cachées.
+export const bsPlace=(id,fleet)=>rpc('bs_place',{p_player:me(),p_id:id,p_fleet:fleet});
+export const bsFire=(id,cell)=>rpc('bs_fire',{p_player:me(),p_id:id,p_cell:cell});
 export const matchAction=(id,action)=>rpc('match_action',{p_player:me(),p_id:id,p_action:action});
 
 // Défi en attente : l'adversaire accepte ou refuse. Partie finie : « hide » la retire de mes listes.
