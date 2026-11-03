@@ -80,7 +80,9 @@ export const partyVote=(id,yes)=>rpc('party_vote',{p_player:me(),p_id:id,p_yes:!
 export const partyThrow=(id,ply,state,end)=>rpc('party_throw',{p_player:me(),p_id:id,p_ply:ply,p_state:state,p_over:!!end,p_winner:end?end.winner:null});
 export const hideParty=id=>rpc('party_hide',{p_player:me(),p_id:id});
 // Toutes mes parties (duels + pétanque). Les parties à plusieurs restent facultatives si le serveur n'est pas à jour.
-export async function allGames(){const [m,p]=await Promise.all([myMatches(),myParties().catch(()=>[])]);return m.concat(p)}
+// Seules les parties en attente ou en cours sont listées : une partie finie, refusée ou annulée n'apparaît plus nulle part.
+export const isOpen=g=>g.status==='pending'||g.status==='active';
+export async function allGames(){const [m,p]=await Promise.all([myMatches(),myParties().catch(()=>[])]);return m.concat(p).filter(isOpen)}
 // Action attendue de ma part : répondre à un défi, jouer, voter, demander à lancer.
 export const needsMe=g=>!!(g.invite||g.my_turn||g.need_vote||g.can_ask);
 
