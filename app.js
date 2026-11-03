@@ -1,6 +1,7 @@
 import {cookie} from './cookie.js';
 import {breakout as breakoutNew} from './breakout.js';
-import {celebrate,music,PANDA} from './rewards.js';
+import {celebrate,music,setMusicVolume,PANDA} from './rewards.js';
+import {petanque,PETANQUE_RULES} from './petanque.js';
 import * as online from './online.js';
 import {puzzles} from './puzzles.js';
 import {arcade} from './arcade.js';
@@ -13,6 +14,7 @@ const games=[
  {id:'chess',title:'Échecs',desc:'',cat:'duel',color:'#eadfca',tag:'',hint:'',art:'chess'},
  {id:'draughts',title:'Dames',desc:'',cat:'duel',color:'#e0ebd1',tag:'',hint:'',art:'draughts'},
  {id:'connect4',title:'Puissance 4',desc:'',cat:'duel',color:'#d9e6f7',tag:'',hint:'',art:'connect4'},
+ {id:'petanque',title:'Pétanque',desc:'',cat:'duel',color:'#f3e1c4',tag:'',hint:'',art:'petanque'},
  {id:'2048',title:'2048',desc:'Fusionne, encore et encore.',cat:'puzzle',color:'#f3e2c0',tag:'LES CHIFFRES S’ALIGNENT',hint:'Glisse pour fusionner les nombres identiques.',art:'numbers'},
  {id:'snake',title:'Snake',desc:'Un petit creux sans fin.',cat:'arcade',color:'#dceeca',tag:'LE GRAND CLASSIQUE',hint:'Glisse pour diriger le serpent. Évite les murs et ta queue.',art:'snake'},
  {id:'blocks',title:'Blocs pastel',desc:'Tout finit par s’emboîter.',cat:'arcade',color:'#ded6f6',tag:'UNE LIGNE À LA FOIS',hint:'Glisse à gauche ou à droite. Touche pour tourner, glisse vers le bas pour poser.',art:'blocks'},
@@ -26,10 +28,13 @@ const games=[
 ];
 let saved={};try{saved=JSON.parse(localStorage.getItem('bagaplay-v1')||'{}')}catch{};
 for(const id of ['memory','snake','sudoku','mines'])if(saved[id]!=null){if(saved[id+':1']==null)saved[id+':1']=saved[id];delete saved[id]}
-let turns={};let difficulty=1,collected=0;let sound=!!saved.sound,current=null,runtime=null,paused=false,ended=false,cleanups=[],tasks=[],time=0,raf=0;
+// Volumes de 0 à 1 (0,5 = volume d'origine). Ancien réglage son marche/arrêt repris tel quel.
+const vol=saved.vol||{music:saved.sound?.5:0,sfx:saved.sound?.5:0};setMusicVolume(vol.music);
+let turns={};let difficulty=1,collected=0;let sound=vol.music>0,current=null,runtime=null,paused=false,ended=false,cleanups=[],tasks=[],time=0,raf=0;
 function persist(){try{localStorage.setItem('bagaplay-v1',JSON.stringify(saved))}catch{}}
 let audio;
-function tone(win=false){if(!sound)return;try{audio??=new(window.AudioContext||window.webkitAudioContext)();audio.resume();const o=audio.createOscillator(),g=audio.createGain();o.type='sine';o.frequency.setValueAtTime(win?660:430,audio.currentTime);o.frequency.exponentialRampToValueAtTime(win?880:540,audio.currentTime+.1);g.gain.setValueAtTime(.055,audio.currentTime);g.gain.exponentialRampToValueAtTime(.001,audio.currentTime+.18);o.connect(g);g.connect(audio.destination);o.start();o.stop(audio.currentTime+.2)}catch{}}
+function audioCtx(){try{audio??=new(window.AudioContext||window.webkitAudioContext)();if(audio.state==='suspended')audio.resume()}catch{}return audio}
+function tone(win=false){if(!vol.sfx)return;try{audioCtx();const o=audio.createOscillator(),g=audio.createGain();o.type='sine';o.frequency.setValueAtTime(win?660:430,audio.currentTime);o.frequency.exponentialRampToValueAtTime(win?880:540,audio.currentTime+.1);g.gain.setValueAtTime(.11*vol.sfx,audio.currentTime);g.gain.exponentialRampToValueAtTime(.001,audio.currentTime+.18);o.connect(g);g.connect(audio.destination);o.start();o.stop(audio.currentTime+.2)}catch{}}
 function icon(type){let s='';const rect=(x,y,w,h,c,rx=5)=>`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}" fill="${c}"/>`;const txt=(x,y,t,c='#4c6640',z=20)=>`<text x="${x}" y="${y}" text-anchor="middle" font-family="Arial" font-size="${z}" font-weight="bold" fill="${c}">${t}</text>`;
  if(type==='numbers')s=`<g transform="rotate(-9 60 50)">${rect(25,17,40,40,'#fff9e9')+rect(66,44,39,39,'#fdc363')+txt(45,44,'2')+txt(85,71,'4')}</g>`;
  if(type==='snake'){for(const [x,y] of [[28,65],[28,46],[47,46],[66,46],[66,27]])s+=rect(x,y,21,21,'#70ac62',7);s+='<circle cx="80" cy="33" r="2" fill="#25462e"/><circle cx="72" cy="33" r="2" fill="#25462e"/>'+rect(91,62,16,17,'#ec8062',6)+'<path d="M99 60l4-6" stroke="#6b964f" stroke-width="3"/>'}
@@ -44,6 +49,7 @@ function icon(type){let s='';const rect=(x,y,w,h,c,rx=5)=>`<rect x="${x}" y="${y
  if(type==='chess'){for(let y=0;y<4;y++)for(let x=0;x<4;x++)s+=rect(29+x*17,18+y*17,17,17,(x+y)%2?'#aed090':'#fff8e4',0);s+=txt(54,60,'♞\uFE0E','#314438',34)+txt(83,82,'♛\uFE0E','#fffdf6',26).replace('<text','<text stroke="#364d3f" stroke-width="1"')}
  if(type==='draughts'){for(let y=0;y<4;y++)for(let x=0;x<4;x++)s+=rect(29+x*17,18+y*17,17,17,(x+y)%2?'#aed090':'#fff8e4',0);for(const [x,y,c] of [[46,26,'#3c5543'],[80,26,'#3c5543'],[63,77,'#fffaf0'],[97,77,'#fffaf0']])s+=`<circle cx="${x-8}" cy="${y+1}" r="7" fill="${c}" stroke="#5e7854" stroke-width="1.5"/>`}
  if(type==='connect4'){s=rect(26,14,74,66,'#3d7fd1',8);for(let y=0;y<4;y++)for(let x=0;x<5;x++){const col=y===3&&x<3?'#e5483b':y===2&&x===1?'#f5c430':y===3&&x===3?'#f5c430':y===2&&x===2?'#e5483b':'#eaf3ff';s+=`<circle cx="${36+x*13.5}" cy="${27+y*14}" r="5.2" fill="${col}"/>`}}
+ if(type==='petanque')s='<ellipse cx="63" cy="80" rx="52" ry="11" fill="#e2c99c"/><circle cx="44" cy="58" r="17" fill="#9aa7ad"/><path d="M31 52q13-9 27 0M30 63q14 8 28 0" stroke="#7c888e" stroke-width="2" fill="none"/><circle cx="39" cy="52" r="4" fill="#d9e1e4"/><circle cx="84" cy="62" r="14" fill="#b8a089"/><path d="M73 57q11-7 22 0M73 67q11 6 22 0" stroke="#96806b" stroke-width="2" fill="none"/><circle cx="80" cy="57" r="3" fill="#e6d8c8"/><circle cx="66" cy="79" r="5" fill="#e5603f"/>';
  return `<svg viewBox="0 0 126 102" aria-hidden="true">${s}</svg>`;
 }
 const isDuel=id=>games.find(g=>g.id===id)?.cat==='duel';
@@ -57,16 +63,19 @@ function recordBoards(){const out=[];for(const g of games){if(DIFF[g.id])for(let
 // Valeur affichée d'un record : durée lisible pour les jeux chronométrés, sinon nombre + unité.
 const fmt=(id,v)=>TIMED.includes(base(id))?formatDuration(v):v+unit(base(id),v);
 const unit=(id,v=2)=>isDuel(id)?(v>1?' victoires':' victoire'):['mines','sudoku'].includes(id)?' s':games.find(g=>g.id===id)?.lower?' coups':'';
-function renderCards(filter='all'){const selected=games.filter(g=>filter==='all'||g.cat===filter);$('#game-count').textContent=selected.length+' jeux';{const w=$('#wallet'),t='● '+(saved.coins||0)+' ›';if(w.textContent&&w.textContent!==t){w.classList.remove('bump');void w.offsetWidth;w.classList.add('bump')}w.textContent=t}$('#cards').innerHTML=selected.map(g=>`<button class="game-card" data-game="${g.id}" aria-label="Jouer à ${g.title}"><div class="card-art" style="--tint:${g.color}"><span class="card-tag">${g.tag}</span>${icon(g.art)}</div><h3>${g.title}</h3><p>${g.desc}</p><span class="card-arrow">↗</span>${turns[g.id]?`<div class="card-turn">● À toi de jouer${turns[g.id]>1?' ('+turns[g.id]+')':''}</div>`:''}${DIFF[g.id]?(()=>{const parts=[];for(let d=0;d<DIFF[g.id];d++){const v=saved[g.id+':'+d];if(v!=null)parts.push(LEVEL_SHORT[d]+' '+fmt(g.id,v))}return parts.length?`<div class="card-record">✦ ${parts.join(' · ')}</div>`:''})():saved[g.id]!=null?`<div class="card-record">${isDuel(g.id)?'✦ ':'✦ Record : '}${fmt(g.id,saved[g.id])}${isDuel(g.id)?' en ligne':''}</div>`:''}</button>`).join('');document.querySelectorAll('[data-game]').forEach(b=>b.onclick=()=>{const id=b.dataset.game;if(isDuel(id))return openLobby(id);if(DIFF[id]){dialog('Difficulté','','Jouer',()=>{difficulty=+document.querySelector('#difficulty').value;launch(id)},'Annuler',()=>{});$('#dialog-text').innerHTML='<select id="difficulty" aria-label="Difficulté"><option value="0">Facile</option><option value="1" selected>Normal</option><option value="2">Difficile</option>'+(DIFF[id]>3?'<option value="3">'+(id==='mines'?'Expert':'Extrême')+'</option>':'')+'</select>'}else launch(id)})}
+function renderCards(filter='all'){const selected=games.filter(g=>filter==='all'||g.cat===filter);$('#game-count').textContent=selected.length+' jeux';{const w=$('#wallet'),t='● '+(saved.coins||0)+' ›';if(w.textContent&&w.textContent!==t){w.classList.remove('bump');void w.offsetWidth;w.classList.add('bump')}w.textContent=t}$('#cards').innerHTML=selected.map(g=>`<button class="game-card" data-game="${g.id}" aria-label="Jouer à ${g.title}"><div class="card-art" style="--tint:${g.color}"><span class="card-tag">${g.tag}</span>${icon(g.art)}</div><h3>${g.title}</h3><p>${g.desc}</p><span class="card-arrow">↗</span>${turns[g.id]?`<span class="card-dot" aria-label="À toi de jouer">${turns[g.id]>1?turns[g.id]:''}</span>`:''}${DIFF[g.id]?(()=>{const parts=[];for(let d=0;d<DIFF[g.id];d++){const v=saved[g.id+':'+d];if(v!=null)parts.push(LEVEL_SHORT[d]+' '+fmt(g.id,v))}return parts.length?`<div class="card-record">✦ ${parts.join(' · ')}</div>`:''})():saved[g.id]!=null?`<div class="card-record">${isDuel(g.id)?'✦ ':'✦ Record : '}${fmt(g.id,saved[g.id])}${isDuel(g.id)?' en ligne':''}</div>`:''}</button>`).join('');document.querySelectorAll('[data-game]').forEach(b=>b.onclick=()=>{const id=b.dataset.game;if(isDuel(id))return openLobby(id);if(DIFF[id]){dialog('Difficulté','','Jouer',()=>{difficulty=+document.querySelector('#difficulty').value;launch(id)},'Annuler',()=>{});$('#dialog-text').innerHTML='<select id="difficulty" aria-label="Difficulté"><option value="0">Facile</option><option value="1" selected>Normal</option><option value="2">Difficile</option>'+(DIFF[id]>3?'<option value="3">'+(id==='mines'?'Expert':'Extrême')+'</option>':'')+'</select>'}else launch(id)})}
 document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-filter]').forEach(x=>x.classList.toggle('active',x===b));renderCards(b.dataset.filter)});
-const VERSION='1.6.2';
-function setSound(on){sound=on;music(sound);saved.sound=sound;persist();tone()}
+const VERSION='1.7.0';
+function setVolume(kind,v){vol[kind]=Math.max(0,Math.min(1,v));saved.vol=vol;persist();if(kind==='music'){setMusicVolume(vol.music);sound=vol.music>0;if(!paused)music(sound)}}
 function updateSound(){$('#footer-version').textContent=`BagaPlay ${VERSION} · Sans pub, sans compte.`}
 // Réglages : son, langue, version.
 function openSettings(){dialog('Réglages','','Fermer',()=>{},'',null);const t=$('#dialog-text');t.textContent='';
  const row=(label,control)=>{const r=el('div','setting-row');r.append(el('span','setting-label',label),control);t.append(r)};
- const sw=el('button','switch'+(sound?' on':''));sw.setAttribute('role','switch');sw.setAttribute('aria-checked',String(sound));sw.setAttribute('aria-label','Son');sw.append(el('span','knob'));
- sw.onclick=()=>{setSound(!sound);sw.classList.toggle('on',sound);sw.setAttribute('aria-checked',String(sound))};row('Son',sw);
+ const slider=(kind,label)=>{const w=el('div','volume');const r=el('input');r.type='range';r.min=0;r.max=100;r.step=5;r.value=Math.round(vol[kind]*100);r.setAttribute('aria-label',label);const ic=el('span','vol-icon');
+  const show=()=>{ic.textContent=vol[kind]===0?'🔇':vol[kind]<.35?'🔈':vol[kind]<.7?'🔉':'🔊'};show();r.oninput=()=>{setVolume(kind,r.value/100);show()};r.onchange=()=>{if(kind==='sfx')tone(true)};w.append(ic,r);row(label,w)};
+ slider('music','Musique');slider('sfx','Bruitages');
+ const nb=el('button','setting-link','…');row('Notifications',nb);(async()=>{const st=await online.pushState();const L={on:'Activées ✓',off:'Activer ›',denied:'Bloquées par le téléphone',unsupported:globalThis.bagaWebNeedsInstall?'Installe l’app d’abord':'Non disponibles ici',native:'Autoriser ›'};nb.textContent=L[st];nb.disabled=st==='denied'||st==='unsupported';
+  nb.onclick=async()=>{try{if(st==='on'){await online.disablePush();nb.textContent=L.off;toast('Notifications désactivées')}else{const r=await online.enablePush();nb.textContent=r==='native'?'Autorisées ✓':L.on;toast('Notifications activées')}}catch(e){toast(e.message)}}})();
  const seg=el('div','segmented');for(const [code,label] of [['fr','Français'],['en','English']]){const b=el('button',window.bagaLang===code?'active':'',label);b.lang=code;b.onclick=()=>{if(window.bagaLang===code)return;saved.lang=code;persist();location.reload()};seg.append(b)}row('Langue',seg);
  if(online.enabled()){const b=el('button','setting-link','Autre appareil ›');b.onclick=openLink;row('Mon profil',b)}
  const v=el('span','setting-value','BagaPlay '+VERSION);row('Version',v);
@@ -92,8 +101,8 @@ window.bagaPause=pause;window.bagaBack=()=>{if(!$('#scores').hidden||!$('#lobby'
 document.addEventListener('visibilitychange',()=>{if(document.hidden)pause();else if(sound&&!paused)music(true)});$('#pause').onclick=pause;$('#back').onclick=()=>{if(ended||onlineDuel)leave();else{paused=true;dialog('Retour aux jeux ?',current.id==='cookie'?'Ta partie sera sauvegardée.':isDuel(current.id)?'La partie en cours sera perdue.':'La partie en cours sera terminée. Ton record est conservé.','Quitter la partie',leave,'Continuer',()=>paused=false)}};$('#restart').onclick=()=>{paused=true;dialog('On recommence ?','Une nouvelle partie, une nouvelle chance.','Recommencer',()=>launch(current.id,true),'Continuer',()=>paused=false)};
 function leave(){const d=current&&isDuel(current.id)?current.id:null;goHome();if(d)openLobby(d)}
 let onlineDuel=false;
-function launch(id,fresh=false,duelOpts=null){stop();onlineDuel=!!duelOpts?.match;$('#restart').hidden=onlineDuel;document.querySelectorAll('.scorebar>div').forEach(d=>d.classList.remove('turn'));collected=0;$('#run-coins').textContent='● 0';current=games.find(g=>g.id===id);ended=false;paused=false;time=0;closeDialog();$('#home').hidden=true;$('#play').hidden=false;$('#game-title').textContent=current.title;$('#lobby').hidden=true;clearInterval(lobbyTimer);$('#game-category').textContent=current.cat==='arcade'?'PETITE DOSE D’ARCADE':'PAUSE RÉFLEXION';$('#hint').textContent=current.hint;$('#score').textContent='0';$('#score-label').textContent=TIMED.includes(id)?'TEMPS':current.lower?'COUPS':id==='ttt'?'VICTOIRES':'SCORE';$('#best-label').textContent='RECORD';const key=recordKey(id);$('#best').textContent=saved[key]==null?'—':TIMED.includes(id)?formatDuration(saved[key]):saved[key];$('#board').innerHTML='';$('#controls').innerHTML='';window.scrollTo(0,0);
- const ctx={difficulty,fresh,duel:duelOpts,dialog,closeDialog,leave,
+function launch(id,fresh=false,duelOpts=null){stop();onlineDuel=!!(duelOpts?.match||duelOpts?.party);$('#play').classList.toggle('immersive',id==='petanque');$('#restart').hidden=onlineDuel;document.querySelectorAll('.scorebar>div').forEach(d=>d.classList.remove('turn'));collected=0;$('#run-coins').textContent='● 0';current=games.find(g=>g.id===id);ended=false;paused=false;time=0;closeDialog();$('#home').hidden=true;$('#play').hidden=false;$('#game-title').textContent=current.title;$('#lobby').hidden=true;clearInterval(lobbyTimer);$('#game-category').textContent=current.cat==='arcade'?'PETITE DOSE D’ARCADE':'PAUSE RÉFLEXION';$('#hint').textContent=current.hint;$('#score').textContent='0';$('#score-label').textContent=TIMED.includes(id)?'TEMPS':current.lower?'COUPS':id==='ttt'?'VICTOIRES':'SCORE';$('#best-label').textContent='RECORD';const key=recordKey(id);$('#best').textContent=saved[key]==null?'—':TIMED.includes(id)?formatDuration(saved[key]):saved[key];$('#board').innerHTML='';$('#controls').innerHTML='';window.scrollTo(0,0);
+ const ctx={difficulty,fresh,duel:duelOpts,dialog,closeDialog,leave,toast,audio:audioCtx,volume:k=>vol[k],isPaused:()=>paused,
   every:(fn,ms)=>{const t=setInterval(()=>{if(!document.hidden)fn()},ms);cleanups.push(()=>clearInterval(t))},
   setBar:(l,lv,r,rv,turn)=>{$('#score-label').textContent=l;$('#score').textContent=lv;$('#best-label').textContent=r;$('#best').textContent=rv;const d=document.querySelectorAll('.scorebar>div');d[0].classList.toggle('turn',turn==='l');d[1].classList.toggle('turn',turn==='r')},
  collect:n=>{collected+=n;const rc=$('#run-coins');rc.textContent='● '+collected;rc.classList.remove('bump');void rc.offsetWidth;rc.classList.add('bump');tone(true)},board:$('#board'),controls:$('#controls'),hint:s=>$('#hint').textContent=s,score:(s,save=true)=>{const sc=$('#score'),txt=String(TIMED.includes(id)?formatDuration(s):s);if(sc.textContent!==txt&&!TIMED.includes(id)){sc.classList.remove('bump');void sc.offsetWidth;sc.classList.add('bump')}sc.textContent=txt;if(save&&!current.lower&&s>0)record(s)},label:s=>$('#score-label').textContent=s,tone,
@@ -105,7 +114,7 @@ function launch(id,fresh=false,duelOpts=null){stop();onlineDuel=!!duelOpts?.matc
    if(o.once){const done=saved.rewarded||[];if(done.includes(o.once))reward=0;else{saved.rewarded=done.concat(o.once).slice(-300);if(o.duelWin)saved[id]=(saved[id]||0)+1}}
    saved.coins=(saved.coins||0)+reward;persist();
    if(onlineDuel)dialog(o.title||'Partie terminée',text,'Retour au salon',leave,'Voir le plateau',()=>{});
-   else if(isDuel(id))dialog(o.title||'Partie terminée',text,'Rejouer',()=>launch(id,true,ctx.duel?.mode==='ai'?ctx.duel:null),'Retour',leave);
+   else if(isDuel(id))dialog(o.title||'Partie terminée',text,'Rejouer',()=>launch(id,true,ctx.duel?.mode==='ai'||id==='petanque'?ctx.duel:null),'Retour',leave);
    else if(o.viewBoard)dialog(win?'Bien joué !':'Partie terminée',text,'Rejouer',()=>launch(id,true),'Voir la grille',()=>{});
    else dialog(win?'Bien joué !':'Partie terminée',text,'Rejouer',()=>launch(id,true),'Tous les jeux',goHome);
    if(reward)celebrate(reward,saved.coins);
@@ -117,7 +126,7 @@ function launch(id,fresh=false,duelOpts=null){stop();onlineDuel=!!duelOpts?.matc
   swipe:fn=>{let start=null;ctx.listen($('#board'),'pointerdown',e=>{start=[e.clientX,e.clientY];e.currentTarget.setPointerCapture?.(e.pointerId)});ctx.listen($('#board'),'pointerup',e=>{if(!start)return;const x=e.clientX-start[0],y=e.clientY-start[1];start=null;if(Math.max(Math.abs(x),Math.abs(y))>18)fn(Math.abs(x)>Math.abs(y)?x>0?'right':'left':y>0?'down':'up')})}
  };
  function record(s,allow=true){if(!allow||!Number.isFinite(s))return;const old=saved[key];if(old==null||(current.lower?s<old:s>old)){saved[key]=s;$('#best').textContent=TIMED.includes(id)?formatDuration(s):s;persist()}}
- runtime=(isDuel(id)?duel(id):id==='cookie'?cookie:id==='breakout'?breakoutNew:(puzzles[id]||arcade[id]))(ctx);fitBoard();let last=performance.now();function frame(now){const dt=Math.min((now-last)/1000,.05);last=now;if(!paused&&!ended){time+=dt*1000;const due=tasks.filter(t=>t.at<=time);tasks=tasks.filter(t=>t.at>time);due.forEach(t=>t.fn());if(!ended)runtime?.update?.(dt)}raf=requestAnimationFrame(frame)}raf=requestAnimationFrame(frame);
+ runtime=(id==='petanque'?petanque:isDuel(id)?duel(id):id==='cookie'?cookie:id==='breakout'?breakoutNew:(puzzles[id]||arcade[id]))(ctx);fitBoard();let last=performance.now();function frame(now){const dt=Math.min((now-last)/1000,.05);last=now;if(!paused&&!ended){time+=dt*1000;const due=tasks.filter(t=>t.at<=time);tasks=tasks.filter(t=>t.at>time);due.forEach(t=>t.fn());if(!ended)runtime?.update?.(dt)}raf=requestAnimationFrame(frame)}raf=requestAnimationFrame(frame);
  ctx.listen(document,'keydown',e=>{if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key))e.preventDefault();runtime?.key?.(e.key)});
 }
 renderCards();updateSound();document.addEventListener('pointerdown',()=>{if(sound)music(true)},{once:true});
@@ -151,9 +160,6 @@ function askPseudo(then,message=''){
 }
 function needPseudo(then){if(online.registered())then();else askPseudo(then)}
 
-// Défi : confirmation puis ouverture de la partie.
-function offerChallenge(r,game){const g=games.find(x=>x.id===game);
- dialog('Défier '+r.name+' ?',`Une partie de ${g.title.toLowerCase()} commence. ${r.name} reçoit une notification et joue quand il veut.`,'Défier',()=>needPseudo(async()=>{try{lobbyStatus('Envoi du défi…');const v=await online.challenge(r.id,game,initialState(game));online.askNotifications();lobbyStatus('');launch(v.game,false,{mode:'online',match:v})}catch(e){lobbyStatus(e.message);toast(e.message)}}),'Annuler',()=>{})}
 function toast(msg){const t=el('div','toast',msg);document.body.append(t);setTimeout(()=>t.remove(),2600)}
 
 // ---------------------------------------------------------------- page des scores
@@ -175,7 +181,7 @@ async function showProfile(r){const box=$('#profile');box.hidden=false;box.repla
  const head=el('div','profile-head');head.append(el('span','avatar big',pr.name.slice(0,1).toUpperCase()),el('h2',null,pr.name));const close=el('button','text-btn','Fermer');close.onclick=()=>{box.hidden=true;scoresSearch?.clear()};head.append(close);
  const coins=el('div','profile-coins');coins.append(el('strong',null,(pr.scores.coins||0).toLocaleString('fr-FR')),el('small',null,' PIÈCES'));
  const values={...pr.scores,...pr.wins};const list=el('div','score-list');list.innerHTML=recordsHtml(values);
- const actions=el('div','profile-actions');if(!pr.me)for(const g of games.filter(x=>x.cat==='duel')){const b=el('button','primary',({chess:'Défier aux échecs',draughts:'Défier aux dames',connect4:'Défier au puissance 4'})[g.id]);b.onclick=()=>offerChallenge(pr,g.id);actions.append(b)}
+ const actions=el('div','profile-actions');if(!pr.me)for(const g of games.filter(x=>x.cat==='duel'&&!isParty(x.id))){const b=el('button','primary',({chess:'Défier aux échecs',draughts:'Défier aux dames',connect4:'Défier au puissance 4'})[g.id]);b.onclick=()=>offerChallenge(pr,g.id);actions.append(b)}
  box.replaceChildren(head,coins,actions,list)}
 async function loadRanking(){const board=$('#ranking-board').value,list=$('#ranking-list');list.innerHTML='<li class="muted">Chargement…</li>';const rows=await online.top(board);if(board!==$('#ranking-board').value)return;
  if(!rows){list.innerHTML='<li class="muted">Classement indisponible (connexion ?).</li>';return}
@@ -187,42 +193,93 @@ async function savePseudo(){if($('#pseudo').disabled){pseudoEditing=true;pseudoM
  $('#pseudo-save').disabled=true;try{await online.setName($('#pseudo').value);online.askNotifications();pseudoEditing=false;$('#pseudo').blur()}catch(e){toast(e.message)}finally{$('#pseudo-save').disabled=false;renderScores()}}
 $('#pseudo-save').onclick=savePseudo;$('#pseudo').addEventListener('keydown',e=>{if(e.key==='Enter')savePseudo()});
 
-// ---------------------------------------------------------------- salon des jeux à deux
-let lobbyGame=null,lobbyTimer=0,lobbySearch=null;
-function openLobby(id){lobbyGame=id;const g=games.find(x=>x.id===id);$('#lobby-title').textContent=g.title;$('#lobby-rules').textContent=DUEL_RULES[id];$('#home').hidden=true;$('#scores').hidden=true;$('#lobby').hidden=false;lobbyStatus('');
- $('#lobby-ai').hidden=!AI_GAMES.includes(id);const on=online.enabled();$('#lobby-on').hidden=!on;$('#lobby-off').hidden=on;if(!on&&globalThis.bagaWebNeedsInstall)$('#lobby-off').textContent='Pour jouer en ligne, installe BagaPlay sur ton écran d’accueil : touche Partager puis « Sur l’écran d’accueil ».';
- if(on){lobbySearch??=playerSearch($('#lobby-search'),'Chercher un adversaire…',r=>offerChallenge(r,lobbyGame));lobbySearch.clear();
+// ---------------------------------------------------------------- salon (jeux à deux, pétanque à plusieurs)
+let lobbyGame=null,lobbyTimer=0,lobbySearch=null,partyPick=[];
+const PARTY_GAMES=['petanque'],isParty=id=>PARTY_GAMES.includes(id);
+function openLobby(id){lobbyGame=id;const g=games.find(x=>x.id===id),party=isParty(id);$('#lobby-title').textContent=g.title;$('#lobby-rules').textContent=party?PETANQUE_RULES:DUEL_RULES[id];$('#home').hidden=true;$('#scores').hidden=true;$('#lobby').hidden=false;lobbyStatus('');
+ $('#lobby-ai').hidden=!(AI_GAMES.includes(id)||party);$('#lobby-local').textContent=party?'Jouer à plusieurs sur ce téléphone':'Jouer à deux sur ce téléphone';
+ const on=online.enabled();$('#lobby-on').hidden=!on;$('#lobby-off').hidden=on;if(!on&&globalThis.bagaWebNeedsInstall)$('#lobby-off').textContent='Pour jouer en ligne, installe BagaPlay sur ton écran d’accueil : touche Partager puis « Sur l’écran d’accueil ».';
+ partyPick=[];renderPick();
+ if(on){lobbySearch??=playerSearch($('#lobby-search'),'Chercher un joueur…',r=>isParty(lobbyGame)?addPick(r):offerChallenge(r,lobbyGame));lobbySearch.clear();lobbySearch.input.placeholder=party?'Inviter jusqu’à 5 joueurs…':'Défier un joueur…';
   if(!online.registered())lobbyStatus('Choisis un pseudo pour jouer en ligne.');loadMatches(true)}
  clearInterval(lobbyTimer);lobbyTimer=setInterval(()=>{if(!$('#lobby').hidden&&!document.hidden&&online.registered())loadMatches(false)},5000);window.scrollTo(0,0)}
 function lobbyStatus(t){$('#lobby-status').textContent=t}
-function matchStatus(m){if(m.status==='declined')return 'Refusé';if(m.status==='finished')return !m.winner?'Nulle':m.winner===m.my_color?'Gagné':'Perdu';if(!m.my_turn)return 'Son tour';return !m.from_me&&m.ply<=1?'Nouveau défi':'À toi !'}
+// Pétanque : choix des invités (puces), puis « Inviter ».
+function addPick(r){if(partyPick.some(p=>p.id===r.id))return;if(partyPick.length>=5){toast('6 joueurs au maximum.');return}partyPick.push(r);renderPick();lobbySearch.clear()}
+function renderPick(){const box=$('#lobby-pick');box.hidden=!isParty(lobbyGame)||!partyPick.length;const chips=$('#lobby-pick-list');chips.replaceChildren(...partyPick.map(r=>{const b=el('button','pick-chip',r.name+' ✕');b.setAttribute('aria-label','Retirer '+r.name);b.onclick=()=>{partyPick=partyPick.filter(p=>p!==r);renderPick()};return b}));$('#lobby-invite').textContent='Inviter ('+(partyPick.length+1)+' joueurs)'}
+$('#lobby-invite').onclick=()=>needPseudo(async()=>{const picks=partyPick.slice();if(!picks.length)return;$('#lobby-invite').disabled=true;try{await online.createParty(lobbyGame,picks.map(r=>r.id));partyPick=[];renderPick();toast('Invitations envoyées');loadMatches(true);askPushOnce()}catch(e){toast(e.message)}finally{$('#lobby-invite').disabled=false}});
+// Défi : il part dans « Mes parties » en attente, l'adversaire accepte ou refuse.
+function offerChallenge(r,game){const g=games.find(x=>x.id===game);
+ dialog('Défier '+r.name+' ?',`Défi ${GAME_PREP[game]}. ${r.name} l’accepte ou le refuse.`,'Défier',()=>needPseudo(async()=>{try{lobbyStatus('Envoi du défi…');await online.challenge(r.id,game,initialState(game));lobbyStatus('');toast('Défi envoyé à '+r.name);loadMatches(true);askPushOnce()}catch(e){lobbyStatus(e.message);toast(e.message)}}),'Annuler',()=>{})}
+const GAME_PREP={chess:'aux échecs',draughts:'aux dames',connect4:'au puissance 4',petanque:'à la pétanque'};
+const gameTitle=id=>games.find(g=>g.id===id)?.title||'';
+function others(g){return g.kind==='party'?(g.players||[]).filter(p=>!p.me).map(p=>p.name):[g.my_color==='w'?g.black_name:g.white_name]}
+function inviteText(g){return g.kind==='party'?`${g.creator_name} t’invite ${GAME_PREP[g.game]}`:`${g.creator_name} te défie ${GAME_PREP[g.game]}`}
+function gameStatus(g){
+ if(g.kind==='party'){const pl=g.players||[];
+  if(g.status==='pending')return g.invite?'Invitation':`En attente ${pl.filter(p=>p.accepted).length}/${pl.length}`;
+  if(g.status==='cancelled')return 'Annulée';if(g.status==='finished')return g.winner===g.my_team?'Gagné':'Perdu';
+  if(g.my_turn)return 'À toi de lancer';if(g.need_vote)return g.ask_name+' veut lancer';if(g.can_ask)return 'À ton équipe';
+  if(g.ask_by)return g.ask_name+' demande';if(g.thrower_name)return 'Au tour de '+g.thrower_name;return String(g.turn_team)===String(g.my_team)?'Ton équipe':'Équipe adverse'}
+ if(g.status==='pending')return g.invite?'Nouveau défi':'En attente';if(g.status==='declined')return 'Refusé';
+ if(g.status==='finished')return !g.winner?'Nulle':g.winner===g.my_color?'Gagné':'Perdu';
+ return g.my_turn?'À toi':'Au tour de '+others(g)[0]}
+function gameSub(g,withGame){const parts=[];if(withGame)parts.push(gameTitle(g.game));
+ if(g.kind==='party'){if(g.status==='pending')parts.push((g.players||[]).map(p=>p.name+(p.accepted?' ✓':p.accepted===false?' ✕':' ⏳')).join(' · '));else if(g.score)parts.push((String(g.my_team)==='1'?g.score[1]+' – '+g.score[0]:g.score[0]+' – '+g.score[1]))}
+ return parts.join(' · ')}
+// Ligne d'une partie (accueil et salon). Pastille rouge : c'est à moi d'agir.
+function matchRow(g,withGame){const over=!['active','pending'].includes(g.status),b=el('button','score-row match-row'+(online.needsMe(g)?' my-turn':'')+(over?' match-over':''));const names=others(g);
+ const who=el('span','score-name',names.length>2?names.slice(0,2).join(', ')+' +'+(names.length-2):names.join(', ')||'…');const sub=gameSub(g,withGame);if(sub)who.append(el('small','match-game',sub));
+ const st=el('strong',null,gameStatus(g));if(online.needsMe(g))st.prepend(el('i','red-dot'));
+ b.append(el('span','avatar'+(g.kind==='party'?' avatar-party':''),g.kind==='party'?'●':(names[0]||'?').slice(0,1).toUpperCase()),who,st);b.onclick=()=>gameAction(g);return b}
+function gameAction(g){
+ if(g.invite)return respondDialog(g);
+ if(g.kind==='party'){
+  if(g.status==='pending'){if(g.from_me)dialog('Annuler la partie ?','Les invitations seront retirées.','Annuler la partie',async()=>{try{await online.respondParty(g.id,false);refreshAll()}catch(e){toast(e.message)}},'Garder',()=>{});else toast('En attente des autres joueurs.');return}
+  if(g.status==='cancelled'){online.hideParty(g.id).catch(()=>{}).then(refreshAll);return}
+  return openParty(g.id)}
+ if(g.status==='pending'){dialog('Annuler le défi ?',others(g)[0]+' n’a pas encore répondu.','Annuler le défi',async()=>{try{await online.declineMatch(g.id);refreshAll()}catch(e){toast(e.message)}},'Garder',()=>{});return}
+ if(g.status==='declined'){online.hideMatch(g.id).catch(()=>{}).then(refreshAll);return}
+ openMatch(g.id)}
+async function respond(g,yes){try{if(g.kind==='party')await online.respondParty(g.id,yes);else if(yes)await online.acceptMatch(g.id);else await online.declineMatch(g.id);toast(yes?'Défi accepté':'Défi refusé');if(yes)askPushOnce()}catch(e){toast(e.message)}refreshAll()}
+function respondDialog(g){dialog(g.kind==='party'?'Invitation':'Nouveau défi',inviteText(g)+'.','Accepter',()=>respond(g,true),'Refuser',()=>respond(g,false))}
 async function loadMatches(loading){const box=$('#lobby-matches'),game=lobbyGame;if(!online.registered()){box.replaceChildren(el('div','muted-note','Tes parties apparaîtront ici.'));return}
  if(loading)box.replaceChildren(el('div','muted-note','Chargement…'));let list;
- try{list=online.visibleMatches(await online.myMatches()).filter(m=>m.game===game)}catch(e){if(loading||!box.children.length)box.replaceChildren(el('div','muted-note',e.message));return}
+ try{list=(await online.allGames()).filter(m=>m.game===game)}catch(e){if(loading||!box.children.length)box.replaceChildren(el('div','muted-note',e.message));return}
  if(game!==lobbyGame||$('#lobby').hidden)return;
- if(!list.length){box.replaceChildren(el('div','muted-note','Aucune partie. Cherche un adversaire ci-dessus.'));return}
+ if(!list.length){box.replaceChildren(el('div','muted-note',isParty(game)?'Aucune partie. Invite des joueurs ci-dessus.':'Aucune partie. Défie un joueur ci-dessus.'));return}
  box.replaceChildren(...list.map(m=>matchRow(m,false)))}
-// Ligne d'une partie. withGame : nom du jeu sous l'adversaire (accueil).
-function matchRow(m,withGame){const st=matchStatus(m),b=el('button','score-row match-row'+(m.my_turn?' my-turn':'')+(m.status!=='active'?' match-over':''));const opp=m.my_color==='w'?m.black_name:m.white_name;
- const who=el('span','score-name',opp||'…');if(withGame){who.append(el('small','match-game',games.find(g=>g.id===m.game)?.title||''))}
- b.append(el('span','avatar',(opp||'?').slice(0,1).toUpperCase()),who,el('strong',null,st));b.onclick=()=>openMatch(m.id);return b}
-async function openMatch(id){lobbyStatus('Ouverture de la partie…');try{const v=await online.getMatch(id);lobbyStatus('');launch(v.game,false,{mode:'online',match:v})}catch(e){lobbyStatus(e.message);toast(e.message)}}
-$('#lobby-back').onclick=goHome;$('#lobby-local').onclick=()=>launch(lobbyGame,true);
+async function openMatch(id){lobbyStatus('Ouverture de la partie…');try{const v=await online.getMatch(id);lobbyStatus('');if(v.status==='pending'){refreshAll();return gameAction({...v,kind:'match'})}launch(v.game,false,{mode:'online',match:v})}catch(e){lobbyStatus(e.message);toast(e.message)}}
+async function openParty(id){lobbyStatus('Ouverture de la partie…');try{const v=await online.getParty(id);lobbyStatus('');if(v.status==='pending'){refreshAll();return gameAction(v)}launch(v.game,false,{mode:'online',party:v})}catch(e){lobbyStatus(e.message);toast(e.message)}}
+$('#lobby-back').onclick=goHome;$('#lobby-local').onclick=()=>isParty(lobbyGame)?partyLocalDialog():launch(lobbyGame,true);
 $('#lobby-ai').onclick=()=>{dialog('Contre l’ordinateur','','Jouer',()=>launch(lobbyGame,true,{mode:'ai',level:+document.querySelector('#ai-level').value}),'Annuler',()=>{});$('#dialog-text').innerHTML='<select id="ai-level" aria-label="Difficulté"><option value="0">Facile</option><option value="1" selected>Normal</option><option value="2">Difficile</option></select>'};$('#lobby-refresh').onclick=()=>loadMatches(true);
+function partyLocalDialog(){dialog('Sur ce téléphone','Combien de joueurs ? Les équipes sont tirées au sort, on se passe le téléphone.','Jouer',()=>launch(lobbyGame,true,{mode:'local',players:+document.querySelector('#party-n').value}),'Annuler',()=>{});
+ const sel=el('select');sel.id='party-n';sel.setAttribute('aria-label','Nombre de joueurs');for(let n=2;n<=6;n++){const o=el('option',null,n+' joueurs');o.value=n;if(n===2)o.selected=true;sel.append(o)}$('#dialog-text').append(sel)}
 
-// ---------------------------------------------------------------- démarrage en ligne, badges, notifications
-// Accueil : parties en cours de tous les jeux (défis reçus compris) + résultats pas encore vus.
+// ---------------------------------------------------------------- accueil : invitations, mes parties, pastilles
 let homeSig='';
-async function refreshTurns(){if(!online.registered()){$('#home-matches').hidden=true;return}let list;try{list=await online.myMatches()}catch{return}
- const t={};for(const m of list)if(m.my_turn)t[m.game]=(t[m.game]||0)+1;
+async function refreshTurns(){if(!online.registered()){$('#home-matches').hidden=true;$('#home-invites').hidden=true;return}let list;try{list=await online.allGames()}catch{return}
+ const t={};for(const g of list)if(online.needsMe(g))t[g.game]=(t[g.game]||0)+1;
  if(JSON.stringify(t)!==JSON.stringify(turns)){turns=t;if(!$('#home').hidden)renderCards(document.querySelector('[data-filter].active').dataset.filter)}
- const shown=online.visibleMatches(list),sig=JSON.stringify(shown.map(m=>[m.id,m.status,m.ply,m.my_turn,m.winner]));
- $('#home-matches').hidden=!shown.length;if(sig===homeSig)return;homeSig=sig;
- const mine=shown.filter(m=>m.my_turn).length;$('#home-matches-count').textContent=mine?(mine>1?mine+' à toi de jouer':'1 à toi de jouer'):shown.length+(shown.length>1?' parties':' partie');
- $('#home-matches-list').replaceChildren(...shown.map(m=>matchRow(m,true)))}
+ const invites=list.filter(g=>g.invite),mine=list.filter(g=>!g.invite);
+ const sig=JSON.stringify(list.map(g=>[g.id,g.status,g.ply,online.needsMe(g),g.winner,g.ask_by,g.thrower,(g.players||[]).map(p=>p.accepted)]));
+ $('#home-invites').hidden=!invites.length;$('#home-matches').hidden=!mine.length;if(sig===homeSig)return;homeSig=sig;
+ $('#home-invites').replaceChildren(...invites.map(g=>{const r=el('div','invite-row');r.append(el('span','avatar'+(g.kind==='party'?' avatar-party':''),(g.creator_name||'?').slice(0,1).toUpperCase()),el('span','invite-text',inviteText(g)));
+  const no=el('button','invite-btn no','✕'),yes=el('button','invite-btn yes','✓');no.setAttribute('aria-label','Refuser');yes.setAttribute('aria-label','Accepter');no.onclick=()=>respond(g,false);yes.onclick=()=>respond(g,true);r.append(no,yes);return r}));
+ const act=mine.filter(online.needsMe).length;$('#home-matches-count').textContent=act?(act>1?act+' à toi de jouer':'1 à toi de jouer'):mine.length+(mine.length>1?' parties':' partie');
+ $('#home-matches-list').replaceChildren(...mine.map(g=>matchRow(g,true)))}
+function refreshAll(){homeSig='';if(!$('#home').hidden)refreshTurns();if(!$('#lobby').hidden)loadMatches(false)}
 window.bagaResume=()=>{if(!online.enabled())return;if(!$('#home').hidden)refreshTurns();else if(!$('#lobby').hidden&&online.registered())loadMatches(false)};
-window.bagaOpenMatch=id=>{if(!online.enabled()||!id)return;closeDialog();if(current){stop();current=null;paused=false}openMatch(id)};
+// Ouvre une partie depuis une notification (duel ou pétanque).
+window.bagaOpenMatch=async id=>{if(!online.enabled()||!id)return;closeDialog();if(current){stop();current=null;paused=false}
+ try{const v=await online.getMatch(id);if(v.status==='pending')return gameAction({...v,kind:'match'});launch(v.game,false,{mode:'online',match:v})}catch{openParty(id)}};
+// Propose une fois d'activer les notifications (après un premier défi envoyé ou accepté).
+async function askPushOnce(){if(saved.pushAsked)return;const st=await online.pushState();if(st!=='off'&&st!=='native')return;saved.pushAsked=true;persist();
+ if(st==='native'){online.askNotifications();return}
+ dialog('Activer les notifications ?','Pour savoir quand on te défie, quand on accepte ton défi et quand c’est ton tour.','Activer',async()=>{try{await online.enablePush();toast('Notifications activées')}catch(e){toast(e.message)}},'Plus tard',()=>{})}
 try{window.BagaNative?.setLanguage?.(window.bagaLang)}catch{}
-if(online.enabled()){online.hello().then(()=>{if(!online.registered())askPseudo(()=>refreshTurns());else refreshTurns();
-  let pending='';try{pending=window.BagaNative?.takePendingMatch?.()||''}catch{}if(pending)window.bagaOpenMatch(pending)});
- setInterval(()=>{if(!document.hidden&&!$('#home').hidden)refreshTurns()},8000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)window.bagaResume()})}
+if(online.enabled()){online.hello().then(()=>{if(!online.registered())askPseudo(()=>refreshTurns());else{refreshTurns();online.refreshPush()}
+  let pending='';try{pending=window.BagaNative?.takePendingMatch?.()||''}catch{}if(!pending)pending=new URLSearchParams(location.search).get('open')||'';if(pending){history.replaceState(null,'',location.pathname);window.bagaOpenMatch(pending)}});
+ navigator.serviceWorker?.addEventListener?.('message',e=>{if(e.data?.open)window.bagaOpenMatch(e.data.open)});
+ setInterval(()=>{if(!document.hidden&&!$('#home').hidden)refreshTurns()},8000);
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden)window.bagaResume()})}

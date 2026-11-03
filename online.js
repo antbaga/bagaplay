@@ -65,12 +65,43 @@ export const myMatches=()=>rpc('my_matches',{p_player:me()});
 export const playMove=(id,ply,state,end)=>rpc('play_move',{p_player:me(),p_id:id,p_ply:ply,p_state:state,p_over:!!end,p_winner:end?.winner||null,p_reason:end?.reason||null});
 export const matchAction=(id,action)=>rpc('match_action',{p_player:me(),p_id:id,p_action:action});
 
-// Parties terminées déjà vues sur cet appareil : elles ne restent pas dans « Tes parties ».
-const SEEN_KEY='bagaplay-seen-ends';
-function seenEnds(){try{return JSON.parse(localStorage.getItem(SEEN_KEY)||'[]')}catch{return []}}
-export function markSeen(id){if(!id)return;const s=seenEnds();if(s.includes(id))return;s.push(id);try{localStorage.setItem(SEEN_KEY,JSON.stringify(s.slice(-200)))}catch{}}
-// Parties à montrer : en cours (défis compris) + résultats pas encore vus ici.
-export const visibleMatches=list=>{const s=seenEnds();return list.filter(m=>m.status==='active'||!s.includes(m.id))};
+// Défi en attente : l'adversaire accepte ou refuse. Partie finie : « hide » la retire de mes listes.
+export const acceptMatch=id=>matchAction(id,'accept');
+export const declineMatch=id=>matchAction(id,'decline');
+export const hideMatch=id=>matchAction(id,'hide');
+
+// ---- parties à plusieurs (pétanque)
+export const createParty=(game,pubs)=>rpc('party_create',{p_player:me(),p_name:named(),p_game:game,p_others:pubs});
+export const respondParty=(id,yes)=>rpc('party_respond',{p_player:me(),p_id:id,p_accept:!!yes});
+export const getParty=id=>rpc('get_party',{p_player:me(),p_id:id});
+export const myParties=()=>rpc('my_parties',{p_player:me()});
+export const partyAsk=id=>rpc('party_ask',{p_player:me(),p_id:id});
+export const partyVote=(id,yes)=>rpc('party_vote',{p_player:me(),p_id:id,p_yes:!!yes});
+export const partyThrow=(id,ply,state,end)=>rpc('party_throw',{p_player:me(),p_id:id,p_ply:ply,p_state:state,p_over:!!end,p_winner:end?end.winner:null});
+export const hideParty=id=>rpc('party_hide',{p_player:me(),p_id:id});
+// Toutes mes parties (duels + pétanque). Les parties à plusieurs restent facultatives si le serveur n'est pas à jour.
+export async function allGames(){const [m,p]=await Promise.all([myMatches(),myParties().catch(()=>[])]);return m.concat(p)}
+// Action attendue de ma part : répondre à un défi, jouer, voter, demander à lancer.
+export const needsMe=g=>!!(g.invite||g.my_turn||g.need_vote||g.can_ask);
+
+// ---- notifications push (app installée sur iPhone, Chrome/Edge…). L'APK Android a ses propres notifications.
+export const VAPID_PUBLIC='BMFD7a8rPH0H_GJ6gMdumkRzBIMOmhfMcCGnQlAyLqPHcvsg7qDht-fI_Hf_e8glcCegd11O--CKRmlyV1sXmyg';
+const fromB64u=s=>Uint8Array.from(atob(s.replace(/-/g,'+').replace(/_/g,'/')+'==='.slice((s.length+3)%4)),c=>c.charCodeAt(0));
+export const nativeNotifications=()=>!!window.BagaNative;
+export const pushSupported=()=>!nativeNotifications()&&'serviceWorker' in navigator&&'PushManager' in window&&'Notification' in window;
+// 'on', 'off', 'denied' ou 'unsupported'
+export async function pushState(){if(nativeNotifications())return 'native';if(!pushSupported())return 'unsupported';if(Notification.permission==='denied')return 'denied';
+ try{const r=await navigator.serviceWorker.getRegistration();const s=await r?.pushManager.getSubscription();return s&&Notification.permission==='granted'?'on':'off'}catch{return 'off'}}
+// À appeler depuis un geste de l'utilisateur (exigé par iPhone).
+export async function enablePush(){if(nativeNotifications()){askNotifications();return 'native'}
+ if(!pushSupported())throw new Error('Notifications non disponibles ici.');
+ const perm=await Notification.requestPermission();if(perm!=='granted')throw new Error('Notifications refusées.');
+ const reg=await navigator.serviceWorker.ready;let sub=await reg.pushManager.getSubscription();
+ if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:fromB64u(VAPID_PUBLIC)});
+ const j=sub.toJSON();await rpc('push_subscribe',{p_player:me(),p_endpoint:j.endpoint,p_p256dh:j.keys.p256dh,p_auth:j.keys.auth,p_lang:window.bagaLang==='en'?'en':'fr'});return 'on'}
+export async function disablePush(){try{const reg=await navigator.serviceWorker.getRegistration();const sub=await reg?.pushManager.getSubscription();if(sub){await rpc('push_unsubscribe',{p_player:me(),p_endpoint:sub.endpoint}).catch(()=>{});await sub.unsubscribe()}}catch{}return 'off'}
+// Réabonne en silence au démarrage (clé renouvelée par le navigateur, changement de profil).
+export async function refreshPush(){try{if(registered()&&await pushState()==='on')await enablePush()}catch{}}
 
 // ---- même profil sur un autre appareil
 export const linkCode=()=>{named();return rpc('link_code',{p_player:me()})};

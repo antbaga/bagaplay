@@ -182,3 +182,39 @@ body:has(.install-banner) footer{padding-bottom:120px}
 .link-code{font-size:34px;font-weight:800;letter-spacing:6px;margin:8px 0 2px;color:var(--ink);font-variant-numeric:tabular-nums}.link-code:empty{display:none}
 .link-sep{display:block;margin-top:18px;padding-top:14px;border-top:1px solid var(--line)}
 #dialog-text .dialog-help{display:block}
+/* 1.7 : invitations, pastilles, volumes, pétanque */
+.home-invites{margin-top:22px;display:grid;gap:8px}
+.invite-row{display:flex;align-items:center;gap:10px;background:#fff1c7;border:1px solid #f2d27a;border-radius:16px;padding:8px 8px 8px 8px;box-shadow:0 3px 0 #efdca5;animation:appear .3s}
+.invite-text{flex:1;font-size:13px;font-weight:700;line-height:1.3}
+.invite-btn{width:40px;height:40px;border-radius:50%;font-size:19px;font-weight:800;display:grid;place-items:center;flex-shrink:0}
+.invite-btn.no{background:#fffaf1;border:1px solid #e9d7b8;color:#b8553f}.invite-btn.yes{background:#5f9b62;color:#fffaf1}
+.red-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#e5483b;margin-right:6px;vertical-align:middle;box-shadow:0 0 0 2px #fff4ee}
+.card-dot{position:absolute;top:6px;right:6px;min-width:14px;height:14px;padding:0 4px;border-radius:8px;background:#e5483b;color:#fff;font-size:9px;font-weight:800;line-height:14px;text-align:center;box-shadow:0 0 0 2px #fffcf5;z-index:2;animation:dot-pulse 1.8s ease-in-out infinite}
+@keyframes dot-pulse{50%{transform:scale(1.18)}}
+.avatar-party{background:#f3e1c4;color:#c48a3f}
+.lobby-pick{margin-top:10px}.pick-list{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px}
+.pick-chip{background:#e5efd9;border:1px solid #cfdfbc;border-radius:16px;padding:6px 10px;font-size:12px;font-weight:700}
+.volume{display:flex;align-items:center;gap:8px;flex:1;max-width:190px}.volume input{flex:1;accent-color:#5f9b62}.vol-icon{width:20px;text-align:center;font-size:15px}
+/* pétanque plein écran : le terrain prend toute la place, l'interface est posée dessus */
+#play.immersive .scorebar,#play.immersive .hint,#play.immersive #controls,#play.immersive #restart{display:none}
+#play.immersive #board{margin-top:8px}
+#play.immersive #board canvas{max-height:none;border-radius:18px;border:0;background:#cfe2d8}
+.pq-hud{position:absolute;pointer-events:none;font-size:12px;color:#2f4637}
+.pq-hud button{pointer-events:auto}
+.pq-top{position:absolute;left:8px;right:8px;top:8px;display:flex;align-items:flex-start;gap:6px}
+.pq-team{flex:1;display:flex;align-items:flex-start;gap:6px;min-width:0}.pq-team.t1{justify-content:flex-end;text-align:right}
+.pq-score{min-width:34px;height:34px;border-radius:12px;display:grid;place-items:center;font-size:19px;color:#fff;box-shadow:0 2px 0 rgba(0,0,0,.15)}
+.t0 .pq-score{background:#4f86c6}.t1 .pq-score{background:#e0674b}
+.pq-team.turn .pq-score{outline:3px solid #fff6c9}
+.pq-names{display:flex;flex-direction:column;gap:1px;background:rgba(255,250,240,.82);border-radius:10px;padding:3px 7px;font-size:10px;font-weight:700;max-width:120px}
+.pq-names span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pq-names i{font-style:normal;margin-left:4px;letter-spacing:-1px;color:#7a8a77}
+.pq-names .pq-cur{color:#b05a2a}.pq-team.mine .pq-names{box-shadow:0 0 0 2px rgba(255,255,255,.9)}
+.pq-mene{background:rgba(255,250,240,.82);border-radius:10px;padding:4px 8px;font-size:10px;font-weight:800;letter-spacing:.5px;white-space:nowrap;margin-top:6px}
+.pq-tools{position:absolute;right:8px;top:62px;display:flex;flex-direction:column;gap:6px}
+.pq-icon{width:40px;height:40px;border-radius:50%;background:rgba(255,250,240,.9);border:1px solid rgba(120,100,70,.18);font-size:19px;font-weight:800;display:grid;place-items:center;box-shadow:0 2px 0 rgba(0,0,0,.08)}
+.pq-icon.on{background:#406c47;color:#fffaf1}.pq-icon.yes{background:#5f9b62;color:#fffaf1}.pq-icon.no{color:#b8553f}
+.pq-bottom{position:absolute;left:8px;right:8px;bottom:10px;display:flex;align-items:center;justify-content:center;gap:8px}
+.pq-prompt{background:rgba(255,250,240,.9);border-radius:16px;padding:8px 12px;font-size:12px;font-weight:700;text-align:center;max-width:72%;line-height:1.35}
+.pq-prompt:empty{display:none}.pq-actions{display:flex;gap:6px}
+.pq-banner{position:absolute;left:50%;top:38%;transform:translate(-50%,-50%);background:rgba(39,69,60,.88);color:#fffaf1;padding:10px 16px;border-radius:16px;font-weight:800;font-size:14px;text-align:center;max-width:80%}
+.pq-banner.show{animation:appear .35s}

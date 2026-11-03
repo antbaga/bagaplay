@@ -85,7 +85,8 @@ export function duel(kind){return c=>{
   if(state.turn===myColor())return `${check}À toi de jouer (${COLOR_NAME[myColor()].toLowerCase()}).${forced}`;
   return `${check}Au tour de ${names()[state.turn]}…`;
  }
- function canDecline(){return isOnline&&match.status==='active'&&!match.from_me&&((myColor()==='w'&&ply===0)||(myColor()==='b'&&ply<=1))}
+ // depuis la 1.7 le défi est accepté ou refusé avant d'ouvrir le plateau
+ function canDecline(){return false}
  function canPlay(){return !ended&&!busy&&!thinking&&(!vsAI||state.turn!==aiColor)&&(!isOnline||(match.status==='active'&&state.turn===myColor()))}
 
  // ---- jeu
@@ -129,7 +130,7 @@ export function duel(kind){return c=>{
  function endLocal(st){ended=true;render();
   if(vsAI){const won=st.winner&&st.winner!==aiColor;c.finish(won,0,st.winner?(won?'Tu as battu l’ordinateur':'L’ordinateur gagne')+(st.reason?' ('+st.reason+')':'')+'.':resultText(null,st.reason),{reward:won?[60,150,300][aiLevel]:st.winner?20:40,noRecord:true,title:won?'Victoire !':st.winner?'Défaite':'Partie nulle'});return}
   c.finish(true,0,resultText(st.winner,st.reason),{reward:0,noRecord:true,title:st.winner?`Victoire des ${COLOR_NAME[st.winner].toLowerCase()} !`:'Partie nulle'})}
- function endOnline(){if(ended)return;ended=true;online.markSeen(match.id);sel=null;prefix=[];buildControls();render();
+ function endOnline(){if(ended)return;ended=true;sel=null;prefix=[];buildControls();render();
   if(match.status==='declined'){c.finish(false,0,match.from_me?`${names()[myColor()==='w'?'b':'w']} a refusé ton défi.`:'Tu as refusé ce défi.',{reward:0,noRecord:true,title:'Défi refusé'});return}
   const mine=match.my_color,won=match.winner===mine,draw=!match.winner;
   c.finish(won,0,resultText(match.winner,match.reason),{reward:won?300:draw?150:50,once:'match:'+match.id,duelWin:won,noRecord:true,title:won?'Victoire !':draw?'Partie nulle':'Défaite'});
@@ -153,5 +154,6 @@ export function duel(kind){return c=>{
 
  buildControls();render();
  if(isOnline){if(match.status!=='active')setTimeout(endOnline,0);c.every(refresh,POLL_MS)}
- return {key(k){if(k==='Escape'){sel=null;prefix=[];render()}}};
+ // partie finie : quitter le plateau la retire de mes listes
+ return {key(k){if(k==='Escape'){sel=null;prefix=[];render()}},destroy(){if(isOnline&&(ended||match.status==='finished'||match.status==='declined'))online.hideMatch(match.id).catch(()=>{})}};
 }}

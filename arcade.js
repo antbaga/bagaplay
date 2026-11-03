@@ -57,11 +57,14 @@ function blocks(c){const [canvas,g]=c.canvas(400);let board=Array.from({length:1
  // le bloc suit le pouce horizontalement (comme la raquette du casse-briques) ; glisser vers le bas accélère ; toucher = tourner ; lancer vers le bas = poser
  let drag=null;
  c.listen(canvas,'pointerdown',e=>{canvas.setPointerCapture?.(e.pointerId);if(!started){started=true;draw();return}drag={x:e.clientX,y:e.clientY,col:piece.x,rows:0,moved:false,t:performance.now()}});
+ // Le geste choisit un axe dès qu'il est net : horizontal = déplacer, vers le bas = descendre. Un glissé vers le bas ne décale plus la pièce.
  c.listen(canvas,'pointermove',e=>{if(!drag||!piece)return;const cell=canvas.getBoundingClientRect().width*18/360,dx=e.clientX-drag.x,dy=e.clientY-drag.y;
-  if(Math.abs(dx)>cell*.4||Math.abs(dy)>cell*.6)drag.moved=true;const target=drag.col+Math.round(dx/cell);while(piece.x<target&&move(1,0));while(piece.x>target&&move(-1,0));
-  const rows=Math.floor(Math.max(0,dy)/cell);while(drag.rows<rows){drag.rows++;if(!move(0,1)){drag=null;return}}});
+  if(Math.abs(dx)>cell*.4||Math.abs(dy)>cell*.6)drag.moved=true;
+  if(!drag.axis&&Math.hypot(dx,dy)>cell*.55)drag.axis=Math.abs(dx)>Math.abs(dy)*1.2?'x':dy>0?'y':'up';
+  if(drag.axis==='x'){const target=drag.col+Math.round(dx/cell);while(piece.x<target&&move(1,0));while(piece.x>target&&move(-1,0));}
+  else if(drag.axis==='y'){const rows=Math.floor(Math.max(0,dy-cell*.3)/cell);while(drag.rows<rows){drag.rows++;if(!move(0,1)){drag=null;return}}}});
  c.listen(canvas,'pointerup',e=>{if(!drag)return;const dt=performance.now()-drag.t,dy=e.clientY-drag.y,dx=e.clientX-drag.x;
-  if(dy>45&&dt<230&&Math.abs(dy)>Math.abs(dx)*1.5)drop();else if(dy<-35&&Math.abs(dy)>Math.abs(dx))turn();else if(!drag.moved)turn();drag=null});
+  if(drag.axis!=='x'&&dy>45&&dt<230&&Math.abs(dy)>Math.abs(dx)*1.5)drop();else if(dy<-35&&Math.abs(dy)>Math.abs(dx))turn();else if(!drag.moved)turn();drag=null});
  c.listen(canvas,'pointercancel',()=>drag=null);
  spawn();draw();
  return {update(dt){if(flashT>0)flashT-=dt;if(shake>0)shake=Math.max(0,shake-dt*14);if(!started){draw();return}clock+=dt;if(clock>Math.max(.1,.72-Math.floor(lines/10)*.07)){clock=0;if(blockFits(board,piece.shape,piece.x,piece.y+1))piece.y++;else lock()}draw()},

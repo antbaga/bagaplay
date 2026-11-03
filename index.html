@@ -3,14 +3,16 @@
 <main id="home">
   <header class="brand"><div class="brand-mark" aria-hidden="true"><i></i><b></b><span>✦</span></div><div>Baga<span>Play</span><small>LE PETIT ATELIER DU JEU</small></div><button id="settings" class="icon-btn" aria-label="Réglages" title="Réglages">⚙︎</button></header><button id="wallet" aria-label="Mes pièces et mes scores"></button>
   
-  <section id="home-matches" class="home-matches" hidden><div class="section-title"><h2>Tes parties</h2><span id="home-matches-count"></span></div><div id="home-matches-list" class="score-list"></div></section>
-  <section class="collection"><div class="section-title"><h2>À toi de jouer</h2><span id="game-count">10 petits bonheurs</span></div><nav class="filters" aria-label="Catégories"><button class="active" data-filter="all">Tous les jeux <span>14</span></button><button data-filter="duel">À deux</button><button data-filter="puzzle">Réflexion</button><button data-filter="arcade">Arcade</button></nav><div id="cards" class="cards"></div></section>
+  <section id="home-invites" class="home-invites" hidden aria-label="Défis reçus"></section>
+  <section id="home-matches" class="home-matches" hidden><div class="section-title"><h2>Mes parties</h2><span id="home-matches-count"></span></div><div id="home-matches-list" class="score-list"></div></section>
+  <section class="collection"><div class="section-title"><h2>À toi de jouer</h2><span id="game-count">10 petits bonheurs</span></div><nav class="filters" aria-label="Catégories"><button class="active" data-filter="all">Tous les jeux <span>15</span></button><button data-filter="duel">À deux</button><button data-filter="puzzle">Réflexion</button><button data-filter="arcade">Arcade</button></nav><div id="cards" class="cards"></div></section>
   <footer><div class="footer-flower">✳</div><p>app créé par Kiara</p><small id="footer-version">BagaPlay · Sans pub, sans compte.</small></footer>
 </main>
 <main id="play" hidden><header class="play-header"><button id="back" class="icon-btn" aria-label="Retour à l’accueil">‹</button><div><small id="game-category"></small><h1 id="game-title"></h1></div><button id="restart" class="icon-btn" aria-label="Recommencer">↻</button><button id="pause" class="icon-btn" aria-label="Mettre en pause">Ⅱ</button></header><div class="scorebar"><div><small id="score-label">SCORE</small><strong id="score">0</strong></div><span id="run-coins" aria-label="Pièces récoltées">● 0</span><div><small id="best-label">RECORD</small><strong id="best">0</strong></div></div><p id="hint" class="hint"></p><section id="board" aria-label="Plateau de jeu"></section><div id="controls"></div></main>
 <main id="lobby" hidden><header class="play-header"><button id="lobby-back" class="icon-btn" aria-label="Retour à l’accueil">‹</button><div><h1 id="lobby-title"></h1></div></header>
   <section id="lobby-on">
     <div class="player-search" id="lobby-search"></div>
+    <div id="lobby-pick" class="lobby-pick" hidden><div id="lobby-pick-list" class="pick-list"></div><button id="lobby-invite" class="primary">Inviter</button></div>
     <p id="lobby-status" class="lobby-status" role="status"></p>
     <div class="section-title"><h2>Mes parties</h2><button id="lobby-refresh" class="text-btn" aria-label="Actualiser">↻</button></div>
     <div id="lobby-matches" class="score-list"></div>
