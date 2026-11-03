@@ -1,7 +1,9 @@
 // Pétanque : terrain, physique des lancers et règles (sans affichage). Unités : mètres, secondes.
 // Le terrain va de x=-2 à x=2 et de z=0 à z=15. Le cercle de lancer est en (0, 1).
 export const FIELD={w:4,l:15},CIRCLE={x:0,z:1},TARGET_SCORE=13;
-export const R_BALL=.0375,R_JACK=.015,M_BALL=.7,M_JACK=.03;
+// Rayons physiques = rayons dessinés (boules un peu plus grosses que nature pour rester lisibles à l'écran) :
+// ce qu'on voit se touche vraiment, aucune boule n'en traverse une autre.
+export const R_BALL=.06,R_JACK=.025,M_BALL=.7,M_JACK=.03;
 const DECEL={ball:1.7,jack:2.4},RESTITUTION=.8,DT=1/240;
 // Cochonnet valable : entre 6 et 10 m du cercle, à plus de 50 cm des bords.
 export const JACK_MIN=6,JACK_MAX=10,JACK_EDGE=.5;

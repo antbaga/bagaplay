@@ -68,7 +68,7 @@ function chooseDifficulty(id){dialog('Difficulté','','Jouer',()=>{difficulty=+d
 // Sudoku : reprend la grille sauvegardée (après une sortie de l'app ou une mise en veille).
 function resumeSudoku(){const run=savedSudoku();if(!run)return;difficulty=run.level??1;launch('sudoku',false,{resume:true})}
 document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-filter]').forEach(x=>x.classList.toggle('active',x===b));renderCards(b.dataset.filter)});
-const VERSION='1.8.1';
+const VERSION='1.8.2';
 function setVolume(kind,v){vol[kind]=Math.max(0,Math.min(1,v));saved.vol=vol;persist();if(kind==='music'){setMusicVolume(vol.music);sound=vol.music>0;if(!paused)music(sound)}}
 function updateSound(){$('#footer-version').textContent=`BagaPlay ${VERSION} · Sans pub, sans compte.`}
 // Réglages : son, langue, version.

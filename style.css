@@ -229,3 +229,4 @@ body:has(.install-banner) footer{padding-bottom:120px}
 .pq-lofts button{width:38px;height:34px;border-radius:12px;background:rgba(255,250,240,.88);border:1px solid rgba(120,100,70,.2);font-size:17px;font-weight:800;color:#4b6a50}
 .pq-lofts button.on{background:#406c47;color:#fffaf1}
 .pq-hud.with-pad .pq-bottom{bottom:168px}
+.pq-hand.locked{background:radial-gradient(circle,rgba(255,236,170,.7) 0 55%,rgba(255,236,170,0) 70%)}
