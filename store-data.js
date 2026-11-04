@@ -3,9 +3,9 @@
 
 // Terrain et bâtiment de départ (grosse supérette de 400 m², façade au sud, réserve au nord).
 export const LOT_W=60,LOT_H=48;
-export const START={x0:20,y0:18,x1:40,y1:38,entrance:29,reserveRows:5,cash:140000,loan:420000,loanMonthly:4450,rep:50};
+export const START={x0:20,y0:18,x1:40,y1:38,entrance:29,reserveRows:5,cash:140000,loan:420000,loanMonthly:3900,rep:50};
 export const EXTEND={perM2:900,margin:2};
-export const HOURS={open:8,close:20,realSecPerHour:20};       // 12 h d'ouverture = 4 min en ×1
+export const HOURS={start:6,open:8,close:20,realSecPerHour:20};   // 6 h–8 h : livraison et mise en place avant l'ouverture       // 12 h d'ouverture = 4 min en ×1
 export const DAYS_PER_MONTH=30;
 export const BANKRUPTCY=-40000;
 export const WALL_COST=150,DOOR_COST=450,REFUND=0.5;
@@ -96,4 +96,4 @@ export const EXTRA_LOAN={amount:100000,monthly:1110};
 export const HOUR_CURVE=[.5,.7,.9,1.1,1.4,1.2,.9,.8,.9,1.2,1.5,1.0];
 export const CUSTOMER={speed:2.6,pick:.7,serviceBase:.8,servicePerUnit:.1,selfFactor:1.5,theft:.02,patience:45};
 export const TRAFFIC={carShare:.5,busShare:.25,busEvery:.5,busMax:12,carSpeed:5,busSpeed:7,carExtra:3};
-export const STAFF={speed:2.4,carton:40,nightPerStocker:500,handle:1.2};
+export const STAFF={speed:2.4,carton:40,nightPerStocker:700,handle:1.2};

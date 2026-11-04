@@ -76,7 +76,7 @@ export function bagastore(c){
 
  // ---- toucher : glisser = déplacer la vue, pincer = zoom, toucher = action
  const pts=new Map();let pinch=null,drag=null;
- const DRAW=new Set(['wall','zoneR','zoneS','extend','asphalt','road']);
+ const DRAW=new Set(['wall','zoneR','zoneS','extend','asphalt','road','walk']);
  const cellAt=(px,py)=>{const [gx,gz]=ground(cam,px,py);return [Math.floor(gx),Math.floor(gz)]};
  c.listen(cv,'pointerdown',e=>{cv.setPointerCapture?.(e.pointerId);pts.set(e.pointerId,{x:e.offsetX,y:e.offsetY,x0:e.offsetX,y0:e.offsetY,t:performance.now()});
   if(pts.size===2){const [a,b]=[...pts.values()];pinch={d:Math.hypot(a.x-b.x,a.y-b.y),z:cam.zoom,mx:(a.x+b.x)/2,my:(a.y+b.y)/2};if(drag?.draw&&mode){mode.a=mode.b=null;updatePlace()}drag={moved:true}}
@@ -105,19 +105,19 @@ export function bagastore(c){
   const L=E.layout(S),id=E.inLot(x,y)?L.occ[E.idx(x,y)]:0;sel=id||null;if(sel){sfx('click');openPanel('item')}else if(panel==='item')closePanel()}
 
  // ---- placement : aperçu, petite bulle ✕ / ✓ au-dessus de l'objet
- const TOOL_NAMES={extend:'Agrandir',asphalt:'Goudron',road:'Route'},TOOL_HINT={extend:'Glisse le doigt pour tracer l’extension.',asphalt:'Glisse le doigt pour goudronner une zone.',road:'Glisse le doigt pour tracer une route.',wall:'Glisse le doigt pour tracer le mur.',zoneR:'Glisse le doigt sur la zone.',zoneS:'Glisse le doigt sur la zone.',erase:'Touche ce que tu veux démolir.'};
+ const TOOL_NAMES={extend:'Agrandir',asphalt:'Goudron',road:'Route',walk:'Trottoir'},TOOL_HINT={extend:'Glisse le doigt pour tracer l’extension.',asphalt:'Glisse le doigt pour goudronner une zone.',walk:'Glisse le doigt pour poser un trottoir.',road:'Glisse le doigt pour tracer une route.',wall:'Glisse le doigt pour tracer le mur.',zoneR:'Glisse le doigt sur la zone.',zoneS:'Glisse le doigt sur la zone.',erase:'Touche ce que tu veux démolir.'};
  function startMove(id){const it=S.items.find(o=>o.id===id);if(!it)return;mode={kind:'item',t:it.t,r:it.r,pos:[it.x,it.y],move:id};staticKey='';closePanel();bar.hidden=false;updatePlace();msg('Touche la nouvelle place.')}
  function startItem(t){mode={kind:'item',t,r:0,pos:null};closePanel();bar.hidden=false;updatePlace();msg('Touche le sol pour placer.')}
  function startTool(t){mode={kind:'tool',id:t};closePanel();bar.hidden=false;updatePlace();msg(TOOL_HINT[t]||D.TOOLS.find(o=>o.id===t)?.hint||'')}
  function stopMode(){mode=null;staticKey='';bar.hidden=true;pop.hidden=true;anchor=null;ren.upload('ghost',Bg.d,0);ren.upload('access',Bac.d,0);c.hint(E.problems(S)[0]||'')}
  function updatePlace(){bar.innerHTML='';let ok=false,why='',label='',cost=0;const g={};anchor=null;
-  let access=[];if(mode.kind==='item'){const d=D.ITEM[mode.t];label=d.name;cost=mode.move?0:d.price;
+  let access=[];if(mode.kind==='item'){const d=D.ITEM[mode.t];label=d.name;cost=mode.move?0:mode.pos?E.placeCost(S,mode.t,mode.pos[0],mode.pos[1],mode.r):d.price;
    if(mode.pos){why=mode.move?E.canMove(S,mode.move,mode.pos[0],mode.pos[1],mode.r):E.canPlace(S,mode.t,mode.pos[0],mode.pos[1],mode.r);if(d.zone!==2&&d.kind!=='decor')access=E.front({t:mode.t,x:mode.pos[0],y:mode.pos[1],r:mode.r});ok=!why;g.item={t:mode.t,x:mode.pos[0],y:mode.pos[1],r:mode.r};const [w,dd]=mode.r%2?[d.d,d.w]:[d.w,d.d];anchor=[mode.pos[0]+w/2,d.h+1.6,mode.pos[1]+dd/2]}}
   else{const t=mode.id;label=TOOL_NAMES[t]||D.TOOLS.find(o=>o.id===t).name;const b=mode.b||mode.a;
    if(t==='wall'&&mode.a){const cl=E.wallPlan(S,mode.a,b);g.cells=cl;g.h=1.3;cost=cl.length*D.WALL_COST;ok=cl.length>0;why=cl.length?'':'Rien à construire ici.'}
    if((t==='zoneR'||t==='zoneS')&&mode.a){const o=[];for(let y=Math.min(mode.a[1],b[1]);y<=Math.max(mode.a[1],b[1]);y++)for(let x=Math.min(mode.a[0],b[0]);x<=Math.max(mode.a[0],b[0]);x++)if(E.inside(S,x,y))o.push([x,y]);g.cells=o;g.h=.06;ok=o.length>0}
    if(t==='extend'&&mode.a){const p=E.extendPlan(S,mode.a,b);g.cells=p.cells;g.h=.12;cost=p.cost;ok=!p.why;why=p.why||'';if(p.m2)label=`Agrandir : ${p.m2} m²`}
-   if((t==='asphalt'||t==='road')&&mode.a){const p=E.groundPlan(S,mode.a,b,t==='road'?2:1);g.cells=p.cells.map(i=>[i%D.LOT_W,i/D.LOT_W|0]);g.h=.04;cost=p.cost;ok=!p.why;why=p.why||'';if(p.cells.length)label=`${TOOL_NAMES[t]} : ${p.cells.length} m²`}
+   if((t==='asphalt'||t==='road'||t==='walk')&&mode.a){const p=E.groundPlan(S,mode.a,b,t==='road'?2:t==='walk'?3:1);g.cells=p.cells.map(i=>[i%D.LOT_W,i/D.LOT_W|0]);g.h=.04;cost=p.cost;ok=!p.why;why=p.why||'';if(p.cells.length)label=`${TOOL_NAMES[t]} : ${p.cells.length} m²`}
    if(t==='erase'&&mode.a){const inf=E.eraseInfo(S,...mode.a);if(inf){g.cells=inf.cells.map(k=>[k%D.LOT_W,k/D.LOT_W|0]);g.h=.3;label='Démolir : '+inf.label;cost=-inf.refund;ok=true;if(inf.lost)why=inf.lost+' articles de la réserve seront perdus.'}else why='Rien à démolir ici.'}
    if(mode.a)anchor=[b[0]+.5,(g.h||0)+1,b[1]+.5]}
   if(ok&&cost>0&&cost>S.cash){ok=false;why='Pas assez d’argent.'}
@@ -136,7 +136,7 @@ export function bagastore(c){
   if(t==='zoneR'||t==='zoneS')why=E.paintZone(S,mode.a,mode.b,t==='zoneR'?1:0);
   if(t==='erase')why=E.eraseAt(S,...mode.a);
   if(t==='extend'){why=E.extendRect(S,mode.a,mode.b);if(!why)save()}
-  if(t==='asphalt'||t==='road')why=E.paintGround(S,mode.a,mode.b,t==='road'?2:1);
+  if(t==='asphalt'||t==='road'||t==='walk')why=E.paintGround(S,mode.a,mode.b,t==='road'?2:t==='walk'?3:1);
   if(why){msg(why);sfx('error')}else sfx(t==='erase'?'erase':'place');mode.a=mode.b=null;updatePlace()}
 
  // ---- panneaux
@@ -157,7 +157,7 @@ export function bagastore(c){
   const nb=sheet.querySelector('.st-body');if(nb&&key===panelKey)nb.scrollTop=top;panelKey=key}
  function pBuild(){const body=head('Construire · '+eur(S.cash),D.TABS,buildTab,v=>buildTab=v);const grid=el('div','st-cards');body.append(grid);
   if(buildTab==='murs'){for(const t of D.TOOLS){const b=card(t.name,t.price?eur(t.price)+(t.id==='wall'?' / m':''):'');b.onclick=()=>{sfx('click');startTool(t.id)};grid.append(b)}return}
-  if(buildTab==='parking'){for(const [id,name,price,sub] of [['asphalt','Goudron',E.GROUND_COST[1],'Pour les places de parking'],['road','Route',E.GROUND_COST[2],'Voitures et camions']]){const b=card(name,eur(price)+' / m²',sub);b.onclick=()=>{sfx('click');startTool(id)};grid.append(b)}}
+  if(buildTab==='parking'){for(const [id,name,price,sub] of [['walk','Trottoir',E.GROUND_COST[3],'Chemin des piétons'],['asphalt','Goudron',E.GROUND_COST[1],'Parking, aire du camion'],['road','Route',E.GROUND_COST[2],'Voitures et camions']]){const b=card(name,eur(price)+' / m²',sub);b.onclick=()=>{sfx('click');startTool(id)};grid.append(b)}}
   if(buildTab==='agrandir'){const b=card('Agrandir le magasin',eur(D.EXTEND.perM2)+' / m²','Sol et murs compris');b.onclick=()=>{sfx('click');startTool('extend')};grid.append(b);
    body.append(el('p','st-note',`Surface : ${E.area(S)} m² · vente ${E.salesArea(S)} m²`));return}
   for(const d of D.ITEMS.filter(i=>i.tab===buildTab)){const sub=d.kind==='spot'?'+ clients en voiture':d.kind==='bus'?'Un bus amène des clients':d.kind==='corral'?'Caddies : paniers plus gros':d.kind==='sale'||d.kind==='counter'||d.kind==='reserve'?`${d.cap} articles`:d.attract?'+ attractif':d.security?'− vols':d.clean?'− saleté':'';
@@ -177,9 +177,10 @@ export function bagastore(c){
   bud.append(el('span',null,'Budget / jour'),btn('−',()=>{S.budget=Math.max(0,S.budget-250);renderPanel()}),el('b',null,eur(S.budget)),btn('+',()=>{S.budget+=250;renderPanel()}));body.append(bud);
   body.append(row(btn('Livraison express +15 %',()=>{const r=E.express(S,S.budget,R);if(typeof r==='string'){msg(r);sfx('error')}else{toast('Camion en route : '+eur(r.cost));sfx('truck');save()}renderPanel()},'st-small wide'),
    btn('% par défaut',()=>{S.alloc=E.defaultAlloc();renderPanel()},'st-small wide')));
-  const tot=D.CATS.reduce((t,k)=>t+(S.alloc[k.id]||0),0)||1,pop=E.popularity(S),TAG={hot:['Populaire','hot'],cold:['Impopulaire','cold'],empty:['Vide','empty']};
+  const tot=D.CATS.reduce((t,k)=>t+(S.alloc[k.id]||0),0)||1,pop=E.popularity(S),alerts=E.stockAlerts(S),TAG={hot:['Populaire','hot'],cold:['Impopulaire','cold'],empty:['Vide','empty'],low:['Stock bas','empty'],short:['Achat insuffisant','warn']};
+  {const nl=Object.values(alerts).filter(v=>v==='low').length,ns=Object.values(alerts).filter(v=>v==='short').length;if(nl||ns)body.append(el('p','st-alert',(nl?`⚠️ Stock bas sur ${nl} rayon${nl>1?'s':''}. `:'')+(ns?`Achats trop faibles pour ${ns} rayon${ns>1?'s':''} : augmente leur % ou le budget.`:'')))}
   const tbl=el('div','st-cats');tbl.append(row(el('span','st-h','Rayon'),el('span','st-h','Achat'),el('span','st-h','Marge'),el('span','st-h','Rayon / réserve')));
-  for(const k of D.CATS){const p=pop[k.id],name=el('span','st-cn');const nb=el('b',null,k.name);if(p.tag){const t=el('em','st-tag '+TAG[p.tag][1],TAG[p.tag][0]);nb.append(t)}
+  for(const k of D.CATS){const p=pop[k.id],name=el('span','st-cn');const nb=el('b',null,k.name);for(const tg of [p.tag==='empty'?'empty':alerts[k.id]||p.tag].filter(Boolean)){const t=el('em','st-tag '+TAG[tg][1],TAG[tg][0]);nb.append(t)}
    name.append(nb,el('small',null,E.price(S,k.id).toFixed(2).replace('.',',')+' €'+(p.perDay?' · '+Math.round(p.perDay)+'/j':'')));
    const al=el('span','st-step');al.append(btn('−',()=>{S.alloc[k.id]=Math.max(0,(S.alloc[k.id]||0)-1);renderPanel()}),el('b',null,Math.round((S.alloc[k.id]||0)/tot*100)+' %'),btn('+',()=>{S.alloc[k.id]=(S.alloc[k.id]||0)+1;renderPanel()}));
    const mg=el('span','st-step'+(S.margin[k.id]>k.ref+5?' high':S.margin[k.id]<k.ref-5?' low':''));mg.append(btn('−',()=>{S.margin[k.id]=Math.max(0,S.margin[k.id]-2);renderPanel()}),el('b',null,S.margin[k.id]+' %'),btn('+',()=>{S.margin[k.id]=Math.min(120,S.margin[k.id]+2);renderPanel()}));
@@ -268,6 +269,9 @@ export function bagastore(c){
   const dpr=cv.width/cam.w;g2.setTransform(dpr,0,0,dpr,0,0);g2.clearRect(0,0,cam.w,cam.h);g2.textAlign='center';g2.textBaseline='middle';
   for(const o of S.items){const d=D.ITEM[o.t];if(!o.cat||!d.cap||o.stock>0)continue;if(d.kind==='counter'&&!E.manned(S,o))continue;const [w,dd]=E.size(o),[px,py]=project(M,cam,o.x+w/2,d.h+.6,o.y+dd/2);
    const s=1+Math.sin(time*5+o.id)*.08;g2.fillStyle='#e0453a';g2.beginPath();g2.arc(px,py,8*s,0,7);g2.fill();g2.fillStyle='#fff';g2.font='bold 12px sans-serif';g2.fillText('!',px,py+.5)}
+  const tk=R.truck;if(tk&&tk.st==='unload'&&tk.total>0){const [px,py]=project(M,cam,tk.x,4.4,tk.z),k=Math.min(1,tk.done/tk.total),w=64;
+   g2.fillStyle='#fffaf1e6';g2.beginPath();g2.roundRect?g2.roundRect(px-w/2-4,py-13,w+8,22,7):g2.rect(px-w/2-4,py-13,w+8,22);g2.fill();g2.fillStyle='#e6e1d3';g2.fillRect(px-w/2,py+1,w,5);g2.fillStyle='#5aa36a';g2.fillRect(px-w/2,py+1,w*k,5);
+   g2.fillStyle='#27453c';g2.font='bold 9px sans-serif';g2.fillText(S.staff.rayon?'Déchargement '+Math.round(k*100)+' %':'Personne pour décharger !',px,py-5)}
   for(const f of floats){f.life-=dt;f.y+=dt*.8;const [px,py]=project(M,cam,f.x,f.y,f.z);g2.globalAlpha=Math.max(0,Math.min(1,f.life));g2.font=(f.big?'bold 15px':'bold 11px')+' sans-serif';g2.fillStyle=f.col;g2.fillText(f.txt,px,py)}
   g2.globalAlpha=1;floats=floats.filter(f=>f.life>0);if(floats.length>60)floats.splice(0,floats.length-60)}
  function hudUpdate(){const n=R.agents.filter(a=>a.k==='c').length;info.textContent=`★ ${Math.round(S.rep)} · ${n} 🛒`;

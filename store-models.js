@@ -20,11 +20,9 @@ export function buildStatic(B,S,v){const b=S.b,L=E.layout(S);B.reset();B.setYaw(
  // sol : goudron, routes (route principale prolongée hors du terrain), marquages
  B.tile(-30,H-3,0,H,0,C.road);B.tile(W,H-3,W+30,H,0,C.road);for(let x=-30;x<W+30;x+=3)B.tile(x,H-1.58,x+1.6,H-1.42,.006,C.line);
  const G=S.ground||[],gr=(x,y)=>x>=0&&y>=0&&x<W&&y<H?G[E.idx(x,y)]:0;
- for(let y=0;y<H;y++)for(let x=0;x<W;x++){const g=gr(x,y);if(!g||E.inside(S,x,y))continue;B.tile(x,y,x+1,y+1,.001,g===2?C.road:C.asphalt);
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++){const g=gr(x,y);if(!g||E.inside(S,x,y))continue;B.tile(x,y,x+1,y+1,.001,g===2?C.road:g===3?((x+y)&1?C.walk:mix(C.walk,C.white,.25)):C.asphalt);
   if(g===2&&y<H-3){const e=.07,lc=mix(C.road,C.line,.75);if(!gr(x,y-1))B.tile(x,y,x+1,y+e,.004,lc);if(!gr(x,y+1))B.tile(x,y+1-e,x+1,y+1,.004,lc);if(!gr(x-1,y))B.tile(x,y,x+e,y+1,.004,lc);if(!gr(x+1,y))B.tile(x+1-e,y,x+1,y+1,.004,lc)}}
  const ins=(x,y)=>E.inside(S,x,y);
- // trottoir autour du bâtiment
- for(let y=b.y0-1;y<=b.y1;y++)for(let x=b.x0-1;x<=b.x1;x++){if(ins(x,y))continue;let near=false;for(let dy=-1;dy<=1&&!near;dy++)for(let dx=-1;dx<=1;dx++)if(ins(x+dx,y+dy)){near=true;break}if(near)B.tile(x,y,x+1,y+1,.002,C.walk)}
  for(const [x,y,s] of S.trees||[])tree(B,x+.5,y+.5,s);
  for(const [x,z,s] of trees)if(x<-1||x>W+1||z<-1)tree(B,x,z,s);
  // sol (carrelage, béton dans la réserve, salissures)
@@ -146,6 +144,7 @@ export function person(B,x,z,ang,col,phase=0,carry=null,sit=1,scan=false,bob=0){
  if(st===4){B.obox(x,hy+.18,z,.135,.05,.135,ang,col.shirt);const [px,pz]=off(0,.17);B.obox(px,hy+.14,pz,.12,.012,.07,ang,col.shirt)}
  const [fx,fz]=off(0,.3);
  if(carry==='carton')B.obox(fx,ty+.05,fz,.2,.16,.14,ang,C.carton,C.cartonT);
+ if(carry==='pallet'){const [px,pz]=off(0,.75);B.obox(px,.07,pz,.42,.07,.42,ang,C.wood,C.woodD);B.obox(px,.42,pz,.38,.28,.38,ang,C.carton,C.cartonT);B.obox(px,.72,pz,.3,.03,.3,ang,mix(C.cartonT,C.white,.3));const [hx,hz]=off(0,.28);B.obox(hx,.55,hz,.03,.45,.03,ang,C.red);B.obox(hx,.95,hz,.14,.03,.03,ang,C.dark)}
  if(carry==='basket'){const [bx2,bz2]=off(.26,.05);B.obox(bx2,ty-.14,bz2,.13,.07,.09,ang,C.red);B.obox(bx2,ty-.04,bz2,.13,.01,.01,ang,C.red)}
  if(carry==='mop'){const sw=Math.sin(phase)*.2,[mx2,mz2]=off(.28+sw,.32);B.obox(mx2,.55,mz2,.02,.55,.02,ang,C.woodD);B.obox(mx2,.04,mz2,.14,.04,.06,ang,rgb('#4aa3c8'))}}
 const STAFF_COL={rayon:{shirt:C.orange,pants:C.dark,skin:rgb('#e9bf98'),hair:rgb('#3b2a20')},menage:{shirt:rgb('#4db08a'),pants:rgb('#2f5f4d'),skin:rgb('#a87452'),hair:rgb('#1e1a18')}};
@@ -174,12 +173,14 @@ function bus(B,x,z,ang){const c=Math.cos(ang),sn=Math.sin(ang),P=(lx,lz)=>[x+lx*
  B.obox(x,1.55,z,1.25,1.25,5.5,ang,body,C.white);B.obox(x,1.95,z,1.27,.4,5.3,ang,C.glass);
  for(const lz of [-3.6,3.4]){for(const lx of [-1.15,1.15]){const [wx,wz]=P(lx,lz);B.obox(wx,.4,wz,.12,.4,.45,ang,rgb('#25262a'))}}
  const [fx,fz]=P(0,5.51);B.obox(fx,1.9,fz,1.1,.55,.02,ang,C.glass);const [sx,sz]=P(0,5.52);B.obox(sx,2.65,sz,.9,.15,.02,ang,rgb('#2f6f45'))}
-function truck(B,x,z,ang){const c=Math.cos(ang),sn=Math.sin(ang),P=(lx,lz)=>[x+lx*c+lz*sn,z-lx*sn+lz*c];
+function truck(B,x,z,ang,open){const c=Math.cos(ang),sn=Math.sin(ang),P=(lx,lz)=>[x+lx*c+lz*sn,z-lx*sn+lz*c];
  const [bx,bz]=P(0,-1.2);B.obox(bx,1.75,bz,1.15,1.3,3,ang,C.white,rgb('#ececec'));const [sx,sz]=P(0,-1.2);B.obox(sx,1.5,sz,1.17,.18,2.9,ang,rgb('#3f7a4f'));
  const [cx,cz]=P(0,2.45);B.obox(cx,1.2,cz,1.05,.8,.75,ang,rgb('#3f7a4f'),rgb('#4f8f5f'));const [wx,wz]=P(0,3.21);B.obox(wx,1.45,wz,.9,.35,.02,ang,C.glass);
- for(const lz of [-3.2,-1.2,2.4])for(const lx of [-1,1]){const [px,pz]=P(lx,lz);B.obox(px,.4,pz,.13,.4,.42,ang,rgb('#25262a'))}}
+ for(const lz of [-3.2,-1.2,2.4])for(const lx of [-1,1]){const [px,pz]=P(lx,lz);B.obox(px,.4,pz,.13,.4,.42,ang,rgb('#25262a'))}
+ if(open){for(const k of [-1,1]){const [dx,dz]=P(k*1.6,-4.35);B.obox(dx,1.75,dz,.04,1.25,.55,ang+k*Math.PI/2*.0,rgb('#dcdcdc'))}const [ix,iz]=P(0,-3.9);B.obox(ix,1.75,iz,1.05,1.15,.3,ang,rgb('#6b5a48'))}
+ else{const [rx,rz]=P(0,-4.21);B.obox(rx,1.75,rz,1.1,1.25,.02,ang,rgb('#dcdcdc'))}}
 export function buildAgents(B,S,R,v,time){B.reset();B.setYaw(v.yaw);
- if(R.truck)truck(B,R.truck.x,R.truck.z,R.truck.ang);
+ if(R.truck)truck(B,R.truck.x,R.truck.z,R.truck.ang,R.truck.st==='unload');
  for(const c of R.cars||[])car(B,c.x,c.z,c.ang,c.col);if(R.bus)bus(B,R.bus.x,R.bus.z,R.bus.ang);
  // portes coulissantes de l'entrée : s'ouvrent quand quelqu'un approche
  const ex=S.ent+1,ez=S.fy+1;let near=0;for(const a of R.agents)if(Math.abs(a.x-ex)<1.8&&Math.abs(a.y-ez)<2.2)near=1;
@@ -198,7 +199,7 @@ export function buildAgents(B,S,R,v,time){B.reset();B.setYaw(v.yaw);
   shadow(B,x,z);
   if(a.k==='c'){if(a.hasCart){const c=Math.cos(ang),sn=Math.sin(ang);cart(B,x+sn*.3,z+c*.3,ang,a.basket.units,a.id)}
    person(B,x,z,ang,{shirt:a.shirt,pants:a.pants,skin:a.skin,hair:a.hair||C.skinH,style:a.style,scale:a.scale},a.st==='waitBus'?0:ph,a.hasCart?'push':a.basket.units?'basket':null,1,false,bob)}
-  else{const work=a.st==='clean'||a.st==='take'||a.st==='put';person(B,x,z,ang+(a.st==='clean'?Math.sin(time*6)*.35:0),STAFF_COL[a.role],work?time*8:ph,a.role==='menage'?'mop':a.carry||a.st==='put'?'carton':null,a.st==='put'||a.st==='take'?.92:1,false,bob)}}}
+  else{const work=a.st==='clean'||a.st==='take'||a.st==='put';person(B,x,z,ang+(a.st==='clean'?Math.sin(time*6)*.35:0),STAFF_COL[a.role],work?time*8:ph,a.role==='menage'?'mop':a.carry?.pallet?'pallet':a.carry||a.st==='put'?'carton':null,a.st==='put'||a.st==='take'?.92:1,false,bob)}}}
 
 // ---------------------------------------------------------------- aperçu de placement
 export function buildAccess(B,cells,v){B.reset();B.setYaw(v.yaw);for(const [x,y] of cells||[]){B.tile(x+.06,y+.06,x+.94,y+.94,.025,rgb('#f7c948'));B.tile(x+.2,y+.2,x+.8,y+.8,.03,rgb('#fff4cf'))}}

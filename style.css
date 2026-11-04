@@ -351,3 +351,5 @@ body:has(.install-banner) footer{padding-bottom:120px}
 .st-pop-cost{font-size:11px;font-weight:800;color:#406c47;line-height:1}.st-pop-cost:empty{display:none}
 .st-pop.bad{background:#ffe1dc}.st-pop.bad:after{border-top-color:#ffe1dc}.st-pop.bad .st-pop-cost{color:#c62f2f}
 .st-small.on{background:#ffe1dc;border-color:#f1b2a8;color:#b2443a}
+.st-tag.warn{background:#fff0c2;color:#9a6a00}
+.st-alert{font-size:11px;font-weight:700;color:#9a4a00;background:#fff0d6;border:1px solid #f3d29a;border-radius:11px;padding:8px 10px;margin:6px 0}
