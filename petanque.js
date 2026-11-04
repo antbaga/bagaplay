@@ -119,20 +119,19 @@ export function petanque(c){
  const baseAngle=()=>state.jack?Math.atan2(state.jack.x-P.CIRCLE.x,state.jack.z-P.CIRCLE.z):0;
  for(const b of throwBox.querySelectorAll('[data-loft]'))b.onclick=e=>{e.stopPropagation();loft=+b.dataset.loft;refreshHud()};
  hand.addEventListener('pointerdown',e=>{if(!canThrow()||c.isPaused())return;e.stopPropagation();e.preventDefault();sfx?.wake();hand.setPointerCapture?.(e.pointerId);topLock=false;lastTouch=0;
-  flick={x0:e.clientX,y0:e.clientY,pts:[[e.clientX,e.clientY,e.timeStamp]],lock:null};angle=baseAngle();hand.classList.add('held')});
+  flick={x0:e.clientX,y0:e.clientY,pts:[[e.clientX,e.clientY,e.timeStamp]],aim:false};angle=baseAngle();hand.classList.add('held')});
  hand.addEventListener('pointermove',e=>{if(!flick)return;flick.pts.push([e.clientX,e.clientY,e.timeStamp]);if(flick.pts.length>40)flick.pts.shift();
   const dx=e.clientX-flick.x0,dy=e.clientY-flick.y0;hand.firstChild.style.transform=`translate(${dx}px,${dy}px)`;
-  // la direction se verrouille sur le début du geste (40 px vers le haut) : une dérive du doigt à la fin ne la change plus
-  if(flick.lock==null&&-dy>=40){flick.lock=Math.atan2(dx,-dy);hand.classList.add('locked')}
-  angle=clamp(baseAngle()+(flick.lock??(-dy>8?Math.atan2(dx,-dy):0))*.5,-.75,.75)});
- hand.addEventListener('pointerup',e=>{if(!flick)return;flick.pts.push([e.clientX,e.clientY,e.timeStamp]);const flick0=flick,pts=flick.pts,end=pts[pts.length-1];flick=null;hand.classList.remove('held','locked');hand.firstChild.style.transform='';
+  // la direction suit le doigt pendant tout le geste (du point de départ au doigt)
+  flick.aim=-dy>8;angle=clamp(baseAngle()+(flick.aim?Math.atan2(dx,-dy):0)*.5,-.75,.75)});
+ hand.addEventListener('pointerup',e=>{if(!flick)return;flick.pts.push([e.clientX,e.clientY,e.timeStamp]);const flick0=flick,pts=flick.pts,end=pts[pts.length-1];flick=null;hand.classList.remove('held');hand.firstChild.style.transform='';
   // vitesse sur les ~90 dernières ms, en unités du terrain (360 de large)
   let i=pts.length-1;while(i>0&&end[2]-pts[i-1][2]<90)i--;const st=pts[Math.max(0,i-1)],dt=Math.max(16,end[2]-st[2]),k=W/cv.getBoundingClientRect().width;
   const vx=(end[0]-st[0])*k/dt*1000,vy=(end[1]-st[1])*k/dt*1000,up=-vy;
-  if(up<150||end[1]>=pts[0][1]-12){banner('Lance la boule vers le haut, d’un geste vif');return}
-  const L=flick0.lock??Math.atan2(end[0]-pts[0][0],pts[0][1]-end[1]),speed=vx*Math.sin(L)+up*Math.cos(L);/* vitesse mesurée dans la direction verrouillée */
+  if(up<150||end[1]>=flick0.y0-12){banner('Lance la boule vers le haut, d’un geste vif');return}
+  const L=Math.atan2(end[0]-flick0.x0,flick0.y0-end[1]),speed=vx*Math.sin(L)+up*Math.cos(L);/* direction : du début à la fin du geste ; force : vitesse du doigt au lâcher */
   angle=clamp(baseAngle()+L*.5,-.75,.75);const power=clamp((speed-150)/2600,0,1);/* ~1600 px/s : cochonnet à 8 m ; ~2750 px/s : force maximale */lastPower=power;powerFlash=1.2;doThrow(power)});
- hand.addEventListener('pointercancel',()=>{flick=null;hand.classList.remove('held','locked');hand.firstChild.style.transform=''});
+ hand.addEventListener('pointercancel',()=>{flick=null;hand.classList.remove('held');hand.firstChild.style.transform=''});
 
  // ---- animation d'un lancer
  let anim=null;
@@ -207,7 +206,7 @@ export function petanque(c){
   const ring=[];for(let i=0;i<24;i++){const a=i/24*Math.PI*2;ring.push([P.CIRCLE.x+Math.cos(a)*.35,.005,P.CIRCLE.z+Math.sin(a)*.35])}const rs=clipPoly(ring);if(rs){g.strokeStyle='#fffaf0';g.lineWidth=1.6;g.beginPath();rs.forEach((p,i)=>i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]));g.closePath();g.stroke()}
   // ombres
   for(const o of objs){const r=(o.kind==='jack'?P.R_JACK:P.R_BALL)*VS*1.1,pts=[];for(let i=0;i<10;i++){const a=i/10*Math.PI*2;pts.push([o.x+.012+Math.cos(a)*r,.006,o.z+Math.sin(a)*r])}const s=clipPoly(pts);if(s)fillPts(s,`rgba(70,55,30,${o.y>0?.16:.3})`)}
-  if(canThrow()&&!anim&&!topLock&&flick?.lock!=null)drawAim();
+  if(canThrow()&&!anim&&!topLock&&flick?.aim)drawAim();
   // objets pleins triés par profondeur
   const items=[];
   for(const f of scene.solids){if(f.tree&&Math.hypot(cam.x-f.tree[0],cam.z-f.tree[1])<3.5)continue;if((cam.x-f.c[0])*f.n[0]+(cam.y-f.c[1])*f.n[1]+(cam.z-f.c[2])*f.n[2]<=0)continue;const d=toView(...f.c)[2];if(d<1.6)continue;/* la caméra traverse un arbre : on ne dessine pas ce qui la touche */const s=clipPoly(f.pts);if(s)items.push({d,s,fill:f.fill,st:'rgba(60,45,30,.16)'})}

@@ -25,7 +25,9 @@ function chart(vals,{line=false,color='#5aa36a',neg='#d9534f',fmt=v=>String(Math
  box.append(s,leg);return box}
 
 export function bagastore(c){
- let S=(!c.fresh&&E.load(savedRun(KEY)))||null,isNew=!S;if(!S)S=E.starter(E.withDirt(E.newGame()));let R=E.runtime();
+ const saved=!c.fresh&&savedRun(KEY);let S=(saved&&E.load(saved))||null,isNew=!S;if(!S)S=E.starter(E.withDirt(E.newGame()));
+ // on reprend exactement où on en était : clients, voitures, camion, employés, heure
+ let R=(!isNew&&E.restore(S,saved))||E.runtime();
  // ---- éléments
  const wrap=el('div','st-wrap');c.board.append(wrap);
  const cv=el('canvas','st-gl'),ov=el('canvas','st-ov');wrap.append(cv,ov);const g2=ov.getContext('2d');
@@ -157,7 +159,7 @@ export function bagastore(c){
   const nb=sheet.querySelector('.st-body');if(nb&&key===panelKey)nb.scrollTop=top;panelKey=key}
  function pBuild(){const body=head('Construire · '+eur(S.cash),D.TABS,buildTab,v=>buildTab=v);const grid=el('div','st-cards');body.append(grid);
   if(buildTab==='murs'){for(const t of D.TOOLS){const b=card(t.name,t.price?eur(t.price)+(t.id==='wall'?' / m':''):'');b.onclick=()=>{sfx('click');startTool(t.id)};grid.append(b)}return}
-  if(buildTab==='parking'){for(const [id,name,price,sub] of [['walk','Trottoir',E.GROUND_COST[3],'Chemin des piétons'],['asphalt','Goudron',E.GROUND_COST[1],'Parking, aire du camion'],['road','Route',E.GROUND_COST[2],'Voitures et camions']]){const b=card(name,eur(price)+' / m²',sub);b.onclick=()=>{sfx('click');startTool(id)};grid.append(b)}}
+  if(buildTab==='parking'){for(const [id,name,price,sub] of [['walk','Trottoir',E.GROUND_COST[3],'Chemin des piétons'],['asphalt','Goudron',E.GROUND_COST[1],'Sol des places, piétons'],['road','Route',E.GROUND_COST[2],'Voitures et camions (3 de large)']]){const b=card(name,eur(price)+' / m²',sub);b.onclick=()=>{sfx('click');startTool(id)};grid.append(b)}}
   if(buildTab==='agrandir'){const b=card('Agrandir le magasin',eur(D.EXTEND.perM2)+' / m²','Sol et murs compris');b.onclick=()=>{sfx('click');startTool('extend')};grid.append(b);
    body.append(el('p','st-note',`Surface : ${E.area(S)} m² · vente ${E.salesArea(S)} m²`));return}
   for(const d of D.ITEMS.filter(i=>i.tab===buildTab)){const sub=d.kind==='spot'?'+ clients en voiture':d.kind==='bus'?'Un bus amène des clients':d.kind==='corral'?'Caddies : paniers plus gros':d.kind==='sale'||d.kind==='counter'||d.kind==='reserve'?`${d.cap} articles`:d.attract?'+ attractif':d.security?'− vols':d.clean?'− saleté':'';
@@ -246,8 +248,12 @@ export function bagastore(c){
   if(e.t==='month'){pending=e;hold=true;openPanel('report');sfx('month');save()}}}
 
  // ---- sauvegarde
- function save(){try{if(!S.over)saveRun(KEY,E.serialize(S))}catch{}}
- c.listen(document,'visibilitychange',()=>{if(document.hidden)save()});c.listen(window,'pagehide',save);
+ function save(){try{if(!S.over)saveRun(KEY,E.serialize(S,R))}catch{}}
+ // écouteurs directs : l'appli se met en pause en passant en arrière-plan, la sauvegarde doit se faire quand même
+ const onHide=()=>{if(document.hidden)save()};document.addEventListener('visibilitychange',onHide);window.addEventListener('pagehide',save);
+ // panneaux ouverts : les chiffres suivent la partie en temps réel (sauf pendant un appui, pour ne pas manquer le bouton)
+ const LIVE=new Set(['stock','money','team','item','build']);let liveT=0,press=false;
+ let scrolled=0;sheet.addEventListener('pointerdown',()=>{press=true});sheet.addEventListener('scroll',()=>{scrolled=performance.now()},true);const unpress=()=>{press=false};window.addEventListener('pointerup',unpress);window.addEventListener('pointercancel',unpress);
 
  // ---- rendu
  function resize(){const w=wrap.clientWidth,h=wrap.clientHeight,dpr=Math.min(2,window.devicePixelRatio||1);if(!w||!h)return;
@@ -284,7 +290,8 @@ export function bagastore(c){
  return {
   update(dt){if(!hold&&!S.over){const total=dt*D.SPEEDS[speedIdx],n=Math.ceil(total/.05);for(let k=0;k<n;k++)E.step(S,R,total/n);handleEvents()}
    draw(dt);hudUpdate();if((hintT+=dt)>2&&!mode){hintT=0;const p=E.problems(S);c.hint(p[0]||'')}
+   if(panel&&LIVE.has(panel)&&!press&&!hold&&(liveT+=dt)>.5&&performance.now()-scrolled>600){liveT=0;renderPanel()}
    if((saveT+=dt)>20){saveT=0;save()}},
   key(k){if(k==='Escape'){if(mode)stopMode();else closePanel()}if(k==='r'&&mode?.kind==='item'){mode.r=(mode.r+1)%4;updatePlace()}},
-  destroy(){save()}}
+  destroy(){save();document.removeEventListener('visibilitychange',onHide);window.removeEventListener('pagehide',save);window.removeEventListener('pointerup',unpress);window.removeEventListener('pointercancel',unpress)}}
 }

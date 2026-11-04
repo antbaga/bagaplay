@@ -166,18 +166,18 @@ function cart(B,x,z,ang,units,id){const c=Math.cos(ang),sn=Math.sin(ang),P=(lx,l
  const [hx,hz]=P(0,.0);B.obox(hx,.95,hz,.24,.02,.02,ang,C.red);
  const n=Math.min(8,Math.ceil(units/2));for(let k=0;k<n;k++){const [px,pz]=P(-.12+(k%3)*.12,.2+Math.floor(k/3)*.14),col=[C.red,C.yellow,C.green,C.blue,C.orange][(id+k)%5];B.obox(px,.86+((k*5)%3)*.02,pz,.05,.06,.05,ang+k,col)}}
 function car(B,x,z,ang,col){const c=Math.cos(ang),sn=Math.sin(ang),P=(lx,lz)=>[x+lx*c+lz*sn,z-lx*sn+lz*c];
- B.obox(x,.42,z,.85,.27,2,ang,col,mix(col,[1,1,1],.15));const [cx,cz]=P(0,-.2);B.obox(cx,.92,cz,.75,.24,1.15,ang,C.glass,col);B.obox(cx,1.17,cz,.74,.02,1.1,ang,col);
- for(const [lx,lz] of [[-.82,1.25],[.82,1.25],[-.82,-1.25],[.82,-1.25]]){const [wx,wz]=P(lx,lz);B.obox(wx,.3,wz,.1,.3,.3,ang,rgb('#25262a'))}
- for(const lx of [-.55,.55]){const [hx,hz]=P(lx,2.01);B.obox(hx,.5,hz,.16,.07,.02,ang,rgb('#fff6c8'));const [tx,tz]=P(lx,-2.01);B.obox(tx,.5,tz,.16,.06,.02,ang,C.red)}}
+ B.obox(x,.42,z,.68,.27,2,ang,col,mix(col,[1,1,1],.15));const [cx,cz]=P(0,-.2);B.obox(cx,.92,cz,.6,.24,1.15,ang,C.glass,col);B.obox(cx,1.17,cz,.59,.02,1.1,ang,col);
+ for(const [lx,lz] of [[-.66,1.25],[.66,1.25],[-.66,-1.25],[.66,-1.25]]){const [wx,wz]=P(lx,lz);B.obox(wx,.3,wz,.1,.3,.3,ang,rgb('#25262a'))}
+ for(const lx of [-.44,.44]){const [hx,hz]=P(lx,2.01);B.obox(hx,.5,hz,.16,.07,.02,ang,rgb('#fff6c8'));const [tx,tz]=P(lx,-2.01);B.obox(tx,.5,tz,.16,.06,.02,ang,C.red)}}
 function bus(B,x,z,ang){const c=Math.cos(ang),sn=Math.sin(ang),P=(lx,lz)=>[x+lx*c+lz*sn,z-lx*sn+lz*c],body=rgb('#f2c230');
- B.obox(x,1.55,z,1.25,1.25,5.5,ang,body,C.white);B.obox(x,1.95,z,1.27,.4,5.3,ang,C.glass);
- for(const lz of [-3.6,3.4]){for(const lx of [-1.15,1.15]){const [wx,wz]=P(lx,lz);B.obox(wx,.4,wz,.12,.4,.45,ang,rgb('#25262a'))}}
- const [fx,fz]=P(0,5.51);B.obox(fx,1.9,fz,1.1,.55,.02,ang,C.glass);const [sx,sz]=P(0,5.52);B.obox(sx,2.65,sz,.9,.15,.02,ang,rgb('#2f6f45'))}
+ B.obox(x,1.55,z,1,1.25,5.5,ang,body,C.white);B.obox(x,1.95,z,1.02,.4,5.3,ang,C.glass);
+ for(const lz of [-3.6,3.4]){for(const lx of [-.92,.92]){const [wx,wz]=P(lx,lz);B.obox(wx,.4,wz,.12,.4,.45,ang,rgb('#25262a'))}}
+ const [fx,fz]=P(0,5.51);B.obox(fx,1.9,fz,.88,.55,.02,ang,C.glass);const [sx,sz]=P(0,5.52);B.obox(sx,2.65,sz,.75,.15,.02,ang,rgb('#2f6f45'))}
 function truck(B,x,z,ang,open){const c=Math.cos(ang),sn=Math.sin(ang),P=(lx,lz)=>[x+lx*c+lz*sn,z-lx*sn+lz*c];
- const [bx,bz]=P(0,-1.2);B.obox(bx,1.75,bz,1.15,1.3,3,ang,C.white,rgb('#ececec'));const [sx,sz]=P(0,-1.2);B.obox(sx,1.5,sz,1.17,.18,2.9,ang,rgb('#3f7a4f'));
- const [cx,cz]=P(0,2.45);B.obox(cx,1.2,cz,1.05,.8,.75,ang,rgb('#3f7a4f'),rgb('#4f8f5f'));const [wx,wz]=P(0,3.21);B.obox(wx,1.45,wz,.9,.35,.02,ang,C.glass);
- for(const lz of [-3.2,-1.2,2.4])for(const lx of [-1,1]){const [px,pz]=P(lx,lz);B.obox(px,.4,pz,.13,.4,.42,ang,rgb('#25262a'))}
- if(open){for(const k of [-1,1]){const [dx,dz]=P(k*1.6,-4.35);B.obox(dx,1.75,dz,.04,1.25,.55,ang+k*Math.PI/2*.0,rgb('#dcdcdc'))}const [ix,iz]=P(0,-3.9);B.obox(ix,1.75,iz,1.05,1.15,.3,ang,rgb('#6b5a48'))}
+ const [bx,bz]=P(0,-1.2);B.obox(bx,1.75,bz,.95,1.3,3,ang,C.white,rgb('#ececec'));const [sx,sz]=P(0,-1.2);B.obox(sx,1.5,sz,.97,.18,2.9,ang,rgb('#3f7a4f'));
+ const [cx,cz]=P(0,2.45);B.obox(cx,1.2,cz,.88,.8,.75,ang,rgb('#3f7a4f'),rgb('#4f8f5f'));const [wx,wz]=P(0,3.21);B.obox(wx,1.45,wz,.76,.35,.02,ang,C.glass);
+ for(const lz of [-3.2,-1.2,2.4])for(const lx of [-.82,.82]){const [px,pz]=P(lx,lz);B.obox(px,.4,pz,.13,.4,.42,ang,rgb('#25262a'))}
+ if(open){for(const k of [-1,1]){const [dx,dz]=P(k*1.4,-4.35);B.obox(dx,1.75,dz,.04,1.25,.55,ang+k*Math.PI/2*.0,rgb('#dcdcdc'))}const [ix,iz]=P(0,-3.9);B.obox(ix,1.75,iz,.88,1.15,.3,ang,rgb('#6b5a48'))}
  else{const [rx,rz]=P(0,-4.21);B.obox(rx,1.75,rz,1.1,1.25,.02,ang,rgb('#dcdcdc'))}}
 export function buildAgents(B,S,R,v,time){B.reset();B.setYaw(v.yaw);
  if(R.truck)truck(B,R.truck.x,R.truck.z,R.truck.ang,R.truck.st==='unload');
