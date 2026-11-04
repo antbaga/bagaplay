@@ -25,7 +25,7 @@ function chart(vals,{line=false,color='#5aa36a',neg='#d9534f',fmt=v=>String(Math
  box.append(s,leg);return box}
 
 export function bagastore(c){
- let S=(!c.fresh&&E.load(savedRun(KEY)))||null,isNew=!S;if(!S)S=E.withDirt(E.newGame());let R=E.runtime();
+ let S=(!c.fresh&&E.load(savedRun(KEY)))||null,isNew=!S;if(!S)S=E.starter(E.withDirt(E.newGame()));let R=E.runtime();
  // ---- éléments
  const wrap=el('div','st-wrap');c.board.append(wrap);
  const cv=el('canvas','st-gl'),ov=el('canvas','st-ov');wrap.append(cv,ov);const g2=ov.getContext('2d');
@@ -176,7 +176,7 @@ export function bagastore(c){
  function stockList(body){const bud=el('div','st-budget');
   bud.append(el('span',null,'Budget / jour'),btn('−',()=>{S.budget=Math.max(0,S.budget-250);renderPanel()}),el('b',null,eur(S.budget)),btn('+',()=>{S.budget+=250;renderPanel()}));body.append(bud);
   body.append(row(btn('Livraison express +15 %',()=>{const r=E.express(S,S.budget,R);if(typeof r==='string'){msg(r);sfx('error')}else{toast('Camion en route : '+eur(r.cost));sfx('truck');save()}renderPanel()},'st-small wide'),
-   btn('% par défaut',()=>{S.alloc=E.defaultAlloc();renderPanel()},'st-small wide')));
+   btn('% par défaut',()=>{S.alloc=E.allocFor(S);renderPanel()},'st-small wide')));
   const tot=D.CATS.reduce((t,k)=>t+(S.alloc[k.id]||0),0)||1,pop=E.popularity(S),alerts=E.stockAlerts(S),TAG={hot:['Populaire','hot'],cold:['Impopulaire','cold'],empty:['Vide','empty'],low:['Stock bas','empty'],short:['Achat insuffisant','warn']};
   {const nl=Object.values(alerts).filter(v=>v==='low').length,ns=Object.values(alerts).filter(v=>v==='short').length;if(nl||ns)body.append(el('p','st-alert',(nl?`⚠️ Stock bas sur ${nl} rayon${nl>1?'s':''}. `:'')+(ns?`Achats trop faibles pour ${ns} rayon${ns>1?'s':''} : augmente leur % ou le budget.`:'')))}
   const tbl=el('div','st-cats');tbl.append(row(el('span','st-h','Rayon'),el('span','st-h','Achat'),el('span','st-h','Marge'),el('span','st-h','Rayon / réserve')));
@@ -229,9 +229,9 @@ export function bagastore(c){
  function pReport(){const r=pending;if(!r){closePanel();return}const m=r.report;const body=head(r.over?'Faillite':'Bilan du mois '+m.month);
   const t=el('div','st-lines');for(const [k,v] of [['Clients',String(m.customers)],['Satisfaction',m.avgSat==null?'—':Math.round(m.avgSat)+' / 100'],['Chiffre d’affaires',eur(m.rev)],['Achats',eur(-m.buy)],['Salaires',eur(-m.salaries)],['Électricité',eur(-m.elec)],['Crédit',eur(-m.loan)],['Agios',eur(-m.interest)],['Publicité',eur(-m.ads)],['Résultat',eur(m.result)],['Travaux',eur(-m.build)],['Trésorerie',eur(m.cash)]]){if(v===eur(-0)||v==='−0 €')continue;const d=el('div',k==='Résultat'?'st-total '+(m.result<0?'neg':'pos'):'');d.append(el('span',null,k),el('b',null,v));t.append(d)}
   body.append(t);
-  body.append(btn(r.over?'Nouvelle partie':'Continuer',()=>{if(r.over){clearRun(KEY);S=E.withDirt(E.newGame());R=E.runtime();staticKey='';isNew=true;home()}pending=null;hold=false;closePanel();if(isNew){isNew=false;openPanel('welcome');hold=true}},'primary'))}
+  body.append(btn(r.over?'Nouvelle partie':'Continuer',()=>{if(r.over){clearRun(KEY);S=E.starter(E.withDirt(E.newGame()));R=E.runtime();staticKey='';isNew=true;home()}pending=null;hold=false;closePanel();if(isNew){isNew=false;openPanel('welcome');hold=true}},'primary'))}
  function pWelcome(){const body=head('Bienvenue dans ton magasin !');
-  for(const t of ['Construis rayons, frigos et caisses. Le sol gris est la réserve : racks, chambres froides et quai de livraison.','Embauche ton équipe, règle ton budget d’achat et tes marges.','Ouvre le magasin ! Fin de mois : salaires, électricité et crédit.'])body.append(el('p','st-step-txt',t));
+  for(const t of ['Tu as déjà des rayons d’épicerie remplis, deux caisses, une réserve et un quai. Ajoute frais, surgelés et rayons à la coupe pour attirer plus de clients.','Embauche ton équipe, règle ton budget d’achat et tes marges.','Ouvre le magasin ! Fin de mois : salaires, électricité et crédit.'])body.append(el('p','st-step-txt',t));
   body.append(btn('C’est parti',()=>{hold=false;closePanel()},'primary'))}
 
  // ---- messages

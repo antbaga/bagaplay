@@ -38,6 +38,22 @@ function genTrees(S){const o=[],used=new Set();let s=11;const r=()=>(s=(s*16807)
   used.add(i);o.push([x,y,+(.7+r()*.6).toFixed(2)])}return o}
 export function treeAt(S,x,y){return (S.trees||[]).findIndex(t=>t[0]===x&&t[1]===y)}
 export function clearTrees(S,cellsIdx){const set=new Set(cellsIdx);const n=(S.trees||[]).length;S.trees=(S.trees||[]).filter(t=>!set.has(idx(t[0],t[1])));return n-S.trees.length}
+// magasin de départ : trottoirs, accès camion, quai, racks, rayons d'épicerie et caisses (sans frais ni coupe)
+export function starter(S){const g=S.ground,G=(x,y,t)=>{if(inLot(x,y)&&!inside(S,x,y)&&!isMainRoad(x,y))g[idx(x,y)]=t};
+ for(let y=16;y<H-3;y++)G(18,y,2);for(let x=17;x<=23;x++)G(x,16,2);
+ for(let y=9;y<=17;y++)for(let x=19;x<=24;x++)G(x,y,1);
+ for(let x=19;x<=41;x++)G(x,S.fy+1,3);for(let y=S.fy+2;y<=S.fy+5;y++)for(let x=S.ent;x<=S.ent+1;x++)G(x,y,3);
+ S.trees=(S.trees||[]).filter(t=>!g[idx(t[0],t[1])]);dirty(S);
+ const P=(t,x,y,r,cat)=>{const why=canPlace(S,t,x,y,r);if(why)throw new Error('starter '+t+' '+x+','+y+': '+why);S.items.push({id:S.nid++,t,x,y,r,cat:cat||null,stock:0});dirty(S)};
+ P('dock',20,18,0);for(const x of [24,26,30,32])P('rack',x,18,0);
+ const am=['epicerie','boissons','sucre','epicerie','petitdej','hygiene','boissons','epicerie','sucre','alcool','entretien','petitdej'];let k=0;
+ for(const [y,r] of [[26,2],[27,0]])for(const x of [21,23,25,32,34,36])P('shelf',x,y,r,am[k++]);
+ for(const x of [25,32])P('checkout',x,36,0);
+ for(const it of S.items)if(def(it.t).kind==='sale'){it.stock=def(it.t).cap;S.reserve[it.cat]+=150}
+ S.alloc=allocFor(S);S.cash=D.START.starterCash;return S}
+// % d'achat par défaut : seulement les rayons présents dans le magasin
+export function allocFor(S){const o=new Set();for(const it of S.items)if(it.cat)o.add(it.cat);if(!o.size)return defaultAlloc();
+ const w={};for(const c of D.CATS)w[c.id]=o.has(c.id)?c.demand*c.cost:0;return defaultAlloc(w)}
 function defaultParking(S){for(const x of [20,22,24,26,32,34,36,38]){if(!canPlace(S,'spot',x,S.fy+2,0))S.items.push({id:S.nid++,t:'spot',x,y:S.fy+2,r:0,cat:null,stock:0});dirty(S)}}
 // répartition du budget d'achat en valeur : demande × prix d'achat (total 100 %)
 export function defaultAlloc(weights){const w={};let t=0;for(const c of D.CATS){w[c.id]=weights?weights[c.id]||0:c.demand*c.cost;t+=w[c.id]}

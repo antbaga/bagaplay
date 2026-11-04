@@ -84,7 +84,7 @@ function chooseDifficulty(id){dialog('Difficulté','','Jouer',()=>{difficulty=+d
 const RESUME={bagastore:()=>savedRun('bagastore'),sudoku:savedSudoku,binero:()=>savedRun('binero'),crossword:()=>savedRun('crossword'),arrowword:()=>savedRun('arrowword')};
 function resumeGame(id){const run=RESUME[id]?.();if(!run)return;difficulty=run.level??1;launch(id,false,{resume:true})}
 document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-filter]').forEach(x=>x.classList.toggle('active',x===b));renderCards(b.dataset.filter)});
-const VERSION='2.5.0';
+const VERSION='2.6.0';
 function setVolume(kind,v){vol[kind]=Math.max(0,Math.min(1,v));saved.vol=vol;persist();if(kind==='music'){setMusicVolume(vol.music);sound=vol.music>0;if(!paused)music(sound)}}
 function updateSound(){$('#footer-version').textContent=`BagaPlay ${VERSION} · Sans pub, sans compte.`}
 // Réglages : son, langue, version.
