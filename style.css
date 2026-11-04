@@ -315,7 +315,15 @@ body:has(.install-banner) footer{padding-bottom:120px}
 .st-cn{display:flex;flex-direction:column;min-width:0}.st-cn b{font-size:11px}.st-cn small{font-size:9px;color:var(--muted)}
 .st-step{display:flex;align-items:center;gap:3px}.st-step b{font-size:11px;min-width:30px;text-align:center}.st-step .st-small{padding:4px 7px;min-width:24px}
 .st-step.high b{color:#b2443a}.st-step.low b{color:#3f7fcf}
-.st-stk{font-size:10px;text-align:right;color:var(--muted)}.st-stk.warn{color:#c62f2f;font-weight:800}
+.st-stk{font-size:10px;text-align:right;color:var(--muted);display:flex;flex-direction:column;align-items:flex-end}.st-stk small{font-size:9px;font-weight:800}
+.st-stk.missing small,.st-stk.missing>span{color:#c62f2f;font-weight:800}.st-stk.short small{color:#9a6a00}.st-stk.over small{color:#4f6a9a}.st-stk.ok small{color:#2f8a45}
+.st-plan{background:#fff;border:1px solid #e6dccb;border-radius:13px;padding:9px 11px;margin:6px 0 8px;display:flex;flex-direction:column;gap:5px}
+.st-plan-h{font-size:12px}.st-pl{margin:0;font-size:11px;line-height:1.35;display:flex;gap:6px;align-items:baseline}.st-pl i{flex:0 0 8px;height:8px;border-radius:50%;transform:translateY(1px)}
+.st-pl span{font-weight:800;white-space:nowrap}.st-pl em{font-style:normal;color:var(--muted)}
+.st-pl.miss i{background:#d9534f}.st-pl.short i{background:#e0a23a}.st-pl.over i{background:#6b86b8}.st-pl.want i{background:#8a6cc9}.st-pl.ok{color:#2f8a45;font-weight:700}
+.st-plan-row{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px;font-weight:700}
+.st-cats .st-off{opacity:.5}
+.st-plan .st-small.on{background:#2f8a45;color:#fff}
 .st-lines>div{display:flex;justify-content:space-between;font-size:12px;padding:4px 2px;border-bottom:1px dashed #e8e2d2}.st-lines .st-sep{border:0;padding-top:10px;color:var(--muted);font-size:10px;font-weight:700}
 .st-lines .st-total{font-size:14px;border-top:2px solid var(--ink);border-bottom:0}.st-lines .neg{color:#b2443a}.st-lines .pos{color:#2f8a45}
 .st-sub{display:block;font-size:12px;margin:12px 2px 4px}

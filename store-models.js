@@ -1,7 +1,7 @@
 // BagaStore : modèles 3D (pavés colorés, style maquette) du terrain, du magasin, des meubles et des personnages.
 import * as D from './store-data.js';
 import * as E from './store-engine.js';
-const W=D.LOT_W,H=D.LOT_H;
+const W=D.LOT_W,H=D.LOT_H,RY=D.ROAD.y,RE=D.ROAD.y+D.ROAD.h;
 const rgb=h=>[parseInt(h.slice(1,3),16)/255,parseInt(h.slice(3,5),16)/255,parseInt(h.slice(5,7),16)/255];
 const mix=(a,b,t)=>[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t];
 const C={grass:rgb('#8cc56b'),grass2:rgb('#7fb862'),asphalt:rgb('#6c7078'),road:rgb('#4d5058'),line:rgb('#f4f1e6'),walk:rgb('#d8d4c8'),
@@ -13,15 +13,21 @@ const C={grass:rgb('#8cc56b'),grass2:rgb('#7fb862'),asphalt:rgb('#6c7078'),road:
 export const COLORS=C;
 
 // ---------------------------------------------------------------- terrain, sol, murs
-const trees=(()=>{const o=[];let s=7;const r=()=>(s=(s*16807)%2147483647)/2147483647;for(let k=0;k<70;k++)o.push([r()*(W+16)-8,r()*(H+10)-12,.7+r()*.6]);return o})();
+// arbres décoratifs hors du terrain (pas sur la route principale prolongée)
+const trees=(()=>{const o=[];let s=7;const r=()=>(s=(s*16807)%2147483647)/2147483647;for(let k=0;k<400&&o.length<110;k++){const x=r()*(W+40)-20,z=r()*(H+40)-20;if(x>-1.5&&x<W+1.5&&z>-1.5&&z<H+1.5)continue;if(z>RY-2&&z<RE+2)continue;o.push([x,z,.7+r()*.6])}return o})();
 export function buildStatic(B,S,v){const b=S.b,L=E.layout(S);B.reset();B.setYaw(v.yaw);
  // herbe, parking, route
- B.tile(-30,-30,W+30,H+30,-.02,C.grass);
- // sol : goudron, routes (route principale prolongée hors du terrain), marquages
- B.tile(-30,H-3,0,H,0,C.road);B.tile(W,H-3,W+30,H,0,C.road);for(let x=-30;x<W+30;x+=3)B.tile(x,H-1.58,x+1.6,H-1.42,.006,C.line);
+ // hors du terrain : herbe plus sombre (on ne construit pas) ; le terrain constructible est l'herbe claire
+ B.tile(-40,-40,W+40,H+40,-.03,mix(C.grass2,[.35,.45,.3],.35));B.tile(0,0,W,H,-.02,C.grass);
+ // sol : goudron, routes (route principale prolongée hors du terrain), marquages : ligne continue au milieu, tirets dans chaque sens
+ for(const [a,b] of [[-40,0],[W,W+40]]){B.tile(a,RY,b,RE,0,C.road);B.tile(a,RY-1,b,RY,0,C.walk);B.tile(a,RE,b,RE+1,0,C.walk)}
+ {const m=(RY+RE)/2;for(const d of [-.12,.12])B.tile(-40,m+d-.04,W+40,m+d+.04,.006,C.yellow);
+  for(let x=-39;x<W+40;x+=3)for(const z of [RY+1.5,RE-1.5])B.tile(x,z-.06,x+1.4,z+.06,.006,C.line)}
  const G=S.ground||[],gr=(x,y)=>x>=0&&y>=0&&x<W&&y<H?G[E.idx(x,y)]:0;
- for(let y=0;y<H;y++)for(let x=0;x<W;x++){const g=gr(x,y);if(!g||E.inside(S,x,y))continue;B.tile(x,y,x+1,y+1,.001,g===2?C.road:g===3?((x+y)&1?C.walk:mix(C.walk,C.white,.25)):C.asphalt);
-  if(g===2&&y<H-3){const e=.07,lc=mix(C.road,C.line,.75);if(!gr(x,y-1))B.tile(x,y,x+1,y+e,.004,lc);if(!gr(x,y+1))B.tile(x,y+1-e,x+1,y+1,.004,lc);if(!gr(x-1,y))B.tile(x,y,x+e,y+1,.004,lc);if(!gr(x+1,y))B.tile(x+1-e,y,x+1,y+1,.004,lc)}}
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++){const g=gr(x,y);if(!g||E.inside(S,x,y))continue;B.tile(x,y,x+1,y+1,.001,g===2||g===4?C.road:g===3?((x+y)&1?C.walk:mix(C.walk,C.white,.25)):C.asphalt);
+  // passage piéton : bandes blanches dans le sens de la route
+  if(g===4){B.tile(x,y,x+1,y+1,.007,C.road);const vert=gr(x,y-1)===4||gr(x,y+1)===4;if(vert)B.tile(x+.08,y+.22,x+.92,y+.78,.008,C.line);else B.tile(x+.22,y+.08,x+.78,y+.92,.008,C.line);continue}
+  if(g===2&&!E.isMainRoad(x,y)){const e=.07,lc=mix(C.road,C.line,.75);if(!gr(x,y-1))B.tile(x,y,x+1,y+e,.004,lc);if(!gr(x,y+1))B.tile(x,y+1-e,x+1,y+1,.004,lc);if(!gr(x-1,y))B.tile(x,y,x+e,y+1,.004,lc);if(!gr(x+1,y))B.tile(x+1-e,y,x+1,y+1,.004,lc)}}
  const ins=(x,y)=>E.inside(S,x,y);
  for(const [x,y,s] of S.trees||[])tree(B,x+.5,y+.5,s);
  for(const [x,z,s] of trees)if(x<-1||x>W+1||z<-1)tree(B,x,z,s);
@@ -124,29 +130,67 @@ export function item(B,S,it,v){const F=frame(it),d=F.d,w=d.w,dd=d.d,fill=d.cap?M
 }
 
 // ---------------------------------------------------------------- personnages
-// ang : direction du regard (0 = vers +z). phase : pas de marche. carry : 'carton' | 'basket' | 'mop'
-export function person(B,x,z,ang,col,phase=0,carry=null,sit=1,scan=false,bob=0){const k0=col.scale||1,s=Math.sin(phase)*.18,c=Math.cos(ang),sn=Math.sin(ang),off=(lx,lz)=>[x+lx*c+lz*sn,z-lx*sn+lz*c];
- const leg=.8*sit*k0,shoe=rgb('#3a3634'),hair=col.hair||C.skinH,st=col.style||0;
- for(const k of [-1,1]){const sw=k*s*.5,[lx,lz]=off(k*.09,sw);B.obox(lx,leg/2+.04,lz,.065,leg/2-.04,.07,ang,col.pants);const [fx,fz]=off(k*.09,sw+.04);B.obox(fx,.04,fz,.07,.04,.11,ang,shoe)}
- const ty=leg+.27*k0+bob,tw=.18*(st===1||st===3?.92:1);
- B.obox(x,ty,z,tw,.27*k0,.11,ang,col.shirt,mix(col.shirt,[1,1,1],.15));B.obox(x,ty-.25*k0,z,tw+.005,.03,.115,ang,mix(col.pants,[0,0,0],.25));
- if(col.apron){const [ax,az]=off(0,.115);B.obox(ax,ty-.05,az,.15,.3,.01,ang,col.apron)}
- for(const k of [-1,1]){if(carry==='push'){const [lx,lz]=off(k*.19,.2);B.obox(lx,ty+.02,lz,.05,.06,.2,ang,col.shirt);const [hx,hz]=off(k*.19,.42);B.obox(hx,ty+.02,hz,.045,.045,.045,ang,col.skin)}
-  else if(scan&&k===1){const z2=.14+Math.sin(phase)*.06,[lx,lz]=off(.22,z2);B.obox(lx,ty+.05,lz,.05,.06,.18,ang,col.shirt);const [hx,hz]=off(.22,z2+.2);B.obox(hx,ty+.05,hz,.045,.045,.045,ang,col.skin)}
-  else{const sw=-k*s*.4,[ax,az]=off(k*(tw+.05),sw);B.obox(ax,ty+.02,az,.05,.23*k0,.06,ang,col.shirt);const [hx,hz]=off(k*(tw+.05),sw*1.3);B.obox(hx,ty-.23*k0,hz,.045,.045,.045,ang,col.skin)}}
- B.obox(x,ty+.3*k0,z,.05,.04,.05,ang,col.skin);const hy=ty+.43*k0;B.obox(x,hy,z,.12,.13,.12,ang,col.skin);
- for(const ex of [-.05,.05]){const [ix,iz]=off(ex,.121);B.obox(ix,hy+.02,iz,.018,.022,.005,ang,C.dark)}
- const [mx,mz]=off(0,.121);B.obox(mx,hy-.06,mz,.035,.008,.004,ang,mix(col.skin,[.5,.1,.1],.5));
- B.obox(x,hy+.15,z,.13,.035,.13,ang,hair);const [kx,kz]=off(0,-.05);B.obox(kx,hy+.04,kz,.13,.1,.085,ang,hair);
- if(st===1){const [lx,lz]=off(0,-.1);B.obox(lx,hy-.12,lz,.12,.18,.04,ang,hair)}
- if(st===2){const [lx,lz]=off(0,-.14);B.obox(lx,hy+.12,lz,.06,.06,.05,ang,hair)}
- if(st===3){const [lx,lz]=off(0,-.13);B.obox(lx,hy-.02,lz,.04,.12,.04,ang,hair)}
- if(st===4){B.obox(x,hy+.18,z,.135,.05,.135,ang,col.shirt);const [px,pz]=off(0,.17);B.obox(px,hy+.14,pz,.12,.012,.07,ang,col.shirt)}
- const [fx,fz]=off(0,.3);
- if(carry==='carton')B.obox(fx,ty+.05,fz,.2,.16,.14,ang,C.carton,C.cartonT);
- if(carry==='pallet'){const [px,pz]=off(0,.75);B.obox(px,.07,pz,.42,.07,.42,ang,C.wood,C.woodD);B.obox(px,.42,pz,.38,.28,.38,ang,C.carton,C.cartonT);B.obox(px,.72,pz,.3,.03,.3,ang,mix(C.cartonT,C.white,.3));const [hx,hz]=off(0,.28);B.obox(hx,.55,hz,.03,.45,.03,ang,C.red);B.obox(hx,.95,hz,.14,.03,.03,ang,C.dark)}
- if(carry==='basket'){const [bx2,bz2]=off(.26,.05);B.obox(bx2,ty-.14,bz2,.13,.07,.09,ang,C.red);B.obox(bx2,ty-.04,bz2,.13,.01,.01,ang,C.red)}
- if(carry==='mop'){const sw=Math.sin(phase)*.2,[mx2,mz2]=off(.28+sw,.32);B.obox(mx2,.55,mz2,.02,.55,.02,ang,C.woodD);B.obox(mx2,.04,mz2,.14,.04,.06,ang,rgb('#4aa3c8'))}}
+// ang : direction du regard (0 = vers +z). phase : cycle de marche (radians). carry : 'carton' | 'basket' | 'mop' | 'push' | 'pallet'
+// ex : {amp : amplitude de marche 0..1, look : rotation de la tête, reach : bras tendu vers un rayon 0..1, t : temps (respiration, clignement), id}
+const SHOES=[rgb('#3a3634'),rgb('#f2efe8'),rgb('#7a4a2e'),rgb('#2f4f7a'),rgb('#c94a3e')];
+export function person(B,x,z,ang,col,phase=0,carry=null,sit=1,scan=false,bob=0,ex={}){
+ const k0=col.scale||1,c=Math.cos(ang),sn=Math.sin(ang),off=(lx,lz)=>[x+lx*c+lz*sn,z-lx*sn+lz*c],id=ex.id||0,t=ex.t||0;
+ const amp=ex.amp??(phase?1:0),hair=col.hair||C.skinH,st=col.style||0,outfit=col.outfit??0,old=hair[0]>.6&&hair[1]>.6&&hair[2]>.6;
+ const shoe=col.shoe||SHOES[id%SHOES.length],L=.78*sit*k0,hip=L+.05;
+ // jambes : cuisse, tibia, pied ; le pied qui avance se lève
+ for(const k of [-1,1]){const p2=phase+(k>0?0:Math.PI),sw=Math.sin(p2)*amp,lift=Math.max(0,Math.cos(p2))*amp*.07,lx=k*.085;
+  const legC=outfit===1||outfit===2?col.skin:col.pants;
+  {const [a,b]=off(lx,sw*.09);B.obox(a,hip-L*.27,b,.068,L*.27,.075,ang,outfit===2?col.pants:legC)}
+  {const [a,b]=off(lx,sw*.2-lift*.4);B.obox(a,L*.25+.06+lift,b,.058,L*.24,.065,ang,legC)}
+  {const [a,b]=off(lx,sw*.22+.045);B.obox(a,.04+lift*.8,b,.07,.04,.12,ang,shoe)}}
+ // bassin, jupe ou short
+ const lean=amp*.035+(old?.03:0),tw=.18*(st===1||st===3?.93:1)*(k0>1.04?1.06:1);
+ B.obox(x,hip,z,tw-.01,.07,.1,ang,col.pants);
+ if(outfit===1){const [a,b]=off(0,.0);B.obox(a,hip-.16,b,tw+.03,.14,.13,ang,col.pants,mix(col.pants,[1,1,1],.1))}
+ // buste (respiration), léger penché en marchant
+ const br=1+Math.sin(t*2.1+id)*.012*(1-amp),cy=hip+.07+.25*k0*br+bob;
+ {const [a,b]=off(0,lean*.5);B.obox(a,hip+.12,b,tw,.09,.105,ang,col.shirt)}
+ {const [a,b]=off(0,lean);B.obox(a,cy+.04,b,tw+.01,.17*k0*br,.115,ang,col.shirt,mix(col.shirt,[1,1,1],.15))}
+ if(outfit===3){for(const k of [-1,1]){const [a,b]=off(k*(tw-.035),lean+.06);B.obox(a,cy-.02,b,.045,.24*k0,.07,ang,mix(col.pants,col.shirt,.35))}}
+ if(col.apron){const [a,b]=off(0,lean+.118);B.obox(a,cy-.06,b,.15,.3,.01,ang,col.apron)}
+ const sh=cy+.17*k0;// épaules
+ // bras : haut du bras, avant-bras, main ; balancement opposé aux jambes, ou pose selon ce qu'on porte
+ for(const k of [-1,1]){const ax=k*(tw+.055),sw=-Math.sin(phase+(k>0?0:Math.PI))*amp;let u=sw*.09,f=sw*.17+.03,fy=0,hold=0;
+  if(carry==='push'||carry==='carton'||carry==='pallet'){u=.1;f=.3;fy=.12;hold=1}
+  else if(carry==='mop'){u=.08;f=.22+Math.sin(phase)*.08*k;fy=.1;hold=1}
+  else if(carry==='basket'&&k===1){u=sw*.03;f=.04}
+  if(scan&&k===1){u=.08;f=.2+Math.sin(phase)*.07;fy=.14}
+  if(ex.reach&&k===1){u=.12*ex.reach;f=.34*ex.reach+.03;fy=.32*ex.reach}
+  {const [a,b]=off(ax,lean+u*.5);B.obox(a,sh-.13,b,.05,.13*k0,.06,ang,outfit===3?mix(col.pants,col.shirt,.35):col.shirt)}
+  {const [a,b]=off(ax*(hold?.92:1),lean+f*.75);B.obox(a,sh-.33+fy*.6,b,.044,.11*k0,.05,ang,(hold||fy>.1)&&!col.long?col.skin:col.shirt)}
+  {const [a,b]=off(ax*(hold?.88:1),lean+f*1.05);B.obox(a,sh-.45+fy*1.1,b,.042,.045,.045,ang,col.skin)}}
+ // cou et tête (regarde autour, cligne des yeux)
+ const ha=ang+(ex.look||0),hc=Math.cos(ha),hs=Math.sin(ha),hoff=(lx,lz)=>[x+(lean*1.3)*sn+lx*hc+lz*hs,z+(lean*1.3)*c-lx*hs+lz*hc];
+ {const [a,b]=hoff(0,0);B.obox(a,sh+.05,b,.05,.05,.05,ang,col.skin)}
+ const hy=sh+.2*k0;{const [a,b]=hoff(0,0);B.obox(a,hy,b,.125,.135,.125,ha,col.skin)}
+ const blink=((t*.37+id*.13)%1)<.04;
+ for(const e of [-.05,.05]){const [a,b]=hoff(e,.126);B.obox(a,hy+.025,b,.024,blink?.004:.026,.004,ha,C.white);const [p,q]=hoff(e,.129);if(!blink)B.obox(p,hy+.02,q,.013,.016,.004,ha,C.dark);
+  const [bx,bz]=hoff(e,.128);B.obox(bx,hy+.068,bz,.03,.008,.004,ha,mix(hair,[0,0,0],.2))}
+ {const [a,b]=hoff(0,.135);B.obox(a,hy-.015,b,.018,.025,.014,ha,mix(col.skin,[.55,.3,.25],.25))}
+ {const [a,b]=hoff(0,.127);B.obox(a,hy-.065,b,.036,.008,.004,ha,mix(col.skin,[.5,.1,.1],.5))}
+ if(id%5===2){const [a,b]=hoff(0,.133);B.obox(a,hy+.025,b,.105,.006,.003,ha,C.dark)}
+ if(id%7===3&&st!==1&&st!==3&&!col.apron){const [a,b]=hoff(0,.105);B.obox(a,hy-.085,b,.115,.045,.03,ha,hair)}
+ // cheveux
+ {const [a,b]=hoff(0,0);B.obox(a,hy+.15,b,.132,.035,.132,ha,hair)}{const [a,b]=hoff(0,-.05);B.obox(a,hy+.04,b,.132,.1,.085,ha,hair)}
+ if(st===1){const [a,b]=hoff(0,-.1);B.obox(a,hy-.12,b,.12,.18,.04,ha,hair)}
+ if(st===2){const [a,b]=hoff(0,-.14);B.obox(a,hy+.12,b,.06,.06,.05,ha,hair)}
+ if(st===3){const [a,b]=hoff(0,-.13);B.obox(a,hy-.02,b,.04,.12,.04,ha,hair)}
+ if(st===4){{const [a,b]=hoff(0,0);B.obox(a,hy+.18,b,.137,.05,.137,ha,col.shirt)}const [a,b]=hoff(0,.17);B.obox(a,hy+.14,b,.12,.012,.07,ha,col.shirt)}
+ // objets portés
+ const [fx,fz]=off(0,lean+.33);
+ if(carry==='carton')B.obox(fx,sh-.32,fz,.2,.16,.14,ang,C.carton,C.cartonT);
+ if(carry==='pallet'){const [px,pz]=off(0,.75);B.obox(px,.07,pz,.42,.07,.42,ang,C.wood,C.woodD);B.obox(px,.42,pz,.38,.28,.38,ang,C.carton,C.cartonT);B.obox(px,.72,pz,.3,.03,.3,ang,mix(C.cartonT,C.white,.3));const [hx,hz]=off(0,.3);B.obox(hx,.55,hz,.03,.45,.03,ang,C.red);B.obox(hx,.95,hz,.14,.03,.03,ang,C.dark)}
+ if(carry==='basket'){const [bx2,bz2]=off(tw+.08,lean+.07);B.obox(bx2,sh-.6,bz2,.13,.07,.09,ang,C.red);B.obox(bx2,sh-.5,bz2,.13,.01,.01,ang,C.red)}
+ if(carry==='mop'){const sw=Math.sin(phase)*.2,[mx2,mz2]=off(.1+sw,.42);B.obox(mx2,.55,mz2,.02,.55,.02,ang,C.woodD);B.obox(mx2,.04,mz2,.14,.04,.06,ang,rgb('#4aa3c8'))}}
+// cycle de marche lié à la distance parcourue (les pieds ne glissent pas), amplitude lissée à l'arrêt
+const gait=new Map();
+function walk(a,x,z,dt){let g=gait.get(a.id);if(!g){g={x,z,ph:a.id,amp:0};gait.set(a.id,g)}const d=Math.hypot(x-g.x,z-g.z);g.x=x;g.z=z;
+ if(d<1.5)g.ph+=d*5.4;g.amp+=((d>.002?1:0)-g.amp)*Math.min(1,dt*8);return g}
 const STAFF_COL={rayon:{shirt:C.orange,pants:C.dark,skin:rgb('#e9bf98'),hair:rgb('#3b2a20')},menage:{shirt:rgb('#4db08a'),pants:rgb('#2f5f4d'),skin:rgb('#a87452'),hair:rgb('#1e1a18')}};
 // places de la file d'attente : tout droit devant la caisse tant que c'est libre, sinon les cases libres voisines
 function queueSlots(S,it,n){const L=E.layout(S),[dx,dy]=E.DIRS[it.r],f=E.front(it)[0],out=[],used=new Set(),W2=D.LOT_W;let cx=f[0],cy=f[1],step=.7;
@@ -189,17 +233,21 @@ export function buildAgents(B,S,R,v,time){B.reset();B.setYaw(v.yaw);
  // personnel à son poste (caisse, comptoir) : animé
  const paying=new Set(R.agents.filter(a=>a.st==='pay').map(a=>a.item));
  for(const it of S.items){const k=D.ITEM[it.t].kind;if((k!=='checkout'&&k!=='counter')||!E.manned(S,it))continue;const F=frame(it);
-  if(k==='checkout'){const [x,z]=F.m(1.75,.3);shadow(B,x,z,.22);person(B,x,z,F.ang+(paying.has(it.id)?Math.sin(time*7)*.5:0),{shirt:rgb('#3f7fcf'),pants:C.dark,skin:rgb('#f0c8a0'),hair:C.skinH},paying.has(it.id)?time*10:0,null,.9,true)}
+  if(k==='checkout'){const [x,z]=F.m(1.75,.3);shadow(B,x,z,.22);person(B,x,z,F.ang+(paying.has(it.id)?Math.sin(time*7)*.5:0),{shirt:rgb('#3f7fcf'),pants:C.dark,skin:rgb('#f0c8a0'),hair:C.skinH,style:it.id%5},paying.has(it.id)?time*10:0,null,.9,paying.has(it.id),0,{amp:0,t:time,id:it.id,look:paying.has(it.id)?0:Math.sin(time*.5+it.id)*.5})}
   else{const base={butcher:rgb('#c2433f'),fish:rgb('#3f78b8'),cheese:rgb('#e8b93c'),bakery:rgb('#a46a3f')}[it.t],sway=Math.sin(time*1.3+it.id)*.6;const [x,z]=F.m(1.5+sway,.85);shadow(B,x,z);
-   person(B,x,z,F.ang+Math.sin(time*.9+it.id)*.3,{shirt:C.white,pants:C.dark,skin:rgb('#f0c8a0'),hair:C.white,apron:base},Math.abs(Math.cos(time*1.3+it.id))>.3?time*6:0)}}
+   person(B,x,z,F.ang+Math.sin(time*.9+it.id)*.3,{shirt:C.white,pants:C.dark,skin:rgb('#f0c8a0'),hair:C.skinH,style:4,apron:base},time*4,null,1,false,0,{amp:Math.min(1,Math.abs(Math.cos(time*1.3+it.id))*1.5),t:time,id:it.id,reach:Math.max(0,Math.sin(time*2.1+it.id))*.6})}}
  for(const a of R.agents){let x=a.x,z=a.y,ang=a.dir||0;
   if(a.k==='c'&&(a.st==='queue'||a.st==='pay')){const it=S.items.find(o=>o.id===a.item),k=E.queueIndex(R,a);if(it&&k>=0&&a.nx<0){const sl=queueSlots(S,it,k+1)[k];if(sl){x=sl[0];z=sl[1];ang=sl[2]}}}
   else if(a.k==='c'){const o=a.id*2654435761>>>0;x+=((o%7)-3)*.05;z+=(((o>>3)%7)-3)*.05}
-  const moving=a.nx>=0,ph=moving?time*9+a.id:0,bob=moving?Math.abs(Math.sin(time*9+a.id))*.03:0;
+  const g=walk(a,x,z,v.dt||.016),ph=g.ph,amp=g.amp,bob=Math.abs(Math.sin(ph))*.035*amp;
+  // au rayon : face au meuble, bras tendu ; à l'arrêt : regarde autour de soi
+  let reach=0,look=amp<.3?Math.sin(time*.55+a.id*1.7)*.55*(1-amp):0;
+  if(a.st==='pick'||a.st==='put'||a.st==='take'){const it=S.items.find(o=>o.id===(a.st==='pick'?a.item:a.task?.f));if(it){const F=frame(it),[cx2,cz2]=F.m(F.d.w/2,F.d.d/2);ang=Math.atan2(cx2-x,cz2-z)}reach=.55+Math.sin(time*5+a.id)*.4;look=0}
   shadow(B,x,z);
-  if(a.k==='c'){if(a.hasCart){const c=Math.cos(ang),sn=Math.sin(ang);cart(B,x+sn*.3,z+c*.3,ang,a.basket.units,a.id)}
-   person(B,x,z,ang,{shirt:a.shirt,pants:a.pants,skin:a.skin,hair:a.hair||C.skinH,style:a.style,scale:a.scale},a.st==='waitBus'?0:ph,a.hasCart?'push':a.basket.units?'basket':null,1,false,bob)}
-  else{const work=a.st==='clean'||a.st==='take'||a.st==='put';person(B,x,z,ang+(a.st==='clean'?Math.sin(time*6)*.35:0),STAFF_COL[a.role],work?time*8:ph,a.role==='menage'?'mop':a.carry?.pallet?'pallet':a.carry||a.st==='put'?'carton':null,a.st==='put'||a.st==='take'?.92:1,false,bob)}}}
+  if(a.k==='c'){if(a.hasCart){const c=Math.cos(ang),sn=Math.sin(ang);cart(B,x+sn*.3,z+c*.3,ang,a.basket.units,a.id)}const h=a.id*2654435761>>>0;
+   person(B,x,z,ang,{shirt:a.shirt,pants:a.pants,skin:a.skin,hair:a.hair||C.skinH,style:a.style,scale:a.scale,outfit:h%5===4?0:h%5,long:h%3===0},ph,a.hasCart?'push':a.basket.units?'basket':null,1,false,bob,{amp,look,reach,t:time,id:a.id})}
+  else{const work=a.st==='clean';person(B,x,z,ang+(work?Math.sin(time*6)*.35:0),STAFF_COL[a.role],work?time*8:ph,a.role==='menage'?'mop':a.carry?.pallet?'pallet':a.carry?'carton':null,1,false,bob,{amp:work?.4:amp,look,reach:a.carry?.pallet?0:reach,t:time,id:a.id})}}
+ if(gait.size>400){const ids=new Set(R.agents.map(a=>a.id));for(const k of gait.keys())if(!ids.has(k))gait.delete(k)}}
 
 // ---------------------------------------------------------------- aperçu de placement
 export function buildAccess(B,cells,v){B.reset();B.setYaw(v.yaw);for(const [x,y] of cells||[]){B.tile(x+.06,y+.06,x+.94,y+.94,.025,rgb('#f7c948'));B.tile(x+.2,y+.2,x+.8,y+.8,.03,rgb('#fff4cf'))}}
