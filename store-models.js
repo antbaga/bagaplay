@@ -30,6 +30,10 @@ export function buildStatic(B,S,v){const b=S.b,L=E.layout(S);B.reset();B.setYaw(
   // cédez le passage : dents de requin blanches le long de la ligne
   if(g===5){const hor=gr(x-1,y)===5||gr(x+1,y)===5;for(const k of [.25,.75]){const a=hor?[x+k-.18,y+.35]:[x+.35,y+k-.18],b2=hor?[x+k+.18,y+.35]:[x+.35,y+k+.18],c2=hor?[x+k,y+.72]:[x+.72,y+k];
     B.quad([a[0],.008,a[1]],[b2[0],.008,b2[1]],[c2[0],.008,c2[1]],[c2[0],.008,c2[1]],C.line)}continue}
+  // sens unique : une flèche blanche toutes les 4 cases, sur la voie du milieu
+  {const ow=(u,v)=>S.oneway&&u>=0&&v>=0&&u<W&&v<H?S.oneway[E.idx(u,v)]:-1,o=ow(x,y);
+   if(g===2&&o>=0){const [dx,dy]=E.DIRS[o],px=-dy,py=dx;if(ow(x+px,y+py)===o&&ow(x-px,y-py)===o&&(dx?x:y)%4===0){const cx=x+.5,cz=y+.5,P=(a,l)=>[cx+dx*a+px*l,.008,cz+dy*a+py*l];
+    B.quad(P(-.38,-.07),P(.08,-.07),P(.08,.07),P(-.38,.07),C.line);B.tri(P(.08,-.22),P(.45,0),P(.08,.22),C.line)}}}
   if(g===2&&!E.isMainRoad(x,y)){const e=.07,lc=mix(C.road,C.line,.75);if(!gr(x,y-1))B.tile(x,y,x+1,y+e,.004,lc);if(!gr(x,y+1))B.tile(x,y+1-e,x+1,y+1,.004,lc);if(!gr(x-1,y))B.tile(x,y,x+e,y+1,.004,lc);if(!gr(x+1,y))B.tile(x+1-e,y,x+1,y+1,.004,lc)}}
  const ins=(x,y)=>E.inside(S,x,y);
  for(const [x,y,s] of S.trees||[])tree(B,x+.5,y+.5,s);

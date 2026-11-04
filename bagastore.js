@@ -78,7 +78,7 @@ export function bagastore(c){
 
  // ---- toucher : glisser = déplacer la vue, pincer = zoom, toucher = action
  const pts=new Map();let pinch=null,drag=null;
- const DRAW=new Set(['wall','zoneR','zoneS','extend','asphalt','road','walk','cross','yield']);const GT={asphalt:1,road:2,walk:3,cross:4,yield:5};
+ const DRAW=new Set(['wall','zoneR','zoneS','extend','asphalt','road','walk','cross','yield','oneway']);const GT={asphalt:1,road:2,walk:3,cross:4,yield:5,oneway:6};
  const cellAt=(px,py)=>{const [gx,gz]=ground(cam,px,py);return [Math.floor(gx),Math.floor(gz)]};
  c.listen(cv,'pointerdown',e=>{cv.setPointerCapture?.(e.pointerId);pts.set(e.pointerId,{x:e.offsetX,y:e.offsetY,x0:e.offsetX,y0:e.offsetY,t:performance.now()});
   if(pts.size===2){const [a,b]=[...pts.values()];pinch={d:Math.hypot(a.x-b.x,a.y-b.y),z:cam.zoom,mx:(a.x+b.x)/2,my:(a.y+b.y)/2};if(drag?.draw&&mode){mode.a=mode.b=null;updatePlace()}drag={moved:true}}
@@ -107,7 +107,7 @@ export function bagastore(c){
   const L=E.layout(S),id=E.inLot(x,y)?L.occ[E.idx(x,y)]:0;sel=id||null;if(sel){sfx('click');openPanel('item')}else if(panel==='item')closePanel()}
 
  // ---- placement : aperçu, petite bulle ✕ / ✓ au-dessus de l'objet
- const TOOL_NAMES={extend:'Agrandir',asphalt:'Goudron',road:'Route',walk:'Trottoir',cross:'Passage piéton',yield:'Cédez le passage'},TOOL_HINT={yield:'Trace la ligne en travers de la voie : les voitures qui y arrivent laissent passer les autres.',cross:'Glisse le doigt en travers d’une route.',extend:'Glisse le doigt pour tracer l’extension.',asphalt:'Glisse le doigt pour goudronner une zone.',walk:'Glisse le doigt pour poser un trottoir.',road:'Glisse le doigt pour tracer une route.',wall:'Glisse le doigt pour tracer le mur.',zoneR:'Glisse le doigt sur la zone.',zoneS:'Glisse le doigt sur la zone.',erase:'Touche ce que tu veux démolir.'};
+ const TOOL_NAMES={extend:'Agrandir',asphalt:'Goudron',road:'Route',walk:'Trottoir',cross:'Passage piéton',yield:'Cédez le passage',oneway:'Sens unique'},TOOL_HINT={oneway:'Glisse le doigt sur une route, dans le sens où les voitures doivent rouler.',yield:'Trace la ligne en travers de la voie : les voitures qui y arrivent laissent passer les autres.',cross:'Glisse le doigt en travers d’une route.',extend:'Glisse le doigt pour tracer l’extension.',asphalt:'Glisse le doigt pour goudronner une zone.',walk:'Glisse le doigt pour poser un trottoir.',road:'Glisse le doigt pour tracer une route.',wall:'Glisse le doigt pour tracer le mur.',zoneR:'Glisse le doigt sur la zone.',zoneS:'Glisse le doigt sur la zone.',erase:'Touche ce que tu veux démolir.'};
  function startMove(id){const it=S.items.find(o=>o.id===id);if(!it)return;mode={kind:'item',t:it.t,r:it.r,pos:[it.x,it.y],move:id};staticKey='';closePanel();bar.hidden=false;updatePlace();msg('Touche la nouvelle place.')}
  function startItem(t){mode={kind:'item',t,r:0,pos:null};closePanel();bar.hidden=false;updatePlace();msg('Touche le sol pour placer.')}
  function startTool(t){mode={kind:'tool',id:t};closePanel();bar.hidden=false;updatePlace();msg(TOOL_HINT[t]||D.TOOLS.find(o=>o.id===t)?.hint||'')}
@@ -159,7 +159,7 @@ export function bagastore(c){
   const nb=sheet.querySelector('.st-body');if(nb&&key===panelKey)nb.scrollTop=top;panelKey=key}
  function pBuild(){const body=head('Construire · '+eur(S.cash),D.TABS,buildTab,v=>buildTab=v);const grid=el('div','st-cards');body.append(grid);
   if(buildTab==='murs'){for(const t of D.TOOLS){const b=card(t.name,t.price?eur(t.price)+(t.id==='wall'?' / m':''):'');b.onclick=()=>{sfx('click');startTool(t.id)};grid.append(b)}return}
-  if(buildTab==='parking'){for(const [id,name,price,sub] of [['walk','Trottoir',E.GROUND_COST[3],'Chemin des piétons (1 de large)'],['cross','Passage piéton',E.GROUND_COST[4],'Traverser une route'],['yield','Cédez le passage',E.GROUND_COST[5],'Les voitures y laissent passer'],['asphalt','Goudron',E.GROUND_COST[1],'Sol des places, piétons'],['road','Route',E.GROUND_COST[2],'Voitures et camions (3 de large)']]){const b=card(name,eur(price)+' / m²',sub);b.onclick=()=>{sfx('click');startTool(id)};grid.append(b)}}
+  if(buildTab==='parking'){for(const [id,name,price,sub] of [['walk','Trottoir',E.GROUND_COST[3],'Chemin des piétons (1 de large)'],['cross','Passage piéton',E.GROUND_COST[4],'Traverser une route'],['yield','Cédez le passage',E.GROUND_COST[5],'Les voitures y laissent passer'],['oneway','Sens unique',E.GROUND_COST[6],'Circulation en boucle, évite les bouchons'],['asphalt','Goudron',E.GROUND_COST[1],'Sol des places, piétons'],['road','Route',E.GROUND_COST[2],'Voitures et camions (3 de large)']]){const b=card(name,eur(price)+' / m²',sub);b.onclick=()=>{sfx('click');startTool(id)};grid.append(b)}}
   if(buildTab==='agrandir'){const b=card('Agrandir le magasin',eur(D.EXTEND.perM2)+' / m²','Sol et murs compris');b.onclick=()=>{sfx('click');startTool('extend')};grid.append(b);
    body.append(el('p','st-note',`Surface : ${E.area(S)} m² · vente ${E.salesArea(S)} m²`));return}
   for(const d of D.ITEMS.filter(i=>i.tab===buildTab)){const sub=d.kind==='spot'?'+ clients en voiture':d.kind==='bus'?'Un bus amène des clients':d.kind==='corral'?'Caddies : paniers plus gros':d.kind==='sale'||d.kind==='counter'||d.kind==='reserve'?`${d.cap} articles`:d.attract?'+ attractif':d.security?'− vols':d.clean?'− saleté':'';
@@ -176,29 +176,32 @@ export function bagastore(c){
    const r=el('div','st-op '+(mood>0?'good':mood<-1?'bad':'meh'));r.append(el('span','st-op-face',mood>0?'😊':mood<-1?'😠':'😕'),el('span','st-op-txt',txt));const m=el('i');const u=el('u');u.style.width=n/max*100+'%';m.append(u);r.append(m,el('b',null,String(n)));box.append(r)}
   body.append(el('p','st-note','Ce que disent tes clients ces 7 derniers jours.'),box)}
  function stockList(body){const bud=el('div','st-budget'),step=v=>v<2000?50:250;
-  bud.append(el('span',null,'Budget / jour'),btn('−',()=>{S.budget=Math.max(0,S.budget-step(S.budget-1));renderPanel()}),el('b',null,eur(S.budget)),btn('+',()=>{S.budget+=step(S.budget);renderPanel()}));body.append(bud);
+  bud.append(el('span',null,'Budget max / jour'),btn('−',()=>{S.budget=Math.max(0,S.budget-step(S.budget-1));renderPanel()}),el('b',null,eur(S.budget)),btn('+',()=>{S.budget+=step(S.budget);renderPanel()}));body.append(bud);
+  const fl=el('div','st-budget'),fill=Math.round((S.fill??1)*100);fl.append(el('span',null,'Remplir la réserve à'),btn('−',()=>{S.fill=Math.max(.5,Math.round(((S.fill??1)-.1)*10)/10);renderPanel()}),el('b',null,fill+' %'),btn('+',()=>{S.fill=Math.min(1,Math.round(((S.fill??1)+.1)*10)/10);renderPanel()}));body.append(fl);
+  body.append(el('p','st-note','Chaque livraison complète seulement ce qui manque, pour que la réserve suive tes % (en volume). Le budget est un plafond.'));
   // ce qui manque, ce qui est en trop, quoi commander
   const plan=E.stockPlan(S),dj=v=>v>=99?'—':v.toFixed(1).replace('.',',')+' j',rows=Object.entries(plan.rows),pick=st=>rows.filter(([,r])=>r.st===st).sort((a,b)=>a[1].days-b[1].days);
   const box=el('div','st-plan');box.append(el('b','st-plan-h','À commander'));
   const line=(cls,label,list)=>{if(!list.length)return;const r=el('p','st-pl '+cls);r.append(el('i'),el('span',null,label+' '),el('em',null,list.join(', ')));box.append(r)};
   line('miss','Il en manque :',pick('missing').map(([c,r])=>`${cn(c)} (${dj(r.days)})`));
-  line('short','Achat trop faible :',pick('short').map(([c,r])=>`${cn(c)} (achète ${Math.round(r.ordered)}, vend ${Math.round(r.perDay)} / j)`));
+  line('short','Part trop faible :',pick('short').map(([c,r])=>`${cn(c)} (objectif ${Math.round(r.target)}, vend ${Math.round(r.perDay)} / j)`));
   line('over','Trop de stock :',pick('over').reverse().map(([c,r])=>`${cn(c)} (${dj(r.days)})`));
   line('want','Demandés, pas en rayon :',plan.wanted.slice(0,5).map(([c,n])=>`${cn(c)} (${n} clients)`));
   if(box.children.length===1)box.append(el('p','st-pl ok','Stock équilibré : rien à signaler.'));
   if(plan.est)box.append(el('p','st-note','Estimation avant la première journée d’ouverture.'));
+  if(plan.low){const r=el('p','st-pl miss');r.append(el('i'),el('span',null,'Budget trop bas : les livraisons ne remplissent pas tout.'));box.append(r)}
   const adv=el('div','st-plan-row');adv.append(el('span',null,`Budget conseillé : ${eur(plan.budget)} / jour`));
   adv.append(btn('Appliquer',()=>{const why=E.applyPlan(S);if(why){msg(why);sfx('error')}else{sfx('click');toast('Budget et % mis à jour')}renderPanel()},'st-small'+(Math.abs(plan.budget-S.budget)>S.budget*.1?' on':'')));box.append(adv);
   if(plan.rushCost)box.append(btn(`🚚 Commander le manquant · ${eur(plan.rushCost)}`,()=>{const r=E.express(S,0,R,plan.rush);if(typeof r==='string'){msg(r);sfx('error')}else{toast('Camion en route : '+eur(r.cost));sfx('truck');save()}renderPanel()},'st-small wide'));
   body.append(box);
   body.append(row(btn('Livraison express +15 %',()=>{const r=E.express(S,S.budget,R);if(typeof r==='string'){msg(r);sfx('error')}else{toast('Camion en route : '+eur(r.cost));sfx('truck');save()}renderPanel()},'st-small wide'),
    btn('% par défaut',()=>{S.alloc=E.allocFor(S);renderPanel()},'st-small wide')));
-  const tot=D.CATS.reduce((t,k)=>t+(S.alloc[k.id]||0),0)||1,pop=E.popularity(S),TAG={hot:['Populaire','hot'],cold:['Impopulaire','cold'],empty:['Vide','empty'],missing:['Manque','empty'],short:['Achat faible','warn'],over:['Trop','cold']};
-  const tbl=el('div','st-cats');tbl.append(row(el('span','st-h','Rayon'),el('span','st-h','Achat'),el('span','st-h','Marge'),el('span','st-h','Stock')));
+  const tot=D.CATS.reduce((t,k)=>t+(S.alloc[k.id]||0),0)||1,pop=E.popularity(S),TAG={hot:['Populaire','hot'],cold:['Impopulaire','cold'],empty:['Vide','empty'],missing:['Manque','empty'],short:['Part faible','warn'],over:['Trop','cold']};
+  const tbl=el('div','st-cats');tbl.append(row(el('span','st-h','Rayon'),el('span','st-h','Part'),el('span','st-h','Marge'),el('span','st-h','Stock')));
   // rayons présents d'abord ; ceux qu'on ne vend pas, en grisé à la fin
   for(const k of D.CATS.filter(c=>plan.rows[c.id]).concat(D.CATS.filter(c=>!plan.rows[c.id]))){const p=pop[k.id],pl=plan.rows[k.id],name=el('span','st-cn');const nb=el('b',null,k.name);
    const tg=p.tag==='empty'?'empty':pl&&pl.st!=='ok'?pl.st:p.tag;if(tg){nb.append(el('em','st-tag '+TAG[tg][1],TAG[tg][0]))}
-   name.append(nb,el('small',null,E.price(S,k.id).toFixed(2).replace('.',',')+' €'+(pl?` · vend ${Math.round(pl.perDay)} · achète ${Math.round(pl.ordered)} / j`:'')));
+   name.append(nb,el('small',null,E.price(S,k.id).toFixed(2).replace('.',',')+' €'+(pl?` · vend ${Math.round(pl.perDay)} / j · objectif ${Math.round(pl.target)}`:'')));
    const al=el('span','st-step');al.append(btn('−',()=>{S.alloc[k.id]=Math.max(0,(S.alloc[k.id]||0)-1);renderPanel()}),el('b',null,Math.round((S.alloc[k.id]||0)/tot*100)+' %'),btn('+',()=>{S.alloc[k.id]=(S.alloc[k.id]||0)+1;renderPanel()}));
    const mg=el('span','st-step'+(S.margin[k.id]>k.ref+5?' high':S.margin[k.id]<k.ref-5?' low':''));mg.append(btn('−',()=>{S.margin[k.id]=Math.max(0,S.margin[k.id]-2);renderPanel()}),el('b',null,S.margin[k.id]+' %'),btn('+',()=>{S.margin[k.id]=Math.min(120,S.margin[k.id]+2);renderPanel()}));
    const sk=el('span','st-stk'+(pl?' '+pl.st:p.tag==='empty'?' missing':''));sk.append(el('span',null,`${p.shelf} / ${p.reserve}`));if(pl)sk.append(el('small',null,dj(pl.days)));
@@ -245,6 +248,9 @@ export function bagastore(c){
   // verdict en une phrase
   const v=el('p','st-verdict '+(st.avg>=0?'up':'down'),st.avg>=0?`Tu gagnes de l’argent : ${sg(Math.round(st.avg))} par jour en moyenne.`:`Tu perds de l’argent : ${sg(Math.round(st.avg))} par jour en moyenne.`);body.append(v);
   body.append(dayBars(st));
+  {const adv=E.advice(S),box=el('div','st-advice');box.append(el('b',null,'Conseils'));
+   if(!adv.length)box.append(el('p',null,'Rien à signaler : continue comme ça.'));
+   for(const x of adv){const r=el('p');r.append(el('i',null,x.ico),el('span',null,x.t));box.append(r)}body.append(box)}
   const g=el('div','st-tiles');
   g.append(tile('Jours rentables',`${st.good} / ${st.n}`,Math.round(st.good/st.n*100)+' %'),tile('Bénéfice total',sg(st.sum)),
    tile('Meilleur jour',sg(st.best),'jour '+st.bestDay),tile('Pire jour',sg(st.worst),'jour '+st.worstDay),
@@ -316,8 +322,12 @@ export function bagastore(c){
   if(anchor&&!pop.hidden){const [px,py]=project(M,cam,...anchor);pop.style.left=Math.max(40,Math.min(cam.w-40,px))+'px';pop.style.top=Math.max(50,Math.min(cam.h-60,py))+'px'}
   // icônes : rayons vides, bulles, encaissements
   const dpr=cv.width/cam.w;g2.setTransform(dpr,0,0,dpr,0,0);g2.clearRect(0,0,cam.w,cam.h);g2.textAlign='center';g2.textBaseline='middle';
-  for(const o of S.items){const d=D.ITEM[o.t];if(!o.cat||!d.cap||o.stock>0)continue;if(d.kind==='counter'&&!E.manned(S,o))continue;const [w,dd]=E.size(o),[px,py]=project(M,cam,o.x+w/2,d.h+.6,o.y+dd/2);
-   const s=1+Math.sin(time*5+o.id)*.08;g2.fillStyle='#e0453a';g2.beginPath();g2.arc(px,py,8*s,0,7);g2.fill();g2.fillStyle='#fff';g2.font='bold 12px sans-serif';g2.fillText('!',px,py+.5)}
+  // rayons vides ou presque : rouge = plus rien en réserve (il faut commander), orange = vide mais la réserve en a (l'équipe va remplir), jaune = presque vide
+  for(const o of S.items){const d=D.ITEM[o.t];if(!o.cat||!d.cap||d.kind==='reserve'||o.stock>=d.cap*.25)continue;if(d.kind==='counter'&&!E.manned(S,o))continue;const [w,dd]=E.size(o),[px,py]=project(M,cam,o.x+w/2,d.h+.6,o.y+dd/2);
+   const res=S.reserve[o.cat]>0,s=1+Math.sin(time*5+o.id)*.08;
+   if(o.stock>0){g2.fillStyle='#f0b429';g2.beginPath();g2.arc(px,py,4.5,0,7);g2.fill();continue}
+   const lab=res?'À remplir':'Réserve vide',col=res?'#e8892b':'#d93a30';g2.font='bold 9px sans-serif';const tw=g2.measureText(lab).width+20;
+   g2.fillStyle=col;g2.beginPath();g2.roundRect?g2.roundRect(px-tw/2,py-8*s,tw,16*s,8):g2.rect(px-tw/2,py-8,tw,16);g2.fill();g2.fillStyle='#fff';g2.fillText((res?'! ':'📦 ')+lab,px,py+.5)}
   const tk=R.truck;if(tk&&tk.st==='unload'&&tk.total>0){const [px,py]=project(M,cam,tk.x,4.4,tk.z),k=Math.min(1,tk.done/tk.total),w=64;
    g2.fillStyle='#fffaf1e6';g2.beginPath();g2.roundRect?g2.roundRect(px-w/2-4,py-13,w+8,22,7):g2.rect(px-w/2-4,py-13,w+8,22);g2.fill();g2.fillStyle='#e6e1d3';g2.fillRect(px-w/2,py+1,w,5);g2.fillStyle='#5aa36a';g2.fillRect(px-w/2,py+1,w*k,5);
    g2.fillStyle='#27453c';g2.font='bold 9px sans-serif';g2.fillText(S.staff.rayon?'Déchargement '+Math.round(k*100)+' %':'Personne pour décharger !',px,py-5)}
@@ -332,7 +342,7 @@ export function bagastore(c){
  let hintT=0;
  return {
   update(dt){if(!hold&&!S.over){const total=dt*D.SPEEDS[speedIdx],n=Math.ceil(total/.05);for(let k=0;k<n;k++)E.step(S,R,total/n);handleEvents()}
-   draw(dt);hudUpdate();if((hintT+=dt)>2&&!mode){hintT=0;const p=E.problems(S);c.hint(p[0]||'')}
+   draw(dt);hudUpdate();if((hintT+=dt)>2&&!mode){hintT=0;const p=E.problems(S);c.hint(p[0]||(S.open&&E.advice(S).find(x=>x.ico!=='📉')?.t)||'')}
    if(panel&&LIVE.has(panel)&&!press&&!hold&&(liveT+=dt)>.5&&performance.now()-scrolled>600){liveT=0;renderPanel()}
    if((saveT+=dt)>20){saveT=0;save()}},
   key(k){if(k==='Escape'){if(mode)stopMode();else closePanel()}if(k==='r'&&mode?.kind==='item'){mode.r=(mode.r+1)%4;updatePlace()}},

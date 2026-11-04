@@ -4,7 +4,7 @@
 // Terrain et bâtiment de départ (grosse supérette de 400 m², façade au sud, réserve au nord).
 // terrain : 80 × 76 m. La route principale (2 × 3 voies) traverse le terrain, on construit des deux côtés.
 export const LOT_W=80,LOT_H=76,ROAD={y:45,h:6};
-export const START={x0:20,y0:18,x1:40,y1:38,entrance:29,reserveRows:5,cash:140000,starterCash:100000,loan:420000,loanMonthly:3900,rep:50};
+export const START={x0:20,y0:18,x1:40,y1:38,entrance:29,reserveRows:5,cash:140000,starterCash:100000,loan:420000,loanMonthly:2900,rep:50};
 export const EXTEND={perM2:900,margin:2};
 export const HOURS={start:6,open:8,close:20,realSecPerHour:20};   // 6 h–8 h : livraison et mise en place avant l'ouverture       // 12 h d'ouverture = 4 min en ×1
 export const DAYS_PER_MONTH=30;
@@ -77,13 +77,13 @@ export const TOOLS=[
 
 // Employés : coût employeur mensuel (charges comprises).
 export const ROLES=[
- {id:'caissier',   name:'Caissier·ère',     salary:2700,desc:'Tient une caisse.'},
- {id:'rayon',      name:'Employé·e de rayon',salary:2600,desc:'Met en rayon depuis la réserve.'},
- {id:'menage',     name:'Agent d’entretien', salary:2400,desc:'Nettoie le magasin.'},
- {id:'boucher',    name:'Boucher·ère',      salary:3500,desc:'Tient la boucherie.',needs:'butcher'},
- {id:'poissonnier',name:'Poissonnier·ère',  salary:3400,desc:'Tient la poissonnerie.',needs:'fish'},
- {id:'fromager',   name:'Fromager·ère',     salary:3200,desc:'Tient la fromagerie.',needs:'cheese'},
- {id:'boulanger',  name:'Boulanger·ère',    salary:3300,desc:'Tient le fournil.',needs:'bakery'}
+ {id:'caissier',   name:'Caissier·ère',     salary:2400,desc:'Tient une caisse.'},
+ {id:'rayon',      name:'Employé·e de rayon',salary:2300,desc:'Met en rayon depuis la réserve.'},
+ {id:'menage',     name:'Agent d’entretien', salary:2100,desc:'Nettoie le magasin.'},
+ {id:'boucher',    name:'Boucher·ère',      salary:3200,desc:'Tient la boucherie.',needs:'butcher'},
+ {id:'poissonnier',name:'Poissonnier·ère',  salary:3100,desc:'Tient la poissonnerie.',needs:'fish'},
+ {id:'fromager',   name:'Fromager·ère',     salary:2900,desc:'Tient la fromagerie.',needs:'cheese'},
+ {id:'boulanger',  name:'Boulanger·ère',    salary:3000,desc:'Tient le fournil.',needs:'bakery'}
 ];
 export const ROLE=Object.fromEntries(ROLES.map(r=>[r.id,r]));
 

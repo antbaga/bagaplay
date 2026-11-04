@@ -206,7 +206,6 @@ export function petanque(c){
   const ring=[];for(let i=0;i<24;i++){const a=i/24*Math.PI*2;ring.push([P.CIRCLE.x+Math.cos(a)*.35,.005,P.CIRCLE.z+Math.sin(a)*.35])}const rs=clipPoly(ring);if(rs){g.strokeStyle='#fffaf0';g.lineWidth=1.6;g.beginPath();rs.forEach((p,i)=>i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]));g.closePath();g.stroke()}
   // ombres
   for(const o of objs){const r=(o.kind==='jack'?P.R_JACK:P.R_BALL)*VS*1.1,pts=[];for(let i=0;i<10;i++){const a=i/10*Math.PI*2;pts.push([o.x+.012+Math.cos(a)*r,.006,o.z+Math.sin(a)*r])}const s=clipPoly(pts);if(s)fillPts(s,`rgba(70,55,30,${o.y>0?.16:.3})`)}
-  if(canThrow()&&!anim&&!topLock&&flick?.aim)drawAim();
   // objets pleins triés par profondeur
   const items=[];
   for(const f of scene.solids){if(f.tree&&Math.hypot(cam.x-f.tree[0],cam.z-f.tree[1])<3.5)continue;if((cam.x-f.c[0])*f.n[0]+(cam.y-f.c[1])*f.n[1]+(cam.z-f.c[2])*f.n[2]<=0)continue;const d=toView(...f.c)[2];if(d<1.6)continue;/* la caméra traverse un arbre : on ne dessine pas ce qui la touche */const s=clipPoly(f.pts);if(s)items.push({d,s,fill:f.fill,st:'rgba(60,45,30,.16)'})}
@@ -226,8 +225,6 @@ export function petanque(c){
      if((px*toCam[0]+py*toCam[1]+pz*toCam[2])/tl<.05){on=false;continue}const q=proj(o.x+px*r,cy+py*r,o.z+pz*r);if(!q){on=false;continue}if(on)g.lineTo(q[0],q[1]);else{g.moveTo(q[0],q[1]);on=true}}g.stroke()}}
   g.strokeStyle='rgba(40,40,40,.35)';g.lineWidth=.6;g.beginPath();g.arc(X,Y,R,0,7);g.stroke()}
  // pendant le geste : direction au sol
- function drawAim(){const dx=Math.sin(angle),dz=Math.cos(angle),pts=[];for(let d=.4;d<=6;d+=.2)pts.push([P.CIRCLE.x+dx*d,.01,P.CIRCLE.z+dz*d]);
-  g.strokeStyle='rgba(255,250,235,.95)';g.lineWidth=2.4;g.setLineDash([6,5]);g.beginPath();let on=false;for(const p of pts){const q=proj(...p);if(!q){on=false;continue}if(on)g.lineTo(q[0],q[1]);else{g.moveTo(q[0],q[1]);on=true}}g.stroke();g.setLineDash([])}
  function drawGauge(v){const x=W-30,y0=130,h=Math.min(300,H-300);g.fillStyle='rgba(255,250,240,.85)';round(x-3,y0-3,22,h+6,11);g.fill();
   const gr=g.createLinearGradient(0,y0+h,0,y0);gr.addColorStop(0,'#86c06c');gr.addColorStop(.6,'#f3c34e');gr.addColorStop(1,'#e2603f');g.fillStyle=gr;round(x,y0+h*(1-v),16,h*v,8);g.fill();
   g.fillStyle='#5b6b50';g.font='bold 9px ui-rounded,Arial';g.textAlign='center';g.fillText('FORCE',x+8,y0+h+16)}
