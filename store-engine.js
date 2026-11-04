@@ -21,8 +21,10 @@ export function newGame(){
  for(let y=s.y0;y<s.y0+s.reserveRows;y++)for(let x=s.x0;x<s.x1;x++)S.zone[idx(x,y)]=1;
  const wy=s.y0+s.reserveRows;for(let x=s.x0;x<s.x1;x++)S.wall[idx(x,wy)]=1;
  S.wall[idx((s.x0+s.x1>>1)-1,wy)]=2;
+ defaultParking(S);
  return S;
 }
+function defaultParking(S){for(const x of [20,22,24,26,32,34,36,38]){if(!canPlace(S,'spot',x,S.fy+2,0))S.items.push({id:S.nid++,t:'spot',x,y:S.fy+2,r:0,cat:null,stock:0});dirty(S)}}
 // répartition du budget d'achat en valeur : demande × prix d'achat (total 100 %)
 export function defaultAlloc(weights){const w={};let t=0;for(const c of D.CATS){w[c.id]=weights?weights[c.id]||0:c.demand*c.cost;t+=w[c.id]}
  const o={};if(!t){for(const c of D.CATS)o[c.id]=0;return o}let sum=0;for(const c of D.CATS){o[c.id]=Math.round(w[c.id]/t*100);sum+=o[c.id]}
@@ -30,7 +32,7 @@ export function defaultAlloc(weights){const w={};let t=0;for(const c of D.CATS){
 // répartition selon les ventes (en valeur d'achat) depuis le début du mois
 export function allocFromSales(S){const w={};for(const c of D.CATS)w[c.id]=(S.sold[c.id]||0)*c.cost;return defaultAlloc(Object.values(w).some(v=>v>0)?w:null)}
 function blankMonth(){return {rev:0,cogs:0,buy:0,build:0,ads:0,loss:0,theft:0,customers:0,sat:0,salaries:0,elec:0,loan:0,interest:0}}
-function blankDay(){return {cats:{},ads:0,build:0,waitPen:0,dirtPen:0,rev:0,cogs:0,customers:0,sat:0,rupture:0,notSold:0,expensive:0,angry:0,theft:0,loss:0,buy:0,units:0}}
+function blankDay(){return {th:{},cats:{},ads:0,build:0,waitPen:0,dirtPen:0,rev:0,cogs:0,customers:0,sat:0,rupture:0,notSold:0,expensive:0,angry:0,theft:0,loss:0,buy:0,units:0}}
 
 // ---------------------------------------------------------------- géométrie
 export const inside=(S,x,y)=>x>=0&&y>=0&&x<W&&y<H&&S.built[y*W+x]===1;
@@ -87,6 +89,13 @@ function targets(S,key){
 
 // ---------------------------------------------------------------- placement
 export function canPlace(S,t,x,y,r){const d=def(t),it={t,x,y,r},L=layout(S);
+ if(d.zone===2){for(const c of cells(it)){const cx=c%W,cy=c/W|0;
+   if(!inLot(cx,cy)||inside(S,cx,cy))return 'Dehors, sur le parking.';
+   if(cy<=S.fy||cy>H-4||cx<2||cx>W-3)return 'Sur le parking seulement.';
+   if(L.occ[c])return 'Place déjà prise.';
+   if(cx>=S.ent-1&&cx<=S.ent+2&&cy<=S.fy+2)return 'Laisse l’accès à l’entrée.';
+   if(d.kind==='bus'&&cy!==H-4)return 'L’arrêt de bus se place au bord de la route.'}
+  return null}
  for(const c of cells(it)){const cx=c%W,cy=c/W|0;
   if(!inside(S,cx,cy))return 'Hors du magasin.';
   if(S.wall[c])return 'Il y a un mur.';
@@ -101,7 +110,7 @@ export function canPlace(S,t,x,y,r){const d=def(t),it={t,x,y,r},L=layout(S);
  return bad}
 // vérifie que chaque meuble reste accessible depuis l'entrée
 export function reachProblem(S){const fc=field(S,'ent','c'),fs=field(S,'ent','s');
- for(const it of S.items){const d=def(it.t);if(d.kind==='decor')continue;
+ for(const it of S.items){const d=def(it.t);if(d.kind==='decor'||d.zone===2)continue;
   const f=d.zone||d.kind==='dock'?fs:fc;if(!front(it).some(([x,y])=>inLot(x,y)&&f[idx(x,y)]>=0))return 'Cela bloquerait l’accès à un meuble.'}
  return null}
 export function place(S,t,x,y,r,cat){const why=canPlace(S,t,x,y,r);if(why)return why;const d=def(t);
@@ -113,6 +122,8 @@ export function bestCat(S,d){let best=d.cats[0],bv=-1;for(const c of d.cats){con
 export function setCat(S,id,cat){const it=S.items.find(o=>o.id===id);if(!it||!def(it.t).cats?.includes(cat)||it.cat===cat)return;S.reserve[it.cat]+=it.stock;it.stock=0;it.cat=cat}
 export function removeItem(S,id){const k=S.items.findIndex(o=>o.id===id);if(k<0)return;const it=S.items[k];
  if(it.cat&&it.stock)S.reserve[it.cat]+=it.stock;S.items.splice(k,1);S.cash+=Math.round(def(it.t).price*D.REFUND);S.month.build-=Math.round(def(it.t).price*D.REFUND);dirty(S)}
+export function canMove(S,id,x,y,r){const k=S.items.findIndex(o=>o.id===id);if(k<0)return 'Introuvable.';const it=S.items[k];S.items.splice(k,1);dirty(S);const why=canPlace(S,it.t,x,y,r);S.items.splice(k,0,it);dirty(S);return why}
+export function moveItem(S,id,x,y,r){const why=canMove(S,id,x,y,r);if(why)return why;const it=S.items.find(o=>o.id===id);Object.assign(it,{x,y,r});dirty(S);return null}
 export function rotateItem(S,id){const it=S.items.find(o=>o.id===id);if(!it)return 'Introuvable.';const k=S.items.indexOf(it);S.items.splice(k,1);dirty(S);
  const r=(it.r+1)%4,why=canPlace(S,it.t,it.x,it.y,r);S.items.splice(k,0,why?it:Object.assign(it,{r}));dirty(S);return why}
 function pay(S,v,k){S.cash-=v;S.month[k]+=v;if(S.dayStats&&k in S.dayStats)S.dayStats[k]+=v}
@@ -177,8 +188,9 @@ export function attraction(S){const sa=salesArea(S),off=offered(S),variety=off.s
  let decor=0,counters=0;for(const it of S.items){const d=def(it.t);decor+=d.attract||0;if(d.kind==='counter'&&manned(S,it))counters++}
  const decorF=Math.min(.12,decor/Math.max(1,sa)*2.2),ad=S.ads.until>=S.d?S.ads.boost:0;
  const base=60+.45*sa,repF=.45+S.rep/90;
- const n0=base*repF*(.45+.55*variety)*priceF*(1+.05*Math.min(4,counters)+decorF)*(1+ad);
- return {perDay:Math.round(n0),sa,variety:off.size,priceF,decorF,counters,ad}}
+ const spots=S.items.filter(o=>o.t==='spot').length,bus=S.items.some(o=>o.t==='busstop'),transportF=.8+Math.min(.35,spots*.025)+(bus?.12:0);
+ const n0=base*repF*(.45+.55*variety)*priceF*(1+.05*Math.min(4,counters)+decorF)*(1+ad)*transportF;
+ return {perDay:Math.round(n0),spots,bus,transportF,sa,variety:off.size,priceF,decorF,counters,ad}}
 export function security(S){let s=0;for(const it of S.items)s+=def(it.t).security||0;
  const staffOnFloor=(S.staff.rayon||0)+(S.staff.menage||0);return Math.min(.8,s+.015*staffOnFloor)}
 export function electricity(S){let p=250+1.6*area(S);for(const it of S.items)p+=def(it.t).power||0;return Math.round(p)}
@@ -198,7 +210,7 @@ export function problems(S){const p=[],has=k=>S.items.some(o=>def(o.t).kind===k)
  return p}
 
 // ---------------------------------------------------------------- exécution
-export function runtime(seed=Date.now()){return {agents:[],queues:new Map(),acc:0,nid:1,events:[],rnd:mulberry(seed),closing:false,staffDay:-1}}
+export function runtime(seed=Date.now()){return {cars:[],spotTaken:new Map(),bus:null,busT:0,busWaiting:0,agents:[],queues:new Map(),acc:0,nid:1,events:[],rnd:mulberry(seed),closing:false,staffDay:-1}}
 const ev=(R,e)=>{R.events.push(e);if(R.events.length>200)R.events.shift()};
 export function hourLabel(S){const h=Math.floor(S.hour),m=Math.floor((S.hour-h)*60/15)*15;return `${h} h ${String(m).padStart(2,'0')}`}
 export const monthOf=S=>Math.floor((S.d-1)/D.DAYS_PER_MONTH)+1,dayOfMonth=S=>(S.d-1)%D.DAYS_PER_MONTH+1;
@@ -211,19 +223,51 @@ export function step(S,R,dt){if(S.over)return;layout(S);
  if(isOpen){const h=clamp(Math.floor(S.hour-D.HOURS.open),0,11),avg=D.HOUR_CURVE.reduce((a,b)=>a+b)/12;
   R.acc+=R.perDay/12*D.HOUR_CURVE[h]/avg/D.HOURS.realSecPerHour*dt;
   while(R.acc>=1){R.acc--;spawnCustomer(S,R)}}
+ traffic(S,R,dt);
  for(const a of R.agents.slice())a.k==='c'?customer(S,R,a,dt):a.role==='rayon'?stocker(S,R,a,dt):cleaner(S,R,a,dt);
  // fermeture : on laisse finir les clients, puis la nuit passe
- if(S.hour>=D.HOURS.close){const left=R.agents.some(a=>a.k==='c');
+ if(S.hour>=D.HOURS.close){const left=R.agents.some(a=>a.k==='c'&&a.st!=='waitBus')||R.cars.some(c=>c.st!=='parked');
   if(!left||S.hour>=D.HOURS.close+.75){for(const a of R.agents.filter(a=>a.k==='c'))finishCustomer(S,R,a,true);night(S,R)}}
 }
 export function startDay(S,R){R.perDay=attraction(S).perDay}
 
-function spawnCustomer(S,R){const r=R.rnd,x=S.ent-8+Math.floor(r()*18);
- const want=[],n=3+Math.floor(Math.pow(r(),1.3)*14),tot=D.CATS.reduce((a,c)=>a+c.demand,0);
+function spawnCustomer(S,R){const r=R.rnd,T=D.TRAFFIC,stop=S.items.find(o=>o.t==='busstop'),spots=S.items.filter(o=>o.t==='spot');
+ const free=spots.filter(o=>!R.spotTaken.has(o.id)),u=r();
+ if(stop&&u<T.busShare){R.busWaiting++;return}
+ if(u<T.busShare+T.carShare){if(free.length)return spawnCar(S,R,free[Math.floor(r()*free.length)]);th(S,'noparking');if(r()<.25)return}
+ const x=S.ent-8+Math.floor(r()*18);makeCustomer(S,R,x,H-1,0)}
+export function makeCustomer(S,R,x,y,extra){const r=R.rnd;
+ const want=[],n=3+extra+Math.floor(Math.pow(r(),1.3)*14),tot=D.CATS.reduce((a,c)=>a+c.demand,0);
  for(let k=0;k<n;k++){let v=r()*tot;for(const c of D.CATS){v-=c.demand;if(v<=0){if(!want.some(w=>w.cat===c.id))want.push({cat:c.id,q:1+(r()<.35)+(r()<.1)});break}}}
- const pal=[[.85,.35,.35],[.35,.55,.85],[.95,.75,.3],[.45,.7,.45],[.7,.45,.75],[.95,.55,.3],[.3,.3,.35],[.9,.9,.85]];
- R.agents.push({id:R.nid++,k:'c',x:x+.5,y:H-.5,c:idx(x,H-1),nx:-1,st:'in',goal:'ent',want,cart:want.length>=7,basket:{units:0,value:0,cost:0,cats:{}},sat:72,t:0,wait:0,
-  shirt:pal[Math.floor(r()*pal.length)],pants:pal[Math.floor(r()*pal.length)],skin:[[.98,.84,.7],[.85,.65,.5],[.6,.42,.3],[.45,.3,.22]][Math.floor(r()*4)],retry:0,dirt:0,steps:0})}
+ const pal=[[.85,.35,.35],[.35,.55,.85],[.95,.75,.3],[.45,.7,.45],[.7,.45,.75],[.95,.55,.3],[.3,.3,.35],[.9,.9,.85],[.25,.45,.6],[.6,.3,.25]];
+ const big=want.length>=7,hasCorral=S.items.some(o=>o.t==='corral');
+ if(big&&!hasCorral){want.length=Math.min(want.length,8);th(S,'nocart')}
+ const a={id:R.nid++,k:'c',x:x+.5,y:y+.5,c:idx(x,y),nx:-1,st:big&&hasCorral?'cart':'in',goal:'ent',want,cart:big&&hasCorral,hasCart:false,basket:{units:0,value:0,cost:0,cats:{}},sat:72,t:0,wait:0,
+  shirt:pal[Math.floor(r()*pal.length)],pants:pal[Math.floor(r()*pal.length)],skin:[[.98,.84,.7],[.85,.65,.5],[.6,.42,.3],[.45,.3,.22]][Math.floor(r()*4)],
+  hair:[[.23,.16,.11],[.12,.1,.09],[.85,.69,.36],[.55,.3,.15],[.7,.7,.72]][Math.floor(r()*5)],style:Math.floor(r()*5),scale:.92+r()*.16,retry:0,dirt:0,steps:0};
+ R.agents.push(a);return a}
+// voitures : arrivent par la route, se garent, repartent quand le client revient
+function spotGeo(it){const [w,d]=size(it);return {cx:it.x+w/2,cz:it.y+d/2,exit:idx(Math.floor(it.x+w/2),Math.min(H-1,it.y+d)),vert:w<d}}
+function spawnCar(S,R,it){const g=spotGeo(it),left=R.rnd()<.5,lane=H-2.25,x0=left?-8:W+8;
+ const car={id:R.nid++,spot:it.id,x:x0,z:left?lane:H-.75,ang:left?Math.PI/2:-Math.PI/2,st:'in',exit:g.exit,cx:g.cx,cz:g.cz,col:[[.85,.2,.2],[.2,.4,.8],[.95,.95,.95],[.2,.2,.22],[.95,.75,.2],[.35,.65,.4],[.6,.6,.65]][Math.floor(R.rnd()*7)],
+  path:[[g.cx,left?lane:H-.75],[g.cx,g.cz]],i:0};
+ R.spotTaken.set(it.id,car.id);R.cars.push(car)}
+function carLeave(S,R,car){if(car.st==='out')return;car.st='out';car.i=0;const right=R.rnd()<.5;car.path=[[car.cx,H-.75+(right?-1.5:0)],[right?W+8:-8,H-.75+(right?-1.5:0)]]}
+function moveVehicle(v,speed,dt){let b=speed*dt;while(b>0&&v.i<v.path.length){const [tx,tz]=v.path[v.i],dx=tx-v.x,dz=tz-v.z,d=Math.hypot(dx,dz);if(d>.01)v.ang=Math.atan2(dx,dz);if(d<=b){v.x=tx;v.z=tz;b-=d;v.i++}else{v.x+=dx/d*b;v.z+=dz/d*b;b=0}}return v.i>=v.path.length}
+function traffic(S,R,dt){const T=D.TRAFFIC;
+ for(const car of R.cars.slice()){if(car.st==='parked')continue;const done=moveVehicle(car,car.st==='in'?T.carSpeed:T.carSpeed*1.2,dt);
+  if(done&&car.st==='in'){car.st='parked';car.ang=Math.atan2(0,-1);const ex=car.exit%W,ey=car.exit/W|0;const a=makeCustomer(S,R,ex,ey,T.carExtra);a.car=car.id;a.x=car.cx+.9;a.y=ey+.5}
+  if(done&&car.st==='out'){R.cars.splice(R.cars.indexOf(car),1);R.spotTaken.delete(car.spot)}}
+ // bus : passe toutes les demi-heures s'il y a du monde à déposer ou à prendre
+ const stop=S.items.find(o=>o.t==='busstop');R.busT+=dt/D.HOURS.realSecPerHour;
+ const waiting=R.agents.filter(a=>a.st==='waitBus');
+ if(!R.bus&&stop&&R.busT>=T.busEvery&&(R.busWaiting>0||waiting.length)){R.busT=0;const sx=stop.x+(stop.r%2?.5:1.5);R.bus={x:-14,z:H-2.25,ang:Math.PI/2,st:'in',path:[[sx,H-2.25]],i:0,t:0,stop:stop.id}}
+ const bus=R.bus;if(bus){
+  if(bus.st==='in'&&moveVehicle(bus,T.busSpeed,dt)){bus.st='stop';bus.t=3;const st2=S.items.find(o=>o.id===bus.stop);
+   if(st2){const n=Math.min(T.busMax,R.busWaiting);R.busWaiting-=n;for(let k=0;k<n;k++){const a=makeCustomer(S,R,Math.max(0,Math.min(W-1,st2.x+(k%3))),H-3,0);a.bus=true;a.x+=R.rnd()*.4-.2}
+    for(const a of waiting)R.agents.splice(R.agents.indexOf(a),1);ev(R,{t:'bus',n})}}
+  if(bus.st==='stop'){bus.t-=dt;if(bus.t<=0){bus.st='out';bus.path=[[W+14,H-2.25]];bus.i=0}}
+  if(bus.st==='out'&&moveVehicle(bus,T.busSpeed*1.2,dt))R.bus=null}}
 
 function spawnStaff(S,R){R.staffDay=S.d;R.agents=R.agents.filter(a=>a.k==='c');
  for(const it of S.items)it.inc=0;
@@ -254,41 +298,45 @@ function move(S,a,key,mode,speed,dt){const f=field(S,key,mode);let budget=speed*
 function rescue(S,a,f){const x=a.c%W,y=a.c/W|0;for(let r=1;r<5;r++)for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++){const nx=x+dx,ny=y+dy;if(inLot(nx,ny)&&f[idx(nx,ny)]>=0)return idx(nx,ny)}return -1}
 
 function customer(S,R,a,dt){const sp=D.CUSTOMER.speed;
+ if(a.st==='cart'){const co=S.items.find(o=>o.t==='corral');if(!co){a.st='in';return}const r=move(S,a,'item:'+co.id,'c',sp,dt);if(r===null){a.st='in';return}if(r){a.hasCart=true;a.st='in'}return}
  if(a.st==='in'){const r=move(S,a,'ent','c',sp,dt);if(r===null)return leaveNow(S,R,a);if(r){a.st='shop'}return}
+ if(a.st==='waitBus')return;
  if(a.st==='shop')return nextWant(S,R,a);
  if(a.st==='goto'){const r=move(S,a,'item:'+a.item,'c',sp,dt);if(r===null){a.st='shop';return}if(r){const it=S.items.find(o=>o.id===a.item);a.st='pick';a.t=it&&def(it.t).kind==='counter'?2.2:D.CUSTOMER.pick}return}
  if(a.st==='pick'){a.t-=dt;if(a.t<=0)pick(S,R,a);return}
  if(a.st==='checkout')return chooseCheckout(S,R,a);
  if(a.st==='queue'){const it=S.items.find(o=>o.id===a.item);if(!it||!usable(S,it)){unqueue(R,a);a.st='checkout';return}
-  a.wait+=dt;if(a.wait>D.CUSTOMER.patience){unqueue(R,a);a.sat-=25;bubble(R,a,'⌛');S.dayStats.angry++;returnGoods(S,a);a.st='leave';return}
+  a.wait+=dt;if(a.wait>D.CUSTOMER.patience){unqueue(R,a);a.sat-=25;bubble(R,a,'⌛');S.dayStats.angry++;th(S,'queue');returnGoods(S,a);a.st='leave';return}
   const q=R.queues.get(it.id)||[];const r=move(S,a,'item:'+it.id,'c',sp,dt);if(r&&q[0]===a){a.st='pay';a.t=(D.CUSTOMER.serviceBase+D.CUSTOMER.servicePerUnit*a.basket.units)*(it.t==='self'?D.CUSTOMER.selfFactor:1)}return}
  if(a.st==='pay'){a.t-=dt;if(a.t<=0){const it=S.items.find(o=>o.id===a.item);unqueue(R,a);payAt(S,R,a,it);a.st='leave'}return}
- if(a.st==='leave'){const r=move(S,a,'street','c',sp,dt);if(r||r===null)finishCustomer(S,R,a,false)}}
+ if(a.st==='leave'){const car=a.car&&R.cars.find(c=>c.id===a.car),stop=a.bus&&S.items.find(o=>o.t==='busstop');
+  const goal=car?'cell:'+car.exit:stop?'item:'+stop.id:'street',r=move(S,a,goal,'c',sp,dt);
+  if(r||r===null){if(stop&&r){finishCustomer(S,R,a,false,true);a.st='waitBus';a.dir=Math.PI}else finishCustomer(S,R,a,false)}}}
 function nextWant(S,R,a){
  while(a.want.length){const w=a.want[0],x=a.c%W,y=a.c/W|0;
   const all=S.items.filter(it=>sells(S,it,w.cat)),ok=all.filter(it=>it.stock>0);
-  if(!all.length){a.want.shift();a.sat-=3;S.dayStats.notSold++;continue}
-  if(!ok.length){a.want.shift();a.sat-=12;S.dayStats.rupture++;bubble(R,a,'!');continue}
+  if(!all.length){th(S,'notsold:'+w.cat);a.want.shift();a.sat-=3;S.dayStats.notSold++;continue}
+  if(!ok.length){th(S,'rupture:'+w.cat);a.want.shift();a.sat-=12;S.dayStats.rupture++;bubble(R,a,'!');continue}
   let best=ok[0],bd=1e9;for(const it of ok){const d=Math.abs(it.x-x)+Math.abs(it.y-y);if(d<bd){bd=d;best=it}}
   a.item=best.id;a.st='goto';return}
  a.st='checkout'}
 function pick(S,R,a){const w=a.want[0],it=S.items.find(o=>o.id===a.item);
- if(!it||it.stock<=0||!sells(S,it,w.cat)){if(a.retry++<1){a.st='shop';return}a.want.shift();a.sat-=12;S.dayStats.rupture++;bubble(R,a,'!');a.st='shop';return}
+ if(!it||it.stock<=0||!sells(S,it,w.cat)){if(a.retry++<1){a.st='shop';return}th(S,'rupture:'+w.cat);a.want.shift();a.sat-=12;S.dayStats.rupture++;bubble(R,a,'!');a.st='shop';return}
  const c=D.CAT[w.cat],m=S.margin[w.cat],ref=c.ref+(def(it.t).kind==='counter'?12:0);
  const p=m<=ref?1:Math.max(.05,1-(m-ref)*.022);
  if(R.rnd()<p){const u=Math.min(w.q,it.stock),pr=price(S,w.cat);it.stock-=u;a.basket.units+=u;a.basket.value+=u*pr;a.basket.cost+=u*c.cost;a.basket.cats[w.cat]=(a.basket.cats[w.cat]||0)+u;
-  if(m<ref)a.sat+=Math.min(2,(ref-m)*.15)}
- else{a.sat-=7;S.dayStats.expensive++;bubble(R,a,'€')}
+  if(m<ref)a.sat+=Math.min(2,(ref-m)*.15);if(m<ref-5&&R.rnd()<.3)th(S,'cheap:'+w.cat);if(def(it.t).kind==='counter'&&R.rnd()<.3)th(S,'counter:'+w.cat)}
+ else{a.sat-=7;S.dayStats.expensive++;th(S,'cher:'+w.cat);bubble(R,a,'€')}
  a.want.shift();a.retry=0;a.st='shop'}
 function usable(S,it){const k=def(it.t).kind;return k==='self'||(k==='checkout'&&manned(S,it))}
 function chooseCheckout(S,R,a){if(!a.basket.units){a.st='leave';return}
  const list=S.items.filter(it=>usable(S,it));
- if(!list.length){a.sat-=30;S.dayStats.angry++;bubble(R,a,'✕');returnGoods(S,a);a.st='leave';return}
+ if(!list.length){a.sat-=30;S.dayStats.angry++;th(S,'nocheckout');bubble(R,a,'✕');returnGoods(S,a);a.st='leave';return}
  const x=a.c%W,y=a.c/W|0;let best=null,bv=1e9;for(const it of list){const q=(R.queues.get(it.id)||[]).length;const v=q*4+(Math.abs(it.x-x)+Math.abs(it.y-y))/3+(it.t==='self'?2:0);if(v<bv){bv=v;best=it}}
  const q=R.queues.get(best.id)||[];q.push(a);R.queues.set(best.id,q);a.item=best.id;a.st='queue';a.wait=0}
 function unqueue(R,a){const q=R.queues.get(a.item);if(q){const k=q.indexOf(a);if(k>=0)q.splice(k,1)}}
 export const queueIndex=(R,a)=>{const q=R.queues.get(a.item);return q?q.indexOf(a):-1};
-function payAt(S,R,a,it){const b=a.basket,wp=Math.min(30,Math.max(0,a.wait-8)*1.2);a.sat-=wp;S.dayStats.waitPen+=wp;
+function payAt(S,R,a,it){const b=a.basket,wp=Math.min(30,Math.max(0,a.wait-8)*1.2);a.sat-=wp;S.dayStats.waitPen+=wp;if(wp>8)th(S,'queue');
  let theft=D.CUSTOMER.theft*(1-security(S))*(it&&it.t==='self'?2:1);let f=0,u=0;for(const c in b.cats){f+=(D.CAT[c].theft||1)*b.cats[c];u+=b.cats[c]}theft*=u?f/u:1;
  if(R.rnd()<theft){S.dayStats.theft+=b.cost;S.month.theft+=b.cost}
  else{S.cash+=b.value;S.dayStats.rev+=b.value;S.month.rev+=b.value;ev(R,{t:'pay',x:a.x,y:a.y,v:b.value})}
@@ -296,12 +344,15 @@ function payAt(S,R,a,it){const b=a.basket,wp=Math.min(30,Math.max(0,a.wait-8)*1.
  for(const c in b.cats){S.sold[c]=(S.sold[c]||0)+b.cats[c];S.dayStats.cats[c]=(S.dayStats.cats[c]||0)+b.cats[c];S.monthCat=S.monthCat||{};S.monthCat[c]=(S.monthCat[c]||0)+b.cats[c]*price(S,c)}b.paid=true}
 function returnGoods(S,a){for(const c in a.basket.cats)S.reserve[c]+=a.basket.cats[c];a.basket={units:0,value:0,cost:0,cats:{}}}
 function leaveNow(S,R,a){finishCustomer(S,R,a,false)}
-function finishCustomer(S,R,a,forced){if(forced&&a.basket.units&&!a.basket.paid){unqueue(R,a);payAt(S,R,a,null)}else unqueue(R,a);
- const dp=Math.min(22,a.dirt/Math.max(1,a.steps)*90);S.dayStats.dirtPen+=dp;const sat=clamp(a.sat-dp+decorBonus(S),0,100);
- S.dayStats.customers++;S.dayStats.sat+=sat;S.month.customers++;S.month.sat+=sat;
- const k=R.agents.indexOf(a);if(k>=0)R.agents.splice(k,1)}
+function finishCustomer(S,R,a,forced,keep){if(!a.done){a.done=true;if(forced&&a.basket.units&&!a.basket.paid){unqueue(R,a);payAt(S,R,a,null)}else unqueue(R,a);
+ const dp=Math.min(22,a.dirt/Math.max(1,a.steps)*90);S.dayStats.dirtPen+=dp;const db=decorBonus(S),sat=clamp(a.sat-dp+db,0,100);
+ if(dp>8)th(S,'dirt');if(sat>=85)th(S,'happy');if(db>5&&R.rnd()<.15)th(S,'decor');
+ S.dayStats.customers++;S.dayStats.sat+=sat;S.month.customers++;S.month.sat+=sat}
+ if(a.car){const car=R.cars.find(c=>c.id===a.car);if(car)carLeave(S,R,car)}
+ if(!keep){const k=R.agents.indexOf(a);if(k>=0)R.agents.splice(k,1)}}
 function decorBonus(S){let d=0;for(const it of S.items)d+=def(it.t).attract||0;return Math.min(8,d/Math.max(1,salesArea(S))*60)}
 function bubble(R,a,txt){ev(R,{t:'bubble',id:a.id,txt})}
+function th(S,k){const t=S.dayStats.th;t[k]=(t[k]||0)+1}
 
 // ---- employé·e de rayon
 function stocker(S,R,a,dt){const sp=D.STAFF.speed;
@@ -371,7 +422,8 @@ export function night(S,R){const ds=S.dayStats,r=R.rnd;
  if(S.history.length>60)S.history.shift();
  S.catHist=(S.catHist||[]).concat([ds.cats]).slice(-14);
  ev(R,{t:'night',day:S.last,delivered,dock:hasDock});
- S.dayStats=blankDay();S.d++;S.hour=D.HOURS.open;R.agents=[];R.queues.clear();R.acc=0;
+ S.thoughts=(S.thoughts||[]).concat([ds.th]).slice(-7);
+ S.dayStats=blankDay();S.d++;S.hour=D.HOURS.open;R.agents=[];R.queues.clear();R.acc=0;R.cars=[];R.spotTaken.clear();R.bus=null;R.busWaiting=0;R.busT=0;
  if((S.d-1)%D.DAYS_PER_MONTH===0)monthEnd(S,R);
  R.staffDay=-1}
 export function monthEnd(S,R){const m=S.month;
@@ -392,7 +444,7 @@ export function serialize(S){const o={};for(const k in S)if(!k.startsWith('_')&&
  o.level=1;o.built=pack(S.built);o.wall=pack(S.wall);o.zone=pack(S.zone);o.items=S.items.map(({inc,...it})=>it);return o}
 export function load(o){if(!o||o.v!==1)return null;const S={...o,wall:[...o.wall].map(Number),zone:[...o.zone].map(Number),items:o.items.map(it=>({...it,inc:0}))};
  if(o.built)S.built=[...o.built].map(Number);else{S.built=new Array(N).fill(0);for(let y=o.b.y0;y<o.b.y1;y++)for(let x=o.b.x0;x<o.b.x1;x++)S.built[idx(x,y)]=1}
- if(S.fy==null)S.fy=o.b.y1-1;S.monthCat=S.monthCat||{};S.catHist=S.catHist||[];bounds(S);
+ if(S.fy==null)S.fy=o.b.y1-1;S.monthCat=S.monthCat||{};S.catHist=S.catHist||[];bounds(S);if(!S.items.some(it=>def(it.t).zone===2))defaultParking(S);
  if(S.hour>D.HOURS.open)S.hour=D.HOURS.open;S.dayStats=blankDay();S.dirt=new Float32Array(N);return S}
 export function withDirt(S){S.dirt=S.dirt||new Float32Array(N);return S}
 
@@ -411,3 +463,7 @@ export function stats(S,n=7){const h=S.history.slice(-n).filter(d=>d.customers>0
  return {days:h.length,customers:sum('customers')/k,sat:h.length?h.reduce((t,d)=>t+(d.sat||0)*d.customers,0)/c:null,basket:sum('rev')/c,items:sum('units')/c,units:sum('units')/k,
   rupture:sum('rupture')/c*100,expensive:sum('expensive')/c*100,angry:sum('angry')/c*100,notSold:sum('notSold')/c*100,wait:sum('waitPen')/c,dirt:sum('dirtPen')/c,loss:sum('loss')/k,theft:sum('theft')/k,
   shelf,shelfCap,cap}}
+
+// remarques des clients (7 derniers jours + aujourd'hui), les plus fréquentes d'abord
+export function thoughts(S){const t={};for(const d of (S.thoughts||[]).concat([S.dayStats.th||{}]))for(const k in d)t[k]=(t[k]||0)+d[k];
+ return Object.entries(t).sort((a,b)=>b[1]-a[1])}

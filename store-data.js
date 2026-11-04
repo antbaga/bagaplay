@@ -55,6 +55,9 @@ export const ITEMS=[
  {id:'cold',   tab:'reserve', name:'Chambre froide',       w:3,d:3,h:2.5,price:11000,kind:'reserve',store:'frais',cap:1400,zone:1,power:450},
  {id:'frozen', tab:'reserve', name:'Chambre froide négative',w:3,d:3,h:2.5,price:13000,kind:'reserve',store:'surgele',cap:900,zone:1,power:600},
  {id:'dock',   tab:'reserve', name:'Quai de livraison',    w:3,d:2,h:0.4,price:9000, kind:'dock',zone:1},
+ {id:'spot',   tab:'parking', name:'Place de parking',     w:2,d:4,h:.05,price:800,  kind:'spot',zone:2},
+ {id:'busstop',tab:'parking', name:'Arrêt de bus',         w:3,d:1,h:2.4,price:6000, kind:'bus',zone:2},
+ {id:'corral', tab:'parking', name:'Abri à caddies',       w:2,d:1,h:1.2,price:1500, kind:'corral',zone:2,cap:15},
  {id:'plant',  tab:'deco',    name:'Plante',               w:1,d:1,h:1.2,price:90,   kind:'decor',zone:0,attract:1},
  {id:'lamp',   tab:'deco',    name:'Éclairage d’ambiance', w:1,d:1,h:2.2,price:300,  kind:'decor',zone:0,attract:2,power:12},
  {id:'bin',    tab:'deco',    name:'Poubelle',             w:1,d:1,h:0.8,price:60,   kind:'decor',zone:0,clean:1},
@@ -62,7 +65,7 @@ export const ITEMS=[
  {id:'gate',   tab:'deco',    name:'Portique antivol',     w:1,d:1,h:1.6,price:3200, kind:'decor',zone:0,security:.2,power:10}
 ];
 export const ITEM=Object.fromEntries(ITEMS.map(i=>[i.id,i]));
-export const TABS=[['rayons','Rayons'],['frais','Frais'],['coupe','À la coupe'],['caisses','Caisses'],['reserve','Réserve'],['murs','Murs'],['deco','Déco'],['agrandir','Agrandir']];
+export const TABS=[['rayons','Rayons'],['frais','Frais'],['coupe','À la coupe'],['caisses','Caisses'],['reserve','Réserve'],['parking','Parking'],['murs','Murs'],['deco','Déco'],['agrandir','Agrandir']];
 export const TOOLS=[
  {id:'wall',name:'Mur',price:WALL_COST,hint:'Touche le début puis la fin du mur.'},
  {id:'door',name:'Porte',price:DOOR_COST,hint:'Touche un mur pour y mettre une porte (employés seulement vers la réserve).'},
@@ -92,4 +95,5 @@ export const EXTRA_LOAN={amount:100000,monthly:1110};
 // Clients : affluence par heure d'ouverture (8 h → 19 h).
 export const HOUR_CURVE=[.5,.7,.9,1.1,1.4,1.2,.9,.8,.9,1.2,1.5,1.0];
 export const CUSTOMER={speed:2.6,pick:.7,serviceBase:.8,servicePerUnit:.1,selfFactor:1.5,theft:.02,patience:45};
+export const TRAFFIC={carShare:.5,busShare:.25,busEvery:.5,busMax:12,carSpeed:5,busSpeed:7,carExtra:3};
 export const STAFF={speed:2.4,carton:40,nightPerStocker:500,handle:1.2};

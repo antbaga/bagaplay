@@ -343,3 +343,7 @@ body:has(.install-banner) footer{padding-bottom:120px}
 .st-note.warn{color:#b2443a;font-weight:700}
 .st-lines .st-total.neg b{color:#b2443a}.st-lines .st-total.pos b{color:#2f8a45}
 .st-info{font-size:12px}
+.st-opinions{display:flex;flex-direction:column;gap:6px}
+.st-op{display:grid;grid-template-columns:24px 1fr 54px 24px;gap:6px;align-items:center;background:#fffaf1;border:1px solid var(--line);border-radius:12px;padding:7px 9px}
+.st-op-face{font-size:17px}.st-op-txt{font-size:11px;line-height:1.3}.st-op i{height:6px;border-radius:4px;background:#ece7da;overflow:hidden}.st-op u{display:block;height:100%}
+.st-op.good u{background:#5aa36a}.st-op.bad u{background:#d9534f}.st-op.meh u{background:#e0a23a}.st-op b{font-size:11px;text-align:right}

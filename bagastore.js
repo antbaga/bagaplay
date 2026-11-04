@@ -2,7 +2,7 @@
 import * as D from './store-data.js';
 import * as E from './store-engine.js';
 import {createRenderer,camera,viewProj,project,ground,Builder} from './store-gl.js';
-import {buildStatic,buildAgents,buildGhost,item as itemModel} from './store-models.js';
+import {buildStatic,buildAgents,buildGhost,buildAccess,item as itemModel} from './store-models.js';
 import {savedRun,saveRun,clearRun} from './runs.js';
 
 const KEY='bagastore';
@@ -37,9 +37,9 @@ export function bagastore(c){
  const ren=createRenderer(cv);
  if(!ren){wrap.append(el('p','st-nogl','La 3D (WebGL) n’est pas disponible sur cet appareil.'));return {}}
  const cam=camera();const home=()=>{cam.tx=(S.b.x0+S.b.x1)/2;cam.tz=(S.b.y0+S.b.y1)/2+2;cam.zoom=Math.max(14,Math.min(26,(S.b.x1-S.b.x0)*.8))};home();
- const Bs=new Builder(1<<17),Ba=new Builder(1<<14),Bg=new Builder(1<<12),Bsel=new Builder(1<<11);
+ const Bs=new Builder(1<<17),Ba=new Builder(1<<14),Bg=new Builder(1<<12),Bsel=new Builder(1<<11),Bac=new Builder(1<<9);
  let mode=null,sel=null,panel=null,speedIdx=0,hold=false,lastStatic=-1,staticKey='',time=0,saveT=0,floats=[],pending=null,ghostTint=[0,0,0,0],anchor=null,frameDt=.016;
- const view=()=>{const s=Math.sin(cam.yawTo),k=Math.cos(cam.yawTo);return {yaw:cam.yaw,near:{S:k>.3,N:k<-.3,E:s>.3,W:s<-.3},sel:null,zones:!!mode,dt:frameDt}};
+ const view=()=>{const s=Math.sin(cam.yawTo),k=Math.cos(cam.yawTo);return {yaw:cam.yaw,near:{S:k>.3,N:k<-.3,E:s>.3,W:s<-.3},sel:null,zones:!!mode,hide:mode?.move||null,dt:frameDt}};
 
  // ---- bruitages (synthétisés)
  const last={};
@@ -56,7 +56,8 @@ export function bagastore(c){
   if(kind==='night'){tone(523,.4,'sine',.08);tone(659,.5,'sine',.07,.15)}
   if(kind==='month'){[523,659,784,1047].forEach((f,i)=>tone(f,.35,'triangle',.1,i*.11))}
   if(kind==='truck'){noise(.7,.25,180,0,.5);tone(60,.6,'sawtooth',.04)}
-  if(kind==='coin')tone(1760,.12,'square',.04)}
+  if(kind==='coin')tone(1760,.12,'square',.04);
+  if(kind==='horn'){tone(392,.25,'square',.05);tone(392,.3,'square',.05,.3)}}
 
  // ---- boutons de caméra
  for(const [t,a,fn] of [['⟲','Tourner la vue à gauche',()=>{cam.yawTo-=Math.PI/2}],['⟳','Tourner la vue à droite',()=>{cam.yawTo+=Math.PI/2}],['+','Zoomer',()=>zoom(.8)],['−','Dézoomer',()=>zoom(1.25)],['⌂','Recentrer',home]]){
@@ -98,12 +99,13 @@ export function bagastore(c){
 
  // ---- placement : aperçu, petite bulle ✕ / ✓ au-dessus de l'objet
  const TOOL_NAMES={extend:'Agrandir'};
+ function startMove(id){const it=S.items.find(o=>o.id===id);if(!it)return;mode={kind:'item',t:it.t,r:it.r,pos:[it.x,it.y],move:id};staticKey='';closePanel();bar.hidden=false;updatePlace();msg('Touche la nouvelle place.')}
  function startItem(t){mode={kind:'item',t,r:0,pos:null};closePanel();bar.hidden=false;updatePlace();msg('Touche le sol pour placer.')}
  function startTool(t){mode={kind:'tool',id:t};closePanel();bar.hidden=false;updatePlace();msg(t==='extend'?'Touche deux coins hors du magasin.':D.TOOLS.find(o=>o.id===t).hint)}
- function stopMode(){mode=null;bar.hidden=true;pop.hidden=true;anchor=null;ren.upload('ghost',Bg.d,0);c.hint(E.problems(S)[0]||'')}
+ function stopMode(){mode=null;staticKey='';bar.hidden=true;pop.hidden=true;anchor=null;ren.upload('ghost',Bg.d,0);ren.upload('access',Bac.d,0);c.hint(E.problems(S)[0]||'')}
  function updatePlace(){bar.innerHTML='';let ok=false,why='',label='',cost=0;const g={};anchor=null;
-  if(mode.kind==='item'){const d=D.ITEM[mode.t];label=d.name;cost=d.price;
-   if(mode.pos){why=E.canPlace(S,mode.t,mode.pos[0],mode.pos[1],mode.r);ok=!why;g.item={t:mode.t,x:mode.pos[0],y:mode.pos[1],r:mode.r};const [w,dd]=mode.r%2?[d.d,d.w]:[d.w,d.d];anchor=[mode.pos[0]+w/2,d.h+1.6,mode.pos[1]+dd/2]}}
+  let access=[];if(mode.kind==='item'){const d=D.ITEM[mode.t];label=d.name;cost=mode.move?0:d.price;
+   if(mode.pos){why=mode.move?E.canMove(S,mode.move,mode.pos[0],mode.pos[1],mode.r):E.canPlace(S,mode.t,mode.pos[0],mode.pos[1],mode.r);if(d.zone!==2&&d.kind!=='decor')access=E.front({t:mode.t,x:mode.pos[0],y:mode.pos[1],r:mode.r});ok=!why;g.item={t:mode.t,x:mode.pos[0],y:mode.pos[1],r:mode.r};const [w,dd]=mode.r%2?[d.d,d.w]:[d.w,d.d];anchor=[mode.pos[0]+w/2,d.h+1.6,mode.pos[1]+dd/2]}}
   else{const t=mode.id;label=TOOL_NAMES[t]||D.TOOLS.find(o=>o.id===t).name;const b=mode.b||mode.a;
    if(t==='wall'&&mode.a){const cl=E.wallPlan(S,mode.a,b);g.cells=cl;g.h=1.3;cost=cl.length*D.WALL_COST;ok=!!mode.b&&cl.length>0;why=mode.b?(cl.length?'':'Rien à construire ici.'):'Touche la fin du mur.'}
    if((t==='zoneR'||t==='zoneS')&&mode.a){const o=[];for(let y=Math.min(mode.a[1],b[1]);y<=Math.max(mode.a[1],b[1]);y++)for(let x=Math.min(mode.a[0],b[0]);x<=Math.max(mode.a[0],b[0]);x++)if(E.inside(S,x,y))o.push([x,y]);g.cells=o;g.h=.06;ok=!!mode.b;why=mode.b?'':'Touche le coin opposé.'}
@@ -112,14 +114,14 @@ export function bagastore(c){
     if(id){const it=S.items.find(o=>o.id===id);g.cells=E.cells(it).map(k=>[k%D.LOT_W,k/D.LOT_W|0]);g.h=.3;label=D.ITEM[it.t].name;cost=-Math.round(D.ITEM[it.t].price*D.REFUND);ok=true}
     else if(S.wall[i]){g.cells=[mode.a];g.h=1.4;cost=-Math.round(D.WALL_COST*D.REFUND);ok=true;label='Mur'}else why='Rien à démolir ici.'}
    if(mode.a)anchor=[b[0]+.5,(g.h||0)+1,b[1]+.5]}
-  buildGhost(Bg,S,g,view());ren.upload('ghost',Bg.d,Bg.n);ghostTint=ok?[.3,.85,.4,.45]:[.95,.3,.25,.5];
+  buildGhost(Bg,S,g,view());ren.upload('ghost',Bg.d,Bg.n);buildAccess(Bac,access,view());ren.upload('access',Bac.d,Bac.n);ghostTint=ok?[.3,.85,.4,.45]:[.95,.3,.25,.5];
   const name=el('div','st-place-name');name.append(el('b',null,label),el('small',null,cost?(cost>0?eur(cost):'+'+eur(-cost)):''));bar.append(name);
   if(mode.kind==='item'){const r=el('button','st-pbtn','↻');r.setAttribute('aria-label','Tourner');r.onclick=()=>{mode.r=(mode.r+1)%4;sfx('click');updatePlace()};bar.append(r)}
   const x=el('button','st-pbtn done','Fini');x.onclick=()=>{sfx('click');stopMode()};bar.append(x);
   pop.hidden=!anchor||(mode.kind==='tool'&&!mode.b&&mode.id!=='erase');popOk.disabled=!ok;
   popOk.onclick=()=>mode.kind==='item'?confirmPlace():applyTool();popNo.onclick=()=>{if(mode.kind==='item')mode.pos=null;else mode.a=mode.b=null;sfx('click');updatePlace()};
   c.hint(why||'')}
- function confirmPlace(){if(!mode?.pos)return;const r=E.place(S,mode.t,mode.pos[0],mode.pos[1],mode.r);
+ function confirmPlace(){if(!mode?.pos)return;if(mode.move){const why=E.moveItem(S,mode.move,mode.pos[0],mode.pos[1],mode.r);if(why){msg(why);sfx('error');return}sfx('place');sel=mode.move;stopMode();return}const r=E.place(S,mode.t,mode.pos[0],mode.pos[1],mode.r);
   if(typeof r==='string'){msg(r);sfx('error');return}sfx('place');mode.pos=null;updatePlace()}
  function applyTool(){let why=null;const t=mode.id;
   if(t==='wall')why=E.buildWall(S,mode.a,mode.b);
@@ -140,15 +142,27 @@ export function bagastore(c){
  const btn=(t,fn,cls='st-small')=>{const b=el('button',cls,t);b.onclick=e=>{e.stopPropagation();sfx('click');fn()};return b};
  const tile=(k,v,sub)=>{const d=el('div','st-tile');d.append(el('small',null,k),el('b',null,v));if(sub)d.append(el('i',null,sub));return d};
  const bars=(items,fmt=eur)=>{const box=el('div','st-hbars'),max=Math.max(1,...items.map(i=>Math.abs(i[1])));for(const [k,v,col] of items){const r=el('div','st-hbar');const m=el('i');const u=el('u');u.style.width=Math.abs(v)/max*100+'%';if(col)u.style.background=col;m.append(u);r.append(el('span',null,k),m,el('b',null,fmt(v)));box.append(r)}return box};
- function renderPanel(){if(!panel)return;const fn={build:pBuild,stock:pStock,team:pTeam,money:pMoney,item:pItem,report:pReport,welcome:pWelcome}[panel];fn&&fn()}
+ let panelKey='';
+ function renderPanel(){if(!panel)return;const old=sheet.querySelector('.st-body'),top=old?old.scrollTop:0,key=[panel,buildTab,stockTab,moneyTab,sel].join();
+  const fn={build:pBuild,stock:pStock,team:pTeam,money:pMoney,item:pItem,report:pReport,welcome:pWelcome}[panel];fn&&fn();
+  const nb=sheet.querySelector('.st-body');if(nb&&key===panelKey)nb.scrollTop=top;panelKey=key}
  function pBuild(){const body=head('Construire · '+eur(S.cash),D.TABS,buildTab,v=>buildTab=v);const grid=el('div','st-cards');body.append(grid);
   if(buildTab==='murs'){for(const t of D.TOOLS){const b=card(t.name,t.price?eur(t.price)+(t.id==='wall'?' / m':''):'');b.onclick=()=>{sfx('click');startTool(t.id)};grid.append(b)}return}
   if(buildTab==='agrandir'){const b=card('Tracer une extension',eur(D.EXTEND.perM2)+' / m²','Sol et murs compris');b.onclick=()=>{sfx('click');startTool('extend')};grid.append(b);
    body.append(el('p','st-note',`Surface : ${E.area(S)} m² · vente ${E.salesArea(S)} m²`));return}
-  for(const d of D.ITEMS.filter(i=>i.tab===buildTab)){const sub=d.kind==='sale'||d.kind==='counter'||d.kind==='reserve'?`${d.cap} articles`:d.attract?'+ attractif':d.security?'− vols':d.clean?'− saleté':'';
+  for(const d of D.ITEMS.filter(i=>i.tab===buildTab)){const sub=d.kind==='spot'?'+ clients en voiture':d.kind==='bus'?'Un bus amène des clients':d.kind==='corral'?'Caddies : paniers plus gros':d.kind==='sale'||d.kind==='counter'||d.kind==='reserve'?`${d.cap} articles`:d.attract?'+ attractif':d.security?'− vols':d.clean?'− saleté':'';
    const b=card(d.name,eur(d.price),sub,d.w+'×'+d.d);b.onclick=()=>{sfx('click');startItem(d.id)};grid.append(b)}}
  function card(t,p,sub,size){const b=el('button','st-card');b.append(el('b',null,t));if(size)b.append(el('i',null,size));b.append(el('span',null,p));if(sub)b.append(el('small',null,sub));return b}
- function pStock(){const body=head('Stock',[['stock','Stock'],['stats','Statistiques']],stockTab,v=>stockTab=v);(stockTab==='stock'?stockList:stockStats)(body)}
+ function pStock(){const body=head('Stock',[['stock','Stock'],['stats','Statistiques'],['avis','Avis']],stockTab,v=>stockTab=v);({stock:stockList,stats:stockStats,avis:opinions})[stockTab](body)}
+ const cn=k=>D.CAT[k]?D.CAT[k].name.toLowerCase():k;
+ const PHRASES={rupture:k=>['Il n’y a plus de '+cn(k)+' !',-2],notsold:k=>['Dommage, pas de '+cn(k)+' ici.',-1],cher:k=>['Le rayon '+cn(k)+' est trop cher.',-2],cheap:k=>['Les prix '+cn(k)+' sont intéressants.',1],
+  counter:k=>['J’adore le comptoir '+cn(k)+' !',2],queue:()=>['La queue aux caisses est interminable.',-2],dirt:()=>['C’est sale par terre…',-2],happy:()=>['Super magasin, je reviendrai !',2],decor:()=>['C’est joli et agréable ici.',1],
+  noparking:()=>['Impossible de se garer !',-2],nocart:()=>['Il n’y a même pas de caddies.',-1],nocheckout:()=>['Aucune caisse ouverte !',-2]};
+ function opinions(body){const list=E.thoughts(S);if(!list.length){body.append(el('p','st-note','Ouvre le magasin pour entendre tes clients.'));return}
+  const box=el('div','st-opinions'),max=list[0][1];
+  for(const [key,n] of list.slice(0,14)){const [k,cat]=key.split(':'),f=PHRASES[k];if(!f)continue;const [txt,mood]=f(cat);
+   const r=el('div','st-op '+(mood>0?'good':mood<-1?'bad':'meh'));r.append(el('span','st-op-face',mood>0?'😊':mood<-1?'😠':'😕'),el('span','st-op-txt',txt));const m=el('i');const u=el('u');u.style.width=n/max*100+'%';m.append(u);r.append(m,el('b',null,String(n)));box.append(r)}
+  body.append(el('p','st-note','Ce que disent tes clients ces 7 derniers jours.'),box)}
  function stockList(body){const bud=el('div','st-budget');
   bud.append(el('span',null,'Budget / jour'),btn('−',()=>{S.budget=Math.max(0,S.budget-250);renderPanel()}),el('b',null,eur(S.budget)),btn('+',()=>{S.budget+=250;renderPanel()}));body.append(bud);
   body.append(row(btn('Livraison express +15 %',()=>{const r=E.express(S,S.budget);if(typeof r==='string'){msg(r);sfx('error')}else{toast('Livraison express : '+eur(r.cost));sfx('truck');save()}renderPanel()},'st-small wide'),
@@ -197,7 +211,7 @@ export function bagastore(c){
   if(d.kind==='reserve'){const cap=E.capacity(S),r=el('div','st-cap'),f=cap.cap[d.store]?cap.used[d.store]/cap.cap[d.store]:0;const m=el('i'),u=el('u');u.style.width=Math.min(1,f)*100+'%';m.append(u);r.append(el('span',null,D.STORES[d.store]),m,el('small',null,`${cap.used[d.store]} / ${cap.cap[d.store]}`));body.append(r)}
   if(d.cats&&d.cats.length>1){const chips=el('div','st-chips');for(const k of d.cats){chips.append(btn(D.CAT[k].name,()=>{E.setCat(S,it.id,k);renderPanel()},'st-chip'+(it.cat===k?' on':'')))}body.append(chips)}
   if((d.kind==='checkout'||d.kind==='counter')&&!E.manned(S,it))body.append(el('p','st-note warn',d.kind==='checkout'?'Pas de caissier·ère':'Comptoir fermé : embauche un·e '+D.ROLES.find(r=>r.needs===it.t).name.toLowerCase()));
-  body.append(row(btn('↻ Tourner',()=>{const why=E.rotateItem(S,it.id);if(why){msg(why);sfx('error')}renderPanel()},'st-small wide'),btn('Vendre '+eur(d.price*D.REFUND),()=>{E.removeItem(S,it.id);sfx('erase');sel=null;closePanel()},'st-small wide danger')))}
+  body.append(row(btn('✥ Déplacer',()=>startMove(it.id),'st-small wide'),btn('↻ Tourner',()=>{const why=E.rotateItem(S,it.id);if(why){msg(why);sfx('error')}renderPanel()},'st-small wide'),btn('Vendre '+eur(d.price*D.REFUND),()=>{E.removeItem(S,it.id);sfx('erase');sel=null;closePanel()},'st-small wide danger')))}
  function pReport(){const r=pending;if(!r){closePanel();return}const m=r.report;const body=head(r.over?'Faillite':'Bilan du mois '+m.month);
   const t=el('div','st-lines');for(const [k,v] of [['Clients',String(m.customers)],['Satisfaction',m.avgSat==null?'—':Math.round(m.avgSat)+' / 100'],['Chiffre d’affaires',eur(m.rev)],['Achats',eur(-m.buy)],['Salaires',eur(-m.salaries)],['Électricité',eur(-m.elec)],['Crédit',eur(-m.loan)],['Agios',eur(-m.interest)],['Publicité',eur(-m.ads)],['Résultat',eur(m.result)],['Travaux',eur(-m.build)],['Trésorerie',eur(m.cash)]]){if(v===eur(-0)||v==='−0 €')continue;const d=el('div',k==='Résultat'?'st-total '+(m.result<0?'neg':'pos'):'');d.append(el('span',null,k),el('b',null,v));t.append(d)}
   body.append(t);
@@ -212,6 +226,7 @@ export function bagastore(c){
  function handleEvents(){for(const e of R.events.splice(0)){
   if(e.t==='pay'){floats.push({x:e.x,z:e.y,y:2,txt:'+'+Math.round(e.v)+' €',col:'#2f8a45',life:1.4});sfx('cash',.18)}
   if(e.t==='bubble'){const a=R.agents.find(o=>o.id===e.id);if(a){floats.push({x:a.x,z:a.y,y:2.2,txt:e.txt,col:e.txt==='€'?'#b8860b':'#c62f2f',life:1.6,big:true});sfx('bad',1.2)}}
+  if(e.t==='bus'&&e.n)sfx('horn',3);
   if(e.t==='night'){const d=e.day;toast(`Jour ${d.d} · ${d.customers} clients · ${eur(d.rev)}`);sfx('night');save()}
   if(e.t==='month'){pending=e;hold=true;openPanel('report');sfx('month');save()}}}
 
@@ -232,7 +247,7 @@ export function bagastore(c){
   if(R.door>.5&&doorWas<=.5)sfx('door',2.5);doorWas=R.door||0;
   // contour de l'objet sélectionné
   const it=sel&&S.items.find(o=>o.id===sel);Bsel.reset();Bsel.setYaw(cam.yaw);if(it)itemModel(Bsel,S,it,v);ren.upload('sel',Bsel.d,Bsel.n);
-  const M=viewProj(cam);ren.frame(M,[['static'],['agents'],['ghost',ghostTint]],it?'sel':null);
+  const M=viewProj(cam);ren.frame(M,[['static'],['access'],['agents'],['ghost',ghostTint]],it&&!mode?'sel':null);
   // bulle ✕ / ✓ au-dessus de l'aperçu
   if(anchor&&!pop.hidden){const [px,py]=project(M,cam,...anchor);pop.style.left=Math.max(40,Math.min(cam.w-40,px))+'px';pop.style.top=Math.max(50,Math.min(cam.h-60,py))+'px'}
   // icônes : rayons vides, bulles, encaissements
