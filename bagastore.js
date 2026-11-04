@@ -11,9 +11,9 @@ const el=(tag,cls,txt)=>{const e=document.createElement(tag);if(cls)e.className=
 const SVG='http://www.w3.org/2000/svg';
 
 // petit graphique (barres ou courbe) en SVG
-function chart(vals,{line=false,color='#5aa36a',neg='#d9534f',fmt=v=>String(Math.round(v)),label=''}={}){
+function chart(vals,{line=false,color='#5aa36a',neg='#d9534f',fmt=v=>String(Math.round(v)),label='',zero=true}={}){
  const box=el('div','st-chart');if(label)box.append(el('b',null,label));
- const W=300,H=96,pad=4,v=vals.map(x=>x??0),max=Math.max(0,...v),min=Math.min(0,...v),span=max-min||1,y=t=>pad+(max-t)/span*(H-2*pad);
+ const W=300,H=96,pad=4,v=vals.map(x=>x??0),max=Math.max(zero?0:-Infinity,...v),min=Math.min(zero?0:Infinity,...v),span=max-min||1,y=t=>pad+(max-t)/span*(H-2*pad);
  const s=document.createElementNS(SVG,'svg');s.setAttribute('viewBox',`0 0 ${W} ${H}`);s.setAttribute('preserveAspectRatio','none');
  const add=(tag,a)=>{const e=document.createElementNS(SVG,tag);for(const k in a)e.setAttribute(k,a[k]);s.append(e);return e};
  add('line',{x1:0,x2:W,y1:y(0),y2:y(0),stroke:'#cfc8b6','stroke-width':1});
@@ -144,7 +144,7 @@ export function bagastore(c){
  // ---- panneaux
  function closePanel(){panel=null;sheet.hidden=true;if(!mode)sel=null}
  function openPanel(name){if(mode&&name!=='item')stopMode();panel=name;sheet.hidden=false;renderPanel()}
- let buildTab='rayons',stockTab='stock',moneyTab='in';
+ let buildTab='rayons',stockTab='stock',moneyTab='tresor',cashSpan=30;
  function head(title,tabs,cur,set){sheet.innerHTML='';const h=el('div','st-head');h.append(el('b',null,title));
   const x=el('button','st-x','✕');x.setAttribute('aria-label','Fermer');x.onclick=()=>{sfx('click');closePanel()};h.append(x);sheet.append(h);
   if(tabs){const t=el('div','st-tabs');for(const [id,name] of tabs)t.append(btn(name,()=>{set(id);renderPanel()},'st-tab'+(id===cur?' on':'')));sheet.append(t)}
@@ -219,7 +219,8 @@ export function bagastore(c){
    body.append(row(name,st))}
   const ck=S.items.filter(o=>o.t==='checkout').length,man=S.items.filter(o=>o.t==='checkout'&&E.manned(S,o)).length;
   body.append(el('p','st-note',`Caisses tenues : ${man} / ${ck}`))}
- function pMoney(){const body=head('Compta',[['in','Rentrées'],['out','Dépenses'],['cash','Trésorerie']],moneyTab,v=>moneyTab=v);const h=S.history.slice(-30),m=S.month;
+ function pMoney(){const body=head('Compta',[['tresor','Trésorerie'],['in','Rentrées'],['out','Dépenses'],['cash','Banque']],moneyTab,v=>moneyTab=v);const h=S.history.slice(-30),m=S.month;
+  if(moneyTab==='tresor')return treasury(body);
   if(moneyTab==='in'){body.append(chart(h.map(d=>d.profit),{label:'Bénéfice par jour',fmt:eur}));
    const g=el('div','st-tiles');const y=h[h.length-1];g.append(tile('CA hier',y?eur(y.rev):'—'),tile('CA du mois',eur(m.rev)),tile('Bénéfice 30 j',eur(h.reduce((t,d)=>t+d.profit,0))),tile('Clients attendus',E.attraction(S).perDay+' / j'));body.append(g);
    const mc=S.monthCat||{},list=D.CATS.map(k=>[k.name,mc[k.id]||0]).filter(i=>i[1]>0).sort((a,b)=>b[1]-a[1]).slice(0,8);
@@ -229,12 +230,38 @@ export function bagastore(c){
    body.append(el('b','st-sub','Ce mois-ci'),bars([['Marchandises',m.buy,'#e0a23a'],['Salaires',pr(E.salaries(S)),'#3f7fcf'],['Électricité',pr(E.electricity(S)),'#f5c542'],['Crédit',pr(S.loan.left>0?S.loan.monthly:0),'#7b61c9'],['Publicité',m.ads,'#e5603f'],['Travaux',m.build,'#9aa38f']]));
    body.append(el('b','st-sub','Perdu'),bars([['Périmés',m.loss,'#d9534f'],['Vols',m.theft,'#d9534f']]));
    body.append(el('p','st-note',`Charges fixes : ${eur(E.salaries(S)+E.electricity(S)+(S.loan.left>0?S.loan.monthly:0))} / mois`))}
-  if(moneyTab==='cash'){body.append(chart(h.map(d=>d.cash),{line:true,color:'#406c47',label:'Trésorerie',fmt:eur}));
+  if(moneyTab==='cash'){
    const g=el('div','st-tiles');g.append(tile('Trésorerie',eur(S.cash)),tile('Crédit restant',eur(S.loan.left)),tile('Mensualité',eur(S.loan.monthly)),tile('Réputation',Math.round(S.rep)+' / 100'));body.append(g);
    body.append(el('b','st-sub','Publicité'+(S.ads.until>=S.d?` · jusqu’au jour ${S.ads.until}`:'')));
    const ads=el('div','st-row');for(const ad of D.ADS)ads.append(btn(`${ad.name} ${eur(ad.price)} · +${Math.round(ad.boost*100)} % ${ad.days} j`,()=>c.dialog(ad.name+' ?',eur(ad.price),'Lancer',()=>{E.advertise(S,ad.id);sfx('coin');toast(ad.name+' lancée !');renderPanel()},'Annuler',()=>{}),'st-small wide'));body.append(ads);
    body.append(el('b','st-sub','Banque'),row(btn(`Emprunter ${eur(D.EXTRA_LOAN.amount)} · +${eur(D.EXTRA_LOAN.monthly)}/mois`,()=>c.dialog('Nouvel emprunt ?',`+${eur(D.EXTRA_LOAN.amount)} · +${eur(D.EXTRA_LOAN.monthly)}/mois`,'Emprunter',()=>{E.borrow(S);sfx('coin');save();renderPanel()},'Annuler',()=>{}),'st-small wide')));
    if(S.reports?.length){body.append(el('b','st-sub','Mois précédents'),bars(S.reports.slice(-6).map(r=>['Mois '+r.month,r.result,r.result<0?'#d9534f':'#5aa36a'])))}}}
+ // ---- trésorerie : jours rentables ou non, dans le temps
+ function treasury(body){const st=E.cashStats(S,cashSpan),sg=v=>(v>0?'+':'')+eur(v);
+  const top=el('div','st-cash-top');const t=el('div','st-cash-today '+(st.today>=0?'up':'down'));t.append(el('small',null,'Aujourd’hui (en cours)'),el('b',null,sg(st.today)));
+  const c2=el('div','st-cash-today');c2.append(el('small',null,'En caisse'),el('b',null,eur(S.cash)));top.append(t,c2);body.append(top);
+  const chips=el('div','st-chips');for(const [n,l] of [[7,'7 jours'],[30,'30 jours'],[90,'90 jours'],[0,'Tout']])chips.append(btn(l,()=>{cashSpan=n;renderPanel()},'st-chip'+(cashSpan===n?' on':'')));body.append(chips);
+  if(!st.n){body.append(el('p','st-note','Les graphiques apparaissent après la première journée.'));return}
+  // verdict en une phrase
+  const v=el('p','st-verdict '+(st.avg>=0?'up':'down'),st.avg>=0?`Tu gagnes de l’argent : ${sg(Math.round(st.avg))} par jour en moyenne.`:`Tu perds de l’argent : ${sg(Math.round(st.avg))} par jour en moyenne.`);body.append(v);
+  body.append(dayBars(st));
+  const g=el('div','st-tiles');
+  g.append(tile('Jours rentables',`${st.good} / ${st.n}`,Math.round(st.good/st.n*100)+' %'),tile('Bénéfice total',sg(st.sum)),
+   tile('Meilleur jour',sg(st.best),'jour '+st.bestDay),tile('Pire jour',sg(st.worst),'jour '+st.worstDay),
+   tile('Série en cours',st.streak>0?`${st.streak} j dans le vert`:`${-st.streak} j dans le rouge`),tile('Moyenne / jour',sg(Math.round(st.avg))));body.append(g);
+  if(st.n>=14){const wk=[];for(let i=0;i<st.n;i+=7){const p=st.profit.slice(i,i+7);wk.push(p.reduce((a,b)=>a+b,0))}body.append(chart(wk,{label:'Par semaine',fmt:eur}))}
+  body.append(chart(st.cash,{line:true,color:'#406c47',label:'Argent en caisse',fmt:eur,zero:false}))}
+ // barres par jour : vert = jour rentable, rouge = jour à perte ; pointillés = moyenne
+ function dayBars(st){const box=el('div','st-chart st-bars2');box.append(el('b',null,'Bénéfice par jour'));
+  const W=300,H=120,pad=6,v=st.profit,max=Math.max(1,...v),min=Math.min(0,...v),span=max-min||1,y=t=>pad+(max-t)/span*(H-2*pad),bw=W/Math.max(v.length,7);
+  const s=document.createElementNS(SVG,'svg');s.setAttribute('viewBox',`0 0 ${W} ${H}`);s.setAttribute('preserveAspectRatio','none');
+  const add=(tag,a)=>{const e=document.createElementNS(SVG,tag);for(const k in a)e.setAttribute(k,a[k]);s.append(e);return e};
+  if(min<0)add('rect',{x:0,y:y(0),width:W,height:H-pad-y(0)+pad,fill:'#fbe9e6'});
+  v.forEach((t,i)=>add('rect',{x:i*bw+bw*.1,width:Math.max(1,bw*.8),y:Math.min(y(t),y(0)),height:Math.max(1.5,Math.abs(y(t)-y(0))),rx:Math.min(2,bw*.2),fill:t<0?'#d9534f':'#4f9d5d'}));
+  add('line',{x1:0,x2:W,y1:y(0),y2:y(0),stroke:'#8d8676','stroke-width':1.2});
+  add('line',{x1:0,x2:W,y1:y(st.avg),y2:y(st.avg),stroke:st.avg<0?'#a33':'#2f6b3a','stroke-width':1,'stroke-dasharray':'4 3'});
+  const leg=el('div','st-chart-leg');leg.append(el('span',null,'jour '+st.days[0]),el('span',null,'▬ vert : rentable · ▬ rouge : à perte'),el('span',null,'jour '+st.days[st.days.length-1]));
+  box.append(s,leg);return box}
  function pItem(){const it=S.items.find(o=>o.id===sel);if(!it){closePanel();return}const d=D.ITEM[it.t];const body=head(d.name);
   if(d.cap&&d.kind!=='reserve'){const f=Math.min(1,it.stock/d.cap),r=el('div','st-cap');const m=el('i'),u=el('u');u.style.width=f*100+'%';m.append(u);r.append(el('span',null,'En rayon'),m,el('small',null,it.stock+' / '+d.cap));body.append(r)}
   if(d.kind==='reserve'){const cap=E.capacity(S),r=el('div','st-cap'),f=cap.cap[d.store]?cap.used[d.store]/cap.cap[d.store]:0;const m=el('i'),u=el('u');u.style.width=Math.min(1,f)*100+'%';m.append(u);r.append(el('span',null,D.STORES[d.store]),m,el('small',null,`${cap.used[d.store]} / ${cap.cap[d.store]}`));body.append(r)}

@@ -609,6 +609,8 @@ export function night(S,R){const ds=S.dayStats,r=R.rnd;
  S.history.push({d:S.d,rev:Math.round(ds.rev),buy:Math.round(ds.buy),fixed:Math.round(fixed),ads:Math.round(ds.ads),build:Math.round(ds.build),profit:Math.round(ds.rev-ds.buy-fixed-ds.ads),cash:Math.round(S.cash),
   customers:ds.customers,sat:avg==null?null:Math.round(avg),units:ds.units,rupture:ds.rupture,expensive:ds.expensive,angry:ds.angry,notSold:ds.notSold,waitPen:Math.round(ds.waitPen),dirtPen:Math.round(ds.dirtPen),loss:Math.round(ds.loss),theft:Math.round(ds.theft)});
  if(S.history.length>60)S.history.shift();
+ // journal long de la trésorerie : [jour, bénéfice, trésorerie] (jusqu'à 2 ans)
+ S.plog=(S.plog||[]).concat([[S.d,Math.round(ds.rev-ds.buy-fixed-ds.ads),Math.round(S.cash)]]).slice(-730);
  S.catHist=(S.catHist||[]).concat([ds.cats]).slice(-14);
  ev(R,{t:'night',day:S.last,delivered,dock:hasDock});
  S.thoughts=(S.thoughts||[]).concat([ds.th]).slice(-7);
@@ -654,7 +656,7 @@ export function load(o){if(!o||o.v!==1)return null;const S={...o,wall:[...o.wall
  if(S.fy==null)S.fy=o.b.y1-1;S.monthCat=S.monthCat||{};S.catHist=S.catHist||[];bounds(S);S.ground=o.ground?fit([...o.ground].map(Number)):defaultGround(S);if(!S.ground.includes(3))addSidewalks(S,S.ground);if(!S.trees)S.trees=genTrees(S);
  if(grown){const g=S.ground;for(let y=0;y<H;y++)for(let x=0;x<W;x++){const i=idx(x,y);if(isMainRoad(x,y))g[i]=g[i]===4?4:2;else if(x>=w0||y>=h0){if((y===RY-1||y===RE)&&!g[i])g[i]=3}}
   for(let x=0;x<W;x++)if(!g[idx(x,RE)])g[idx(x,RE)]=3;const old=new Set(S.trees.map(t=>idx(t[0],t[1])));
-  S.trees=S.trees.concat(genTrees(S).filter(t=>(t[0]>=w0||t[1]>=h0)&&!old.has(idx(t[0],t[1]))))}if(!S.gv)migrateGround(S);if(!S.items.some(it=>def(it.t).zone===2))defaultParking(S);
+  S.trees=S.trees.concat(genTrees(S).filter(t=>(t[0]>=w0||t[1]>=h0)&&!old.has(idx(t[0],t[1]))))}if(!S.gv)migrateGround(S);if(!S.plog)S.plog=(S.history||[]).map(h=>[h.d,h.profit,h.cash]);if(!S.items.some(it=>def(it.t).zone===2))defaultParking(S);
  // sans la partie en cours sauvegardée (anciennes versions), on reprend au début de la journée
  if(!o.rt){if(S.hour>D.HOURS.open)S.hour=D.HOURS.start;S.dayStats=blankDay()}delete S.rt;S.dirt=new Float32Array(N);return S}
 export function withDirt(S){S.dirt=S.dirt||new Float32Array(N);return S}
@@ -700,3 +702,12 @@ export function applyPlan(S){const p=stockPlan(S),w={};for(const c of D.CATS)w[c
  if(!Object.values(w).some(v=>v>0))return 'Rien à commander pour l’instant.';S.alloc=defaultAlloc(w);S.budget=Math.max(250,p.budget);return null}
 // alertes (barre de conseils, étiquettes) : 'low' = il en manque, 'short' = achat insuffisant
 export function stockAlerts(S){const p=stockPlan(S),o={};for(const c in p.rows){const st=p.rows[c].st;if(st==='missing')o[c]='low';else if(st==='short')o[c]='short'}return o}
+
+// trésorerie sur une période (n derniers jours ; 0 = tout) : jours rentables, moyenne, meilleur et pire jour, série en cours
+export function cashStats(S,n=0){const all=S.plog||[],l=n?all.slice(-n):all,p=l.map(r=>r[1]);
+ const fixed=(salaries(S)+electricity(S)+(S.loan.left>0?S.loan.monthly:0))/D.DAYS_PER_MONTH,ds=S.dayStats;
+ let streak=0;for(let i=p.length-1;i>=0;i--){if(!streak)streak=p[i]>=0?1:-1;else if((p[i]>=0)===(streak>0))streak+=streak>0?1:-1;else break}
+ const sum=p.reduce((a,b)=>a+b,0);
+ return {days:l.map(r=>r[0]),profit:p,cash:l.map(r=>r[2]),good:p.filter(v=>v>=0).length,n:p.length,sum,avg:p.length?sum/p.length:0,
+  best:p.length?Math.max(...p):0,worst:p.length?Math.min(...p):0,bestDay:p.length?l[p.indexOf(Math.max(...p))][0]:null,worstDay:p.length?l[p.indexOf(Math.min(...p))][0]:null,
+  streak,today:Math.round(ds.rev-ds.buy-ds.ads-fixed*clamp((S.hour-D.HOURS.start)/(D.HOURS.close+.75-D.HOURS.start),0,1))}}
