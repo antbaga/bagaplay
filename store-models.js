@@ -149,6 +149,15 @@ export function person(B,x,z,ang,col,phase=0,carry=null,sit=1,scan=false,bob=0){
  if(carry==='basket'){const [bx2,bz2]=off(.26,.05);B.obox(bx2,ty-.14,bz2,.13,.07,.09,ang,C.red);B.obox(bx2,ty-.04,bz2,.13,.01,.01,ang,C.red)}
  if(carry==='mop'){const sw=Math.sin(phase)*.2,[mx2,mz2]=off(.28+sw,.32);B.obox(mx2,.55,mz2,.02,.55,.02,ang,C.woodD);B.obox(mx2,.04,mz2,.14,.04,.06,ang,rgb('#4aa3c8'))}}
 const STAFF_COL={rayon:{shirt:C.orange,pants:C.dark,skin:rgb('#e9bf98'),hair:rgb('#3b2a20')},menage:{shirt:rgb('#4db08a'),pants:rgb('#2f5f4d'),skin:rgb('#a87452'),hair:rgb('#1e1a18')}};
+// places de la file d'attente : tout droit devant la caisse tant que c'est libre, sinon les cases libres voisines
+function queueSlots(S,it,n){const L=E.layout(S),[dx,dy]=E.DIRS[it.r],f=E.front(it)[0],out=[],used=new Set(),W2=D.LOT_W;let cx=f[0],cy=f[1],step=.7;
+ const ok=(x,y)=>x>=0&&y>=0&&x<W2&&y<D.LOT_H&&L.pc[y*W2+x];
+ for(let k=0;k<n;k++){const px=f[0]+.5+dx*k*step,pz=f[1]+.5+dy*k*step,gx=Math.floor(px),gy=Math.floor(pz);
+  if(ok(gx,gy)){out.push([px,pz,Math.atan2(-dx,-dy)]);used.add(gy*W2+gx);continue}
+  // sinon : virage vers la case libre la plus proche de la dernière place
+  const [lx,lz]=out.length?out[out.length-1]:[f[0]+.5,f[1]+.5];let best=null;
+  for(const [ax,ay] of [[1,0],[-1,0],[0,1],[0,-1]]){const x=Math.floor(lx+ax*step*1.4),y=Math.floor(lz+ay*step*1.4);if(ok(x,y)&&!used.has(y*W2+x)){best=[lx+ax*step,lz+ay*step,Math.atan2(-ax,-ay)];used.add(y*W2+x);break}}
+  out.push(best||[lx,lz,0])}return out}
 const SHADOW=rgb('#000000');
 function shadow(B,x,z,r=.26){B.tile(x-r,z-r*.8,x+r,z+r*.8,.03,mix(C.tileB,SHADOW,.28))}
 // caddie poussé devant soi, rempli selon les articles
@@ -183,7 +192,8 @@ export function buildAgents(B,S,R,v,time){B.reset();B.setYaw(v.yaw);
   else{const base={butcher:rgb('#c2433f'),fish:rgb('#3f78b8'),cheese:rgb('#e8b93c'),bakery:rgb('#a46a3f')}[it.t],sway=Math.sin(time*1.3+it.id)*.6;const [x,z]=F.m(1.5+sway,.85);shadow(B,x,z);
    person(B,x,z,F.ang+Math.sin(time*.9+it.id)*.3,{shirt:C.white,pants:C.dark,skin:rgb('#f0c8a0'),hair:C.white,apron:base},Math.abs(Math.cos(time*1.3+it.id))>.3?time*6:0)}}
  for(const a of R.agents){let x=a.x,z=a.y,ang=a.dir||0;
-  if(a.k==='c'&&(a.st==='queue'||a.st==='pay')){const it=S.items.find(o=>o.id===a.item),k=E.queueIndex(R,a);if(it&&k>=0&&a.nx<0){const [dx,dy]=E.DIRS[it.r];const f=E.front(it)[0];x=f[0]+.5+dx*k*(a.hasCart?1:.7);z=f[1]+.5+dy*k*(a.hasCart?1:.7);ang=Math.atan2(-dx,-dy)}}
+  if(a.k==='c'&&(a.st==='queue'||a.st==='pay')){const it=S.items.find(o=>o.id===a.item),k=E.queueIndex(R,a);if(it&&k>=0&&a.nx<0){const sl=queueSlots(S,it,k+1)[k];if(sl){x=sl[0];z=sl[1];ang=sl[2]}}}
+  else if(a.k==='c'){const o=a.id*2654435761>>>0;x+=((o%7)-3)*.05;z+=(((o>>3)%7)-3)*.05}
   const moving=a.nx>=0,ph=moving?time*9+a.id:0,bob=moving?Math.abs(Math.sin(time*9+a.id))*.03:0;
   shadow(B,x,z);
   if(a.k==='c'){if(a.hasCart){const c=Math.cos(ang),sn=Math.sin(ang);cart(B,x+sn*.3,z+c*.3,ang,a.basket.units,a.id)}
