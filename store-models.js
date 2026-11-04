@@ -24,9 +24,12 @@ export function buildStatic(B,S,v){const b=S.b,L=E.layout(S);B.reset();B.setYaw(
  {const m=(RY+RE)/2;for(const d of [-.12,.12])B.tile(-40,m+d-.04,W+40,m+d+.04,.006,C.yellow);
   for(let x=-39;x<W+40;x+=3)for(const z of [RY+1.5,RE-1.5])B.tile(x,z-.06,x+1.4,z+.06,.006,C.line)}
  const G=S.ground||[],gr=(x,y)=>x>=0&&y>=0&&x<W&&y<H?G[E.idx(x,y)]:0;
- for(let y=0;y<H;y++)for(let x=0;x<W;x++){const g=gr(x,y);if(!g||E.inside(S,x,y))continue;B.tile(x,y,x+1,y+1,.001,g===2||g===4?C.road:g===3?((x+y)&1?C.walk:mix(C.walk,C.white,.25)):C.asphalt);
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++){const g=gr(x,y);if(!g||E.inside(S,x,y))continue;B.tile(x,y,x+1,y+1,.001,g===2||g===4||g===5?C.road:g===3?((x+y)&1?C.walk:mix(C.walk,C.white,.25)):C.asphalt);
   // passage piéton : bandes blanches dans le sens de la route
   if(g===4){B.tile(x,y,x+1,y+1,.007,C.road);const vert=gr(x,y-1)===4||gr(x,y+1)===4;if(vert)B.tile(x+.08,y+.22,x+.92,y+.78,.008,C.line);else B.tile(x+.22,y+.08,x+.78,y+.92,.008,C.line);continue}
+  // cédez le passage : dents de requin blanches le long de la ligne
+  if(g===5){const hor=gr(x-1,y)===5||gr(x+1,y)===5;for(const k of [.25,.75]){const a=hor?[x+k-.18,y+.35]:[x+.35,y+k-.18],b2=hor?[x+k+.18,y+.35]:[x+.35,y+k+.18],c2=hor?[x+k,y+.72]:[x+.72,y+k];
+    B.quad([a[0],.008,a[1]],[b2[0],.008,b2[1]],[c2[0],.008,c2[1]],[c2[0],.008,c2[1]],C.line)}continue}
   if(g===2&&!E.isMainRoad(x,y)){const e=.07,lc=mix(C.road,C.line,.75);if(!gr(x,y-1))B.tile(x,y,x+1,y+e,.004,lc);if(!gr(x,y+1))B.tile(x,y+1-e,x+1,y+1,.004,lc);if(!gr(x-1,y))B.tile(x,y,x+e,y+1,.004,lc);if(!gr(x+1,y))B.tile(x+1-e,y,x+1,y+1,.004,lc)}}
  const ins=(x,y)=>E.inside(S,x,y);
  for(const [x,y,s] of S.trees||[])tree(B,x+.5,y+.5,s);
@@ -210,9 +213,9 @@ function cart(B,x,z,ang,units,id){const c=Math.cos(ang),sn=Math.sin(ang),P=(lx,l
  const [hx,hz]=P(0,.0);B.obox(hx,.95,hz,.24,.02,.02,ang,C.red);
  const n=Math.min(8,Math.ceil(units/2));for(let k=0;k<n;k++){const [px,pz]=P(-.12+(k%3)*.12,.2+Math.floor(k/3)*.14),col=[C.red,C.yellow,C.green,C.blue,C.orange][(id+k)%5];B.obox(px,.86+((k*5)%3)*.02,pz,.05,.06,.05,ang+k,col)}}
 function car(B,x,z,ang,col){const c=Math.cos(ang),sn=Math.sin(ang),P=(lx,lz)=>[x+lx*c+lz*sn,z-lx*sn+lz*c];
- B.obox(x,.42,z,.68,.27,2,ang,col,mix(col,[1,1,1],.15));const [cx,cz]=P(0,-.2);B.obox(cx,.92,cz,.6,.24,1.15,ang,C.glass,col);B.obox(cx,1.17,cz,.59,.02,1.1,ang,col);
- for(const [lx,lz] of [[-.66,1.25],[.66,1.25],[-.66,-1.25],[.66,-1.25]]){const [wx,wz]=P(lx,lz);B.obox(wx,.3,wz,.1,.3,.3,ang,rgb('#25262a'))}
- for(const lx of [-.44,.44]){const [hx,hz]=P(lx,2.01);B.obox(hx,.5,hz,.16,.07,.02,ang,rgb('#fff6c8'));const [tx,tz]=P(lx,-2.01);B.obox(tx,.5,tz,.16,.06,.02,ang,C.red)}}
+ B.obox(x,.42,z,.58,.27,1.3,ang,col,mix(col,[1,1,1],.15));const [cx,cz]=P(0,-.12);B.obox(cx,.9,cz,.51,.23,.74,ang,C.glass,col);B.obox(cx,1.14,cz,.5,.02,.7,ang,col);
+ for(const [lx,lz] of [[-.56,.82],[.56,.82],[-.56,-.82],[.56,-.82]]){const [wx,wz]=P(lx,lz);B.obox(wx,.3,wz,.1,.3,.3,ang,rgb('#25262a'))}
+ for(const lx of [-.38,.38]){const [hx,hz]=P(lx,1.31);B.obox(hx,.5,hz,.13,.07,.02,ang,rgb('#fff6c8'));const [tx,tz]=P(lx,-1.31);B.obox(tx,.5,tz,.16,.06,.02,ang,C.red)}}
 function bus(B,x,z,ang){const c=Math.cos(ang),sn=Math.sin(ang),P=(lx,lz)=>[x+lx*c+lz*sn,z-lx*sn+lz*c],body=rgb('#f2c230');
  B.obox(x,1.55,z,1,1.25,5.5,ang,body,C.white);B.obox(x,1.95,z,1.02,.4,5.3,ang,C.glass);
  for(const lz of [-3.6,3.4]){for(const lx of [-.92,.92]){const [wx,wz]=P(lx,lz);B.obox(wx,.4,wz,.12,.4,.45,ang,rgb('#25262a'))}}
