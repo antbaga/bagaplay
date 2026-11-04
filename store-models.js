@@ -17,16 +17,23 @@ const trees=(()=>{const o=[];let s=7;const r=()=>(s=(s*16807)%2147483647)/214748
 export function buildStatic(B,S,v){const b=S.b,L=E.layout(S);B.reset();B.setYaw(v.yaw);
  // herbe, parking, route
  B.tile(-30,-30,W+30,H+30,-.02,C.grass);
- const px0=b.x0-2,px1=b.x1+2,fy=S.fy+1;B.tile(px0,fy,px1,H-3,0,C.asphalt);B.tile(-30,H-3,W+30,H,0,C.road);
- for(let x=-30;x<W+30;x+=3)B.tile(x,H-1.58,x+1.6,H-1.42,.005,C.line);
+ // sol : goudron, routes (route principale prolongée hors du terrain), marquages
+ B.tile(-30,H-3,0,H,0,C.road);B.tile(W,H-3,W+30,H,0,C.road);for(let x=-30;x<W+30;x+=3)B.tile(x,H-1.58,x+1.6,H-1.42,.006,C.line);
+ const G=S.ground||[],gr=(x,y)=>x>=0&&y>=0&&x<W&&y<H?G[E.idx(x,y)]:0;
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++){const g=gr(x,y);if(!g||E.inside(S,x,y))continue;B.tile(x,y,x+1,y+1,.001,g===2?C.road:C.asphalt);
+  if(g===2&&y<H-3){const e=.07,lc=mix(C.road,C.line,.75);if(!gr(x,y-1))B.tile(x,y,x+1,y+e,.004,lc);if(!gr(x,y+1))B.tile(x,y+1-e,x+1,y+1,.004,lc);if(!gr(x-1,y))B.tile(x,y,x+e,y+1,.004,lc);if(!gr(x+1,y))B.tile(x+1-e,y,x+1,y+1,.004,lc)}}
  const ins=(x,y)=>E.inside(S,x,y);
  // trottoir autour du bâtiment
  for(let y=b.y0-1;y<=b.y1;y++)for(let x=b.x0-1;x<=b.x1;x++){if(ins(x,y))continue;let near=false;for(let dy=-1;dy<=1&&!near;dy++)for(let dx=-1;dx<=1;dx++)if(ins(x+dx,y+dy)){near=true;break}if(near)B.tile(x,y,x+1,y+1,.002,C.walk)}
- for(const [x,z,s] of trees){if(x>b.x0-3&&x<b.x1+3&&z>b.y0-3&&z<H)continue;if(z>H-4&&z<H+1)continue;tree(B,x,z,s)}
+ for(const [x,y,s] of S.trees||[])tree(B,x+.5,y+.5,s);
+ for(const [x,z,s] of trees)if(x<-1||x>W+1||z<-1)tree(B,x,z,s);
  // sol (carrelage, béton dans la réserve, salissures)
  for(let y=b.y0;y<b.y1;y++)for(let x=b.x0;x<b.x1;x++){if(!ins(x,y))continue;const i=E.idx(x,y),r=S.zone[i],alt=(x+y)&1;
   let c=r?(alt?C.resA:C.resB):(alt?C.tileA:C.tileB);const d=S.dirt?S.dirt[i]:0;if(d>.12)c=mix(c,C.dirt,Math.min(.55,(d-.12)*.9));
-  if(v.zones&&r)c=mix(c,[.55,.7,.95],.35);B.tile(x,y,x+1,y+1,.01,c)}
+  if(v.zones&&r)c=mix(c,[.55,.7,.95],.35);B.tile(x,y,x+1,y+1,.01,c);
+  if(d>.3){const h=(x*73856093^y*19349663)>>>0,ox=(h%50)/100,oz=((h>>6)%50)/100;B.tile(x+.15+ox*.4,y+.2+oz*.4,x+.55+ox*.4,y+.5+oz*.4,.013,mix(c,rgb('#5d4a35'),.45));
+   if(d>.5){B.box(x+.2+ox,0,y+.6-oz*.3,x+.32+ox,.03,y+.7-oz*.3,[.96,.96,.92]);B.box(x+.6-ox*.4,0,y+.25+oz,x+.66-ox*.4,.1,y+.31+oz,[.8,.22,.2])}
+   if(d>.75)B.box(x+.4,0,y+.4,x+.58,.05,y+.52,[.55,.8,.95])}}
  // murs intérieurs et portes
  for(let y=b.y0;y<b.y1;y++)for(let x=b.x0;x<b.x1;x++){const w=ins(x,y)&&S.wall[E.idx(x,y)];if(!w)continue;
   if(w===1)B.box(x,0,y,x+1,1.3,y+1,C.iwall,C.iwallTop);
@@ -106,9 +113,7 @@ export function item(B,S,it,v){const F=frame(it),d=F.d,w=d.w,dd=d.d,fill=d.cap?M
   for(let x=1.5;x<2.8;x+=.2)L(x,d.h,.3,x+.1,d.h+.2,1.3,C.dark);break}
  case 'dock':{L(0,0,0,w,.15,dd,rgb('#a7aaae'));for(let x=0;x<w;x+=.5)L(x,.15,.02,x+.25,.17,.12,C.yellow);
   L(.1,0,-.05,w-.1,1.3,.02,C.dark);
-  // camion garé derrière le quai
-  L(.25,.45,-7.2,w-.25,3.1,-.25,C.white,rgb('#e6e6e6'));L(.25,1.4,-7.2,w-.25,1.75,-.25,C.red);L(.35,.45,-8.9,w-.35,2.5,-7.25,C.red,rgb('#b83a32'));L(.5,1.6,-8.95,w-.5,2.3,-8.85,rgb('#9fd3ff'));
-  for(const z of [-1.6,-2.6,-6.3,-8.3])for(const x of [.15,w-.45])L(x,0,z,x+.3,.6,z+.65,rgb('#2b2b2f'));break}
+  break}
  case 'spot':{L(0,0,0,.08,.012,dd,C.line);L(w-.08,0,0,w,.012,dd,C.line);L(0,0,0,w,.012,.08,C.line);L(.6,0,.35,w-.6,.1,.5,rgb('#9aa0a6'));break}
  case 'busstop':{L(.1,0,.2,.2,2.3,.3,C.metal);L(w-.2,0,.2,w-.1,2.3,.3,C.metal);L(0,2.3,0,w,2.42,1,rgb('#4c8fd1'),rgb('#6aa6e0'));L(.15,0,.15,w-.15,2.2,.22,C.glass);
   L(.4,.45,.3,w-.4,.52,.7,C.wood);for(const x of [.5,w-.6])L(x,0,.4,x+.1,.45,.6,C.dark);L(w-.05,0,.85,w+.05,2.6,.95,C.metal);L(w-.35,2.2,.82,w+.35,2.7,.98,C.yellow);L(w-.2,2.32,.98,w+.2,2.58,1,rgb('#2f6f45'));break}
@@ -160,7 +165,12 @@ function bus(B,x,z,ang){const c=Math.cos(ang),sn=Math.sin(ang),P=(lx,lz)=>[x+lx*
  B.obox(x,1.55,z,1.25,1.25,5.5,ang,body,C.white);B.obox(x,1.95,z,1.27,.4,5.3,ang,C.glass);
  for(const lz of [-3.6,3.4]){for(const lx of [-1.15,1.15]){const [wx,wz]=P(lx,lz);B.obox(wx,.4,wz,.12,.4,.45,ang,rgb('#25262a'))}}
  const [fx,fz]=P(0,5.51);B.obox(fx,1.9,fz,1.1,.55,.02,ang,C.glass);const [sx,sz]=P(0,5.52);B.obox(sx,2.65,sz,.9,.15,.02,ang,rgb('#2f6f45'))}
+function truck(B,x,z,ang){const c=Math.cos(ang),sn=Math.sin(ang),P=(lx,lz)=>[x+lx*c+lz*sn,z-lx*sn+lz*c];
+ const [bx,bz]=P(0,-1.2);B.obox(bx,1.75,bz,1.15,1.3,3,ang,C.white,rgb('#ececec'));const [sx,sz]=P(0,-1.2);B.obox(sx,1.5,sz,1.17,.18,2.9,ang,rgb('#3f7a4f'));
+ const [cx,cz]=P(0,2.45);B.obox(cx,1.2,cz,1.05,.8,.75,ang,rgb('#3f7a4f'),rgb('#4f8f5f'));const [wx,wz]=P(0,3.21);B.obox(wx,1.45,wz,.9,.35,.02,ang,C.glass);
+ for(const lz of [-3.2,-1.2,2.4])for(const lx of [-1,1]){const [px,pz]=P(lx,lz);B.obox(px,.4,pz,.13,.4,.42,ang,rgb('#25262a'))}}
 export function buildAgents(B,S,R,v,time){B.reset();B.setYaw(v.yaw);
+ if(R.truck)truck(B,R.truck.x,R.truck.z,R.truck.ang);
  for(const c of R.cars||[])car(B,c.x,c.z,c.ang,c.col);if(R.bus)bus(B,R.bus.x,R.bus.z,R.bus.ang);
  // portes coulissantes de l'entrée : s'ouvrent quand quelqu'un approche
  const ex=S.ent+1,ez=S.fy+1;let near=0;for(const a of R.agents)if(Math.abs(a.x-ex)<1.8&&Math.abs(a.y-ez)<2.2)near=1;

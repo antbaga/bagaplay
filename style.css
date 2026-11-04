@@ -347,3 +347,7 @@ body:has(.install-banner) footer{padding-bottom:120px}
 .st-op{display:grid;grid-template-columns:24px 1fr 54px 24px;gap:6px;align-items:center;background:#fffaf1;border:1px solid var(--line);border-radius:12px;padding:7px 9px}
 .st-op-face{font-size:17px}.st-op-txt{font-size:11px;line-height:1.3}.st-op i{height:6px;border-radius:4px;background:#ece7da;overflow:hidden}.st-op u{display:block;height:100%}
 .st-op.good u{background:#5aa36a}.st-op.bad u{background:#d9534f}.st-op.meh u{background:#e0a23a}.st-op b{font-size:11px;text-align:right}
+.st-pop{flex-direction:column;align-items:center;gap:3px}.st-pop-btns{display:flex;gap:6px}
+.st-pop-cost{font-size:11px;font-weight:800;color:#406c47;line-height:1}.st-pop-cost:empty{display:none}
+.st-pop.bad{background:#ffe1dc}.st-pop.bad:after{border-top-color:#ffe1dc}.st-pop.bad .st-pop-cost{color:#c62f2f}
+.st-small.on{background:#ffe1dc;border-color:#f1b2a8;color:#b2443a}

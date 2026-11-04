@@ -65,7 +65,7 @@ export const ITEMS=[
  {id:'gate',   tab:'deco',    name:'Portique antivol',     w:1,d:1,h:1.6,price:3200, kind:'decor',zone:0,security:.2,power:10}
 ];
 export const ITEM=Object.fromEntries(ITEMS.map(i=>[i.id,i]));
-export const TABS=[['rayons','Rayons'],['frais','Frais'],['coupe','À la coupe'],['caisses','Caisses'],['reserve','Réserve'],['parking','Parking'],['murs','Murs'],['deco','Déco'],['agrandir','Agrandir']];
+export const TABS=[['rayons','Rayons'],['frais','Frais'],['coupe','À la coupe'],['caisses','Caisses'],['reserve','Réserve'],['parking','Extérieur'],['murs','Murs'],['deco','Déco'],['agrandir','Agrandir']];
 export const TOOLS=[
  {id:'wall',name:'Mur',price:WALL_COST,hint:'Touche le début puis la fin du mur.'},
  {id:'door',name:'Porte',price:DOOR_COST,hint:'Touche un mur pour y mettre une porte (employés seulement vers la réserve).'},

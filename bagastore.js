@@ -30,7 +30,7 @@ export function bagastore(c){
  const wrap=el('div','st-wrap');c.board.append(wrap);
  const cv=el('canvas','st-gl'),ov=el('canvas','st-ov');wrap.append(cv,ov);const g2=ov.getContext('2d');
  const hud=el('div','st-hud');const info=el('div','st-info');const camBox=el('div','st-cam');hud.append(info,camBox);wrap.append(hud);
- const pop=el('div','st-pop');pop.hidden=true;const popNo=el('button','st-pop-no','✕'),popOk=el('button','st-pop-ok','✓');popNo.setAttribute('aria-label','Annuler');popOk.setAttribute('aria-label','Valider');pop.append(popNo,popOk);wrap.append(pop);
+ const pop=el('div','st-pop');pop.hidden=true;const popNo=el('button','st-pop-no','✕'),popOk=el('button','st-pop-ok','✓'),popCost=el('div','st-pop-cost');popNo.setAttribute('aria-label','Annuler');popOk.setAttribute('aria-label','Valider');const popBtns=el('div','st-pop-btns');popBtns.append(popNo,popOk);pop.append(popBtns,popCost);wrap.append(pop);
  const sheet=el('div','st-sheet');sheet.hidden=true;wrap.append(sheet);
  const bar=el('div','st-place');bar.hidden=true;wrap.append(bar);
  const toastBox=el('div','st-toast');wrap.append(toastBox);
@@ -60,7 +60,7 @@ export function bagastore(c){
   if(kind==='horn'){tone(392,.25,'square',.05);tone(392,.3,'square',.05,.3)}}
 
  // ---- boutons de caméra
- for(const [t,a,fn] of [['⟲','Tourner la vue à gauche',()=>{cam.yawTo-=Math.PI/2}],['⟳','Tourner la vue à droite',()=>{cam.yawTo+=Math.PI/2}],['+','Zoomer',()=>zoom(.8)],['−','Dézoomer',()=>zoom(1.25)],['⌂','Recentrer',home]]){
+ for(const [t,a,fn] of [['⟲','Tourner la vue à gauche',()=>{cam.yawTo-=Math.PI/2}],['⟳','Tourner la vue à droite',()=>{cam.yawTo+=Math.PI/2}],['+','Zoomer',()=>zoom(.8)],['−','Dézoomer',()=>zoom(1.25)],['⌂','Recentrer',home],['🗑','Démolir',()=>{if(mode?.id==='erase')stopMode();else startTool('erase')}]]){
   const b=el('button','st-cbtn',t);b.setAttribute('aria-label',a);c.listen(b,'click',()=>{sfx('click');fn()});camBox.append(b)}
  const zoom=k=>{cam.zoom=Math.max(4,Math.min(40,cam.zoom*k))};
 
@@ -76,12 +76,19 @@ export function bagastore(c){
 
  // ---- toucher : glisser = déplacer la vue, pincer = zoom, toucher = action
  const pts=new Map();let pinch=null,drag=null;
+ const DRAW=new Set(['wall','zoneR','zoneS','extend','asphalt','road']);
+ const cellAt=(px,py)=>{const [gx,gz]=ground(cam,px,py);return [Math.floor(gx),Math.floor(gz)]};
  c.listen(cv,'pointerdown',e=>{cv.setPointerCapture?.(e.pointerId);pts.set(e.pointerId,{x:e.offsetX,y:e.offsetY,x0:e.offsetX,y0:e.offsetY,t:performance.now()});
-  if(pts.size===2){const [a,b]=[...pts.values()];pinch={d:Math.hypot(a.x-b.x,a.y-b.y),z:cam.zoom}}else{drag={moved:false}}});
+  if(pts.size===2){const [a,b]=[...pts.values()];pinch={d:Math.hypot(a.x-b.x,a.y-b.y),z:cam.zoom,mx:(a.x+b.x)/2,my:(a.y+b.y)/2};if(drag?.draw&&mode){mode.a=mode.b=null;updatePlace()}drag={moved:true}}
+  else if(mode?.kind==='tool'&&DRAW.has(mode.id)){const c0=cellAt(e.offsetX,e.offsetY);mode.a=c0;mode.b=c0;drag={draw:true,moved:false};updatePlace()}
+  else{drag={moved:false}}});
  c.listen(cv,'pointermove',e=>{const p=pts.get(e.pointerId);if(!p)return;const px=p.x,py=p.y;p.x=e.offsetX;p.y=e.offsetY;
-  if(pts.size>=2&&pinch){const [a,b]=[...pts.values()];cam.zoom=Math.max(4,Math.min(40,pinch.z*pinch.d/Math.max(20,Math.hypot(a.x-b.x,a.y-b.y))));if(drag)drag.moved=true;return}
+  if(pts.size>=2&&pinch){const [a,b]=[...pts.values()];cam.zoom=Math.max(4,Math.min(40,pinch.z*pinch.d/Math.max(20,Math.hypot(a.x-b.x,a.y-b.y))));
+   const mx=(a.x+b.x)/2,my=(a.y+b.y)/2,g0=ground(cam,pinch.mx,pinch.my),g1=ground(cam,mx,my);cam.tx+=g0[0]-g1[0];cam.tz+=g0[1]-g1[1];pinch.mx=mx;pinch.my=my;clampCam();return}
+  if(drag?.draw&&mode){const c1=cellAt(p.x,p.y);if(!mode.b||c1[0]!==mode.b[0]||c1[1]!==mode.b[1]){mode.b=c1;drag.moved=true;updatePlace()}return}
   if(drag&&(drag.moved||Math.hypot(p.x-p.x0,p.y-p.y0)>8)){drag.moved=true;const g0=ground(cam,px,py),g1=ground(cam,p.x,p.y);cam.tx+=g0[0]-g1[0];cam.tz+=g0[1]-g1[1];clampCam()}});
  const up=e=>{const p=pts.get(e.pointerId);pts.delete(e.pointerId);if(pts.size<2)pinch=null;if(!p)return;
+  if(drag?.draw){if(!pts.size){drag=null;updatePlace()}return}
   if(drag&&!drag.moved&&pts.size===0&&performance.now()-p.t<500)tap(p.x,p.y);if(!pts.size)drag=null};
  c.listen(cv,'pointerup',up);c.listen(cv,'pointercancel',e=>{pts.delete(e.pointerId);drag=null;pinch=null});
  c.listen(cv,'wheel',e=>{e.preventDefault();zoom(e.deltaY>0?1.12:.89)},{passive:false});
@@ -93,32 +100,32 @@ export function bagastore(c){
   if(mode?.kind==='tool'){const t=mode.id;
    if(t==='door'){const why=E.makeDoor(S,x,y);if(why){msg(why);sfx('error')}else sfx('place');return}
    if(t==='erase'){mode.a=[x,y];mode.b=[x,y];updatePlace();return}
-   if(!mode.a||mode.b){mode.a=[x,y];mode.b=null}else mode.b=[x,y];updatePlace();return}
+   return}
   // sans outil : sélection d'un meuble (contour)
   const L=E.layout(S),id=E.inLot(x,y)?L.occ[E.idx(x,y)]:0;sel=id||null;if(sel){sfx('click');openPanel('item')}else if(panel==='item')closePanel()}
 
  // ---- placement : aperçu, petite bulle ✕ / ✓ au-dessus de l'objet
- const TOOL_NAMES={extend:'Agrandir'};
+ const TOOL_NAMES={extend:'Agrandir',asphalt:'Goudron',road:'Route'},TOOL_HINT={extend:'Glisse le doigt pour tracer l’extension.',asphalt:'Glisse le doigt pour goudronner une zone.',road:'Glisse le doigt pour tracer une route.',wall:'Glisse le doigt pour tracer le mur.',zoneR:'Glisse le doigt sur la zone.',zoneS:'Glisse le doigt sur la zone.',erase:'Touche ce que tu veux démolir.'};
  function startMove(id){const it=S.items.find(o=>o.id===id);if(!it)return;mode={kind:'item',t:it.t,r:it.r,pos:[it.x,it.y],move:id};staticKey='';closePanel();bar.hidden=false;updatePlace();msg('Touche la nouvelle place.')}
  function startItem(t){mode={kind:'item',t,r:0,pos:null};closePanel();bar.hidden=false;updatePlace();msg('Touche le sol pour placer.')}
- function startTool(t){mode={kind:'tool',id:t};closePanel();bar.hidden=false;updatePlace();msg(t==='extend'?'Touche deux coins hors du magasin.':D.TOOLS.find(o=>o.id===t).hint)}
+ function startTool(t){mode={kind:'tool',id:t};closePanel();bar.hidden=false;updatePlace();msg(TOOL_HINT[t]||D.TOOLS.find(o=>o.id===t)?.hint||'')}
  function stopMode(){mode=null;staticKey='';bar.hidden=true;pop.hidden=true;anchor=null;ren.upload('ghost',Bg.d,0);ren.upload('access',Bac.d,0);c.hint(E.problems(S)[0]||'')}
  function updatePlace(){bar.innerHTML='';let ok=false,why='',label='',cost=0;const g={};anchor=null;
   let access=[];if(mode.kind==='item'){const d=D.ITEM[mode.t];label=d.name;cost=mode.move?0:d.price;
    if(mode.pos){why=mode.move?E.canMove(S,mode.move,mode.pos[0],mode.pos[1],mode.r):E.canPlace(S,mode.t,mode.pos[0],mode.pos[1],mode.r);if(d.zone!==2&&d.kind!=='decor')access=E.front({t:mode.t,x:mode.pos[0],y:mode.pos[1],r:mode.r});ok=!why;g.item={t:mode.t,x:mode.pos[0],y:mode.pos[1],r:mode.r};const [w,dd]=mode.r%2?[d.d,d.w]:[d.w,d.d];anchor=[mode.pos[0]+w/2,d.h+1.6,mode.pos[1]+dd/2]}}
   else{const t=mode.id;label=TOOL_NAMES[t]||D.TOOLS.find(o=>o.id===t).name;const b=mode.b||mode.a;
-   if(t==='wall'&&mode.a){const cl=E.wallPlan(S,mode.a,b);g.cells=cl;g.h=1.3;cost=cl.length*D.WALL_COST;ok=!!mode.b&&cl.length>0;why=mode.b?(cl.length?'':'Rien à construire ici.'):'Touche la fin du mur.'}
-   if((t==='zoneR'||t==='zoneS')&&mode.a){const o=[];for(let y=Math.min(mode.a[1],b[1]);y<=Math.max(mode.a[1],b[1]);y++)for(let x=Math.min(mode.a[0],b[0]);x<=Math.max(mode.a[0],b[0]);x++)if(E.inside(S,x,y))o.push([x,y]);g.cells=o;g.h=.06;ok=!!mode.b;why=mode.b?'':'Touche le coin opposé.'}
-   if(t==='extend'&&mode.a){const p=E.extendPlan(S,mode.a,b);g.cells=p.cells;g.h=.12;cost=p.cost;ok=!!mode.b&&!p.why;why=mode.b?p.why||'':'Touche le coin opposé.';if(p.m2)label=`Agrandir : ${p.m2} m²`}
-   if(t==='erase'&&mode.a){const L=E.layout(S),i=E.idx(...mode.a),id=E.inLot(...mode.a)?L.occ[i]:0;
-    if(id){const it=S.items.find(o=>o.id===id);g.cells=E.cells(it).map(k=>[k%D.LOT_W,k/D.LOT_W|0]);g.h=.3;label=D.ITEM[it.t].name;cost=-Math.round(D.ITEM[it.t].price*D.REFUND);ok=true}
-    else if(S.wall[i]){g.cells=[mode.a];g.h=1.4;cost=-Math.round(D.WALL_COST*D.REFUND);ok=true;label='Mur'}else why='Rien à démolir ici.'}
+   if(t==='wall'&&mode.a){const cl=E.wallPlan(S,mode.a,b);g.cells=cl;g.h=1.3;cost=cl.length*D.WALL_COST;ok=cl.length>0;why=cl.length?'':'Rien à construire ici.'}
+   if((t==='zoneR'||t==='zoneS')&&mode.a){const o=[];for(let y=Math.min(mode.a[1],b[1]);y<=Math.max(mode.a[1],b[1]);y++)for(let x=Math.min(mode.a[0],b[0]);x<=Math.max(mode.a[0],b[0]);x++)if(E.inside(S,x,y))o.push([x,y]);g.cells=o;g.h=.06;ok=o.length>0}
+   if(t==='extend'&&mode.a){const p=E.extendPlan(S,mode.a,b);g.cells=p.cells;g.h=.12;cost=p.cost;ok=!p.why;why=p.why||'';if(p.m2)label=`Agrandir : ${p.m2} m²`}
+   if((t==='asphalt'||t==='road')&&mode.a){const p=E.groundPlan(S,mode.a,b,t==='road'?2:1);g.cells=p.cells.map(i=>[i%D.LOT_W,i/D.LOT_W|0]);g.h=.04;cost=p.cost;ok=!p.why;why=p.why||'';if(p.cells.length)label=`${TOOL_NAMES[t]} : ${p.cells.length} m²`}
+   if(t==='erase'&&mode.a){const inf=E.eraseInfo(S,...mode.a);if(inf){g.cells=inf.cells.map(k=>[k%D.LOT_W,k/D.LOT_W|0]);g.h=.3;label='Démolir : '+inf.label;cost=-inf.refund;ok=true}else why='Rien à démolir ici.'}
    if(mode.a)anchor=[b[0]+.5,(g.h||0)+1,b[1]+.5]}
+  if(ok&&cost>0&&cost>S.cash){ok=false;why='Pas assez d’argent.'}
   buildGhost(Bg,S,g,view());ren.upload('ghost',Bg.d,Bg.n);buildAccess(Bac,access,view());ren.upload('access',Bac.d,Bac.n);ghostTint=ok?[.3,.85,.4,.45]:[.95,.3,.25,.5];
   const name=el('div','st-place-name');name.append(el('b',null,label),el('small',null,cost?(cost>0?eur(cost):'+'+eur(-cost)):''));bar.append(name);
   if(mode.kind==='item'){const r=el('button','st-pbtn','↻');r.setAttribute('aria-label','Tourner');r.onclick=()=>{mode.r=(mode.r+1)%4;sfx('click');updatePlace()};bar.append(r)}
   const x=el('button','st-pbtn done','Fini');x.onclick=()=>{sfx('click');stopMode()};bar.append(x);
-  pop.hidden=!anchor||(mode.kind==='tool'&&!mode.b&&mode.id!=='erase');popOk.disabled=!ok;
+  pop.hidden=!anchor||(mode.kind==='tool'&&!mode.b)||!!drag?.draw||(mode.id==='erase'&&!ok);popOk.disabled=!ok;pop.classList.toggle('bad',!ok);popCost.textContent=cost?(cost>0?eur(cost):'+'+eur(-cost)):'';
   popOk.onclick=()=>mode.kind==='item'?confirmPlace():applyTool();popNo.onclick=()=>{if(mode.kind==='item')mode.pos=null;else mode.a=mode.b=null;sfx('click');updatePlace()};
   c.hint(why||'')}
  function confirmPlace(){if(!mode?.pos)return;if(mode.move){const why=E.moveItem(S,mode.move,mode.pos[0],mode.pos[1],mode.r);if(why){msg(why);sfx('error');return}sfx('place');sel=mode.move;stopMode();return}const r=E.place(S,mode.t,mode.pos[0],mode.pos[1],mode.r);
@@ -128,6 +135,7 @@ export function bagastore(c){
   if(t==='zoneR'||t==='zoneS')why=E.paintZone(S,mode.a,mode.b,t==='zoneR'?1:0);
   if(t==='erase')why=E.eraseAt(S,...mode.a);
   if(t==='extend'){why=E.extendRect(S,mode.a,mode.b);if(!why)save()}
+  if(t==='asphalt'||t==='road')why=E.paintGround(S,mode.a,mode.b,t==='road'?2:1);
   if(why){msg(why);sfx('error')}else sfx(t==='erase'?'erase':'place');mode.a=mode.b=null;updatePlace()}
 
  // ---- panneaux
@@ -148,7 +156,8 @@ export function bagastore(c){
   const nb=sheet.querySelector('.st-body');if(nb&&key===panelKey)nb.scrollTop=top;panelKey=key}
  function pBuild(){const body=head('Construire · '+eur(S.cash),D.TABS,buildTab,v=>buildTab=v);const grid=el('div','st-cards');body.append(grid);
   if(buildTab==='murs'){for(const t of D.TOOLS){const b=card(t.name,t.price?eur(t.price)+(t.id==='wall'?' / m':''):'');b.onclick=()=>{sfx('click');startTool(t.id)};grid.append(b)}return}
-  if(buildTab==='agrandir'){const b=card('Tracer une extension',eur(D.EXTEND.perM2)+' / m²','Sol et murs compris');b.onclick=()=>{sfx('click');startTool('extend')};grid.append(b);
+  if(buildTab==='parking'){for(const [id,name,price,sub] of [['asphalt','Goudron',E.GROUND_COST[1],'Pour les places de parking'],['road','Route',E.GROUND_COST[2],'Voitures et camions']]){const b=card(name,eur(price)+' / m²',sub);b.onclick=()=>{sfx('click');startTool(id)};grid.append(b)}}
+  if(buildTab==='agrandir'){const b=card('Agrandir le magasin',eur(D.EXTEND.perM2)+' / m²','Sol et murs compris');b.onclick=()=>{sfx('click');startTool('extend')};grid.append(b);
    body.append(el('p','st-note',`Surface : ${E.area(S)} m² · vente ${E.salesArea(S)} m²`));return}
   for(const d of D.ITEMS.filter(i=>i.tab===buildTab)){const sub=d.kind==='spot'?'+ clients en voiture':d.kind==='bus'?'Un bus amène des clients':d.kind==='corral'?'Caddies : paniers plus gros':d.kind==='sale'||d.kind==='counter'||d.kind==='reserve'?`${d.cap} articles`:d.attract?'+ attractif':d.security?'− vols':d.clean?'− saleté':'';
    const b=card(d.name,eur(d.price),sub,d.w+'×'+d.d);b.onclick=()=>{sfx('click');startItem(d.id)};grid.append(b)}}
@@ -165,7 +174,7 @@ export function bagastore(c){
   body.append(el('p','st-note','Ce que disent tes clients ces 7 derniers jours.'),box)}
  function stockList(body){const bud=el('div','st-budget');
   bud.append(el('span',null,'Budget / jour'),btn('−',()=>{S.budget=Math.max(0,S.budget-250);renderPanel()}),el('b',null,eur(S.budget)),btn('+',()=>{S.budget+=250;renderPanel()}));body.append(bud);
-  body.append(row(btn('Livraison express +15 %',()=>{const r=E.express(S,S.budget);if(typeof r==='string'){msg(r);sfx('error')}else{toast('Livraison express : '+eur(r.cost));sfx('truck');save()}renderPanel()},'st-small wide'),
+  body.append(row(btn('Livraison express +15 %',()=>{const r=E.express(S,S.budget,R);if(typeof r==='string'){msg(r);sfx('error')}else{toast('Camion en route : '+eur(r.cost));sfx('truck');save()}renderPanel()},'st-small wide'),
    btn('% par défaut',()=>{S.alloc=E.defaultAlloc();renderPanel()},'st-small wide')));
   const tot=D.CATS.reduce((t,k)=>t+(S.alloc[k.id]||0),0)||1,pop=E.popularity(S),TAG={hot:['Populaire','hot'],cold:['Impopulaire','cold'],empty:['Vide','empty']};
   const tbl=el('div','st-cats');tbl.append(row(el('span','st-h','Rayon'),el('span','st-h','Achat'),el('span','st-h','Marge'),el('span','st-h','Rayon / réserve')));
@@ -209,6 +218,9 @@ export function bagastore(c){
  function pItem(){const it=S.items.find(o=>o.id===sel);if(!it){closePanel();return}const d=D.ITEM[it.t];const body=head(d.name);
   if(d.cap&&d.kind!=='reserve'){const f=Math.min(1,it.stock/d.cap),r=el('div','st-cap');const m=el('i'),u=el('u');u.style.width=f*100+'%';m.append(u);r.append(el('span',null,'En rayon'),m,el('small',null,it.stock+' / '+d.cap));body.append(r)}
   if(d.kind==='reserve'){const cap=E.capacity(S),r=el('div','st-cap'),f=cap.cap[d.store]?cap.used[d.store]/cap.cap[d.store]:0;const m=el('i'),u=el('u');u.style.width=Math.min(1,f)*100+'%';m.append(u);r.append(el('span',null,D.STORES[d.store]),m,el('small',null,`${cap.used[d.store]} / ${cap.cap[d.store]}`));body.append(r)}
+  if(it.cat&&(d.kind==='sale'||d.kind==='counter')){
+   body.append(row(btn(it.urgent?'🚨 Urgence en cours…':'🚨 Remplir en urgence',()=>{E.urgent(S,it.id,!it.urgent);renderPanel()},'st-small wide'+(it.urgent?' on':'')),
+    btn('📦 Commander '+D.CAT[it.cat].name.toLowerCase(),()=>{const r=E.expressCat(S,it.cat,R);if(typeof r==='string'){msg(r);sfx('error')}else{toast('Camion en route : '+eur(r.cost));sfx('truck')}renderPanel()},'st-small wide')))}
   if(d.cats&&d.cats.length>1){const chips=el('div','st-chips');for(const k of d.cats){chips.append(btn(D.CAT[k].name,()=>{E.setCat(S,it.id,k);renderPanel()},'st-chip'+(it.cat===k?' on':'')))}body.append(chips)}
   if((d.kind==='checkout'||d.kind==='counter')&&!E.manned(S,it))body.append(el('p','st-note warn',d.kind==='checkout'?'Pas de caissier·ère':'Comptoir fermé : embauche un·e '+D.ROLES.find(r=>r.needs===it.t).name.toLowerCase()));
   body.append(row(btn('✥ Déplacer',()=>startMove(it.id),'st-small wide'),btn('↻ Tourner',()=>{const why=E.rotateItem(S,it.id);if(why){msg(why);sfx('error')}renderPanel()},'st-small wide'),btn('Vendre '+eur(d.price*D.REFUND),()=>{E.removeItem(S,it.id);sfx('erase');sel=null;closePanel()},'st-small wide danger')))}
@@ -227,6 +239,7 @@ export function bagastore(c){
   if(e.t==='pay'){floats.push({x:e.x,z:e.y,y:2,txt:'+'+Math.round(e.v)+' €',col:'#2f8a45',life:1.4});sfx('cash',.18)}
   if(e.t==='bubble'){const a=R.agents.find(o=>o.id===e.id);if(a){floats.push({x:a.x,z:a.y,y:2.2,txt:e.txt,col:e.txt==='€'?'#b8860b':'#c62f2f',life:1.6,big:true});sfx('bad',1.2)}}
   if(e.t==='bus'&&e.n)sfx('horn',3);
+  if(e.t==='truck')sfx('truck');if(e.t==='delivery'&&e.cost)toast('Livraison reçue : '+eur(e.cost));if(e.t==='noroad')toast('Le camion ne peut pas atteindre le quai : construis une route.');
   if(e.t==='night'){const d=e.day;toast(`Jour ${d.d} · ${d.customers} clients · ${eur(d.rev)}`);sfx('night');save()}
   if(e.t==='month'){pending=e;hold=true;openPanel('report');sfx('month');save()}}}
 
