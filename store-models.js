@@ -1,6 +1,7 @@
 // BagaStore : modèles 3D (pavés colorés, style maquette) du terrain, du magasin, des meubles et des personnages.
 import * as D from './store-data.js';
 import * as E from './store-engine.js';
+import * as RD from './store-roads.js';
 const W=D.LOT_W,H=D.LOT_H,RY=D.ROAD.y,RE=D.ROAD.y+D.ROAD.h;
 const rgb=h=>[parseInt(h.slice(1,3),16)/255,parseInt(h.slice(3,5),16)/255,parseInt(h.slice(5,7),16)/255];
 const mix=(a,b,t)=>[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t];
@@ -19,26 +20,14 @@ export function buildStatic(B,S,v){const b=S.b,L=E.layout(S);B.reset();B.setYaw(
  // herbe, parking, route
  // hors du terrain : herbe plus sombre (on ne construit pas) ; le terrain constructible est l'herbe claire
  B.tile(-40,-40,W+40,H+40,-.03,mix(C.grass2,[.35,.45,.3],.35));B.tile(0,0,W,H,-.02,C.grass);
- // sol : goudron, routes (route principale prolongée hors du terrain), marquages : ligne continue au milieu, tirets dans chaque sens
- for(const [a,b] of [[-40,0],[W,W+40]]){B.tile(a,RY,b,RE,0,C.road);B.tile(a,RY-1,b,RY,0,C.walk);B.tile(a,RE,b,RE+1,0,C.walk)}
- {const m=(RY+RE)/2;for(const d of [-.12,.12])B.tile(-40,m+d-.04,W+40,m+d+.04,.006,C.yellow);
-  for(let x=-39;x<W+40;x+=3)for(const z of [RY+1.5,RE-1.5])B.tile(x,z-.06,x+1.4,z+.06,.006,C.line)}
+ // trottoirs de la route de départ, prolongés hors du terrain
+ for(const [a,b] of [[-40,0],[W,W+40]]){B.tile(a,RY-1,b,RY,0,C.walk);B.tile(a,RE,b,RE+1,0,C.walk)}
  const G=S.ground||[],gr=(x,y)=>x>=0&&y>=0&&x<W&&y<H?G[E.idx(x,y)]:0;
- for(let y=0;y<H;y++)for(let x=0;x<W;x++){const g=gr(x,y);if(!g||E.inside(S,x,y))continue;B.tile(x,y,x+1,y+1,.001,g===2||g===4||g===5?C.road:g===3?((x+y)&1?C.walk:mix(C.walk,C.white,.25)):C.asphalt);
-  // passage piéton : bandes blanches dans le sens de la route
-  if(g===4){B.tile(x,y,x+1,y+1,.007,C.road);const vert=gr(x,y-1)===4||gr(x,y+1)===4;if(vert)B.tile(x+.08,y+.22,x+.92,y+.78,.008,C.line);else B.tile(x+.22,y+.08,x+.78,y+.92,.008,C.line);continue}
-  // cédez le passage : dents de requin blanches le long de la ligne
-  if(g===5){const hor=gr(x-1,y)===5||gr(x+1,y)===5;for(const k of [.25,.75]){const a=hor?[x+k-.18,y+.35]:[x+.35,y+k-.18],b2=hor?[x+k+.18,y+.35]:[x+.35,y+k+.18],c2=hor?[x+k,y+.72]:[x+.72,y+k];
-    B.quad([a[0],.008,a[1]],[b2[0],.008,b2[1]],[c2[0],.008,c2[1]],[c2[0],.008,c2[1]],C.line)}continue}
-  // sens unique : une flèche blanche toutes les 4 cases, sur la voie du milieu
-  {const ow=(u,v)=>S.oneway&&u>=0&&v>=0&&u<W&&v<H?S.oneway[E.idx(u,v)]:-1,o=ow(x,y);
-   if(g===2&&o>=0&&!S.owid?.[E.idx(x,y)]){const [dx,dy]=E.DIRS[o],px=-dy,py=dx;if(ow(x+px,y+py)===o&&ow(x-px,y-py)===o&&(dx?x:y)%3===0){const cx=x+.5,cz=y+.5,P=(a,l)=>[cx+dx*a+px*l,.008,cz+dy*a+py*l];
-    B.quad(P(-.38,-.07),P(.08,-.07),P(.08,.07),P(-.38,.07),C.line);B.tri(P(.08,-.22),P(.45,0),P(.08,.22),C.line)}}}
-  if(g===2&&!E.isMainRoad(x,y)){const e=.07,lc=mix(C.road,C.line,.75);if(!gr(x,y-1))B.tile(x,y,x+1,y+e,.004,lc);if(!gr(x,y+1))B.tile(x,y+1-e,x+1,y+1,.004,lc);if(!gr(x-1,y))B.tile(x,y,x+e,y+1,.004,lc);if(!gr(x+1,y))B.tile(x+1-e,y,x+1,y+1,.004,lc)}}
- // blocs de sens unique : une grande flèche au milieu de chaque bloc (au centre de ses cases de route)
- if(S.owid&&S.oneway){const bl=new Map();for(let i=0;i<S.owid.length;i++){const id=S.owid[i];if(!id||S.oneway[i]<0)continue;const b=bl.get(id)||{x:0,z:0,n:0,r:S.oneway[i]};b.x+=i%W+.5;b.z+=(i/W|0)+.5;b.n++;bl.set(id,b)}
-  for(const b of bl.values()){const cx=b.x/b.n,cz=b.z/b.n,[dx,dy]=E.DIRS[b.r],px=-dy,py=dx,P=(a,l)=>[cx+dx*a+px*l,.012,cz+dy*a+py*l];
-   B.quad(P(-.9,-.13),P(.2,-.13),P(.2,.13),P(-.9,.13),C.line);B.tri(P(.2,-.42),P(.95,0),P(.2,.42),C.line)}}
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++){const g=gr(x,y);if(!g||E.inside(S,x,y))continue;
+  // passage piéton (sur une voie) : bandes blanches dans le sens de la voie
+  if(g===4){const vert=gr(x,y-1)===4||gr(x,y+1)===4;if(vert)B.tile(x+.08,y+.22,x+.92,y+.78,.012,C.line);else B.tile(x+.22,y+.08,x+.78,y+.92,.012,C.line);continue}
+  B.tile(x,y,x+1,y+1,.001,g===3?((x+y)&1?C.walk:mix(C.walk,C.white,.25)):C.asphalt)}
+ lanes(B,S);
  const ins=(x,y)=>E.inside(S,x,y);
  for(const [x,y,s] of S.trees||[])tree(B,x+.5,y+.5,s);
  for(const [x,z,s] of trees)if(x<-1||x>W+1||z<-1)tree(B,x,z,s);
@@ -268,9 +257,36 @@ export function buildAgents(B,S,R,v,time){B.reset();B.setYaw(v.yaw);
 
 // ---------------------------------------------------------------- aperçu de placement
 export function buildAccess(B,cells,v){B.reset();B.setYaw(v.yaw);for(const [x,y] of cells||[]){B.tile(x+.06,y+.06,x+.94,y+.94,.025,rgb('#f7c948'));B.tile(x+.2,y+.2,x+.8,y+.8,.03,rgb('#fff4cf'))}}
+// voies : chaussée de 2 m le long de chaque ligne, bords blancs (sauf là où une autre voie touche), flèches de sens, cédez-le-passage, îlot des ronds-points
+function lanes(B,S){const NT=RD.net(S),gs=[...NT.geo.values()],bk=new Map(),key=(x,z)=>Math.floor(x)*4096+Math.floor(z);
+ for(const g of gs)for(let i=0;i<g.n;i+=2){const k=key(g.xs[i],g.zs[i]);(bk.get(k)||bk.set(k,[]).get(k)).push(g.id,g.xs[i],g.zs[i])}
+ const covered=(x,z,self,r)=>{for(let ox=-1;ox<=1;ox++)for(let oz=-1;oz<=1;oz++){const L=bk.get(key(x+ox,z+oz));if(!L)continue;for(let k=0;k<L.length;k+=3)if(L[k]!==self&&(L[k+1]-x)**2+(L[k+2]-z)**2<r*r)return true}return false};
+ const rc=mix(C.road,C.asphalt,.15),lc=C.line;
+ for(const g of gs){const n=g.n,R=i=>[-Math.cos(g.as[i]),Math.sin(g.as[i])];
+  // prolongement visuel des voies qui sortent du terrain
+  for(const [i0,sg] of [[0,-1],[n-1,1]]){if(sg<0?!g.pre:!g.post)continue;const a=R(i0),ux=Math.sin(g.as[i0])*sg,uz=Math.cos(g.as[i0])*sg,x0=g.xs[i0],z0=g.zs[i0],x1=x0+ux*30,z1=z0+uz*30;
+   B.quad([x0-a[0],.003,z0-a[1]],[x0+a[0],.003,z0+a[1]],[x1+a[0],.003,z1+a[1]],[x1-a[0],.003,z1-a[1]],rc)}
+  for(let i=0;i<n-1;i+=2){const j=Math.min(n-1,i+2),a=R(i),b=R(j),x0=g.xs[i],z0=g.zs[i],x1=g.xs[j],z1=g.zs[j];
+   B.quad([x0-a[0],.003,z0-a[1]],[x0+a[0],.003,z0+a[1]],[x1+b[0],.003,z1+b[1]],[x1-b[0],.003,z1-b[1]],rc);
+   for(const sd of [-1,1]){const ex=x0+a[0]*.93*sd,ez=z0+a[1]*.93*sd;if(covered(ex,ez,g.id,1.0))continue;const fx=x1+b[0]*.93*sd,fz=z1+b[1]*.93*sd,w=.035;
+    B.quad([ex-a[0]*w,.006,ez-a[1]*w],[ex+a[0]*w,.006,ez+a[1]*w],[fx+b[0]*w,.006,fz+b[1]*w],[fx-b[0]*w,.006,fz-b[1]*w],lc)}
+   }
+  // flèches : toutes les 7 m (pas sur un carrefour)
+  for(let s0=g.ring?1.5:3;s0<g.len-2;s0+=g.ring?Math.max(4,g.len/4):7){const P=RD.pos(g,s0);if(covered(P.x,P.z,g.id,1.6))continue;const ux=Math.sin(P.ang),uz=Math.cos(P.ang),px=-uz,pz=ux,Q=(f,l)=>[P.x+ux*f+px*l,.008,P.z+uz*f+pz*l];
+   B.quad(Q(-.75,-.09),Q(.05,-.09),Q(.05,.09),Q(-.75,.09),lc);B.tri(Q(.05,-.32),Q(.6,0),Q(.05,.32),lc)}
+  // cédez-le-passage : dents de requin en travers de la voie
+  for(const ys of NT.yields.get(g.id)||[]){const P=RD.pos(g,ys),ux=Math.sin(P.ang),uz=Math.cos(P.ang),px=-uz,pz=ux;for(let k=-3;k<=3;k+=2){const l=k*.25,Q=(f,m)=>[P.x+ux*f+px*(l+m),.009,P.z+uz*f+pz*(l+m)];B.tri(Q(.25,-.2),Q(.25,.2),Q(-.2,0),lc)}}
+  // îlot central du rond-point
+  if(g.ring){const l=S.lanes.find(o=>o.id===g.id);if(l&&l.ring){const {cx,cy,r}=l.ring,ri=r-1,m=32;for(let k=0;k<m;k++){const t0=2*Math.PI*k/m,t1=2*Math.PI*(k+1)/m;
+     B.tri([cx,.05,cy],[cx+Math.cos(t0)*ri,.05,cy+Math.sin(t0)*ri],[cx+Math.cos(t1)*ri,.05,cy+Math.sin(t1)*ri],C.grass2);
+     B.quad([cx+Math.cos(t0)*ri,0,cy+Math.sin(t0)*ri],[cx+Math.cos(t1)*ri,0,cy+Math.sin(t1)*ri],[cx+Math.cos(t1)*ri,.05,cy+Math.sin(t1)*ri],[cx+Math.cos(t0)*ri,.05,cy+Math.sin(t0)*ri],C.walk)}
+    tree(B,cx,cy,.8)}}}}
 export function buildGhost(B,S,g,v){B.reset();B.setYaw(v.yaw);if(!g)return;
  if(g.item){item(B,S,{...g.item,stock:0,id:-1,cat:null},{...v,sel:null});return}
  for(const [x,y] of g.cells||[])B.box(x+.04,0,y+.04,x+.96,g.h||.08,y+.96,g.col||C.white);
  // flèche du sens unique, au-dessus du bloc
+ // tracé d'une voie : axe et flèche au bout
+ if(g.poly&&g.poly.length>1){const P=g.poly,h=.18,c=[.15,.45,.95];for(let i=1;i<P.length;i++){const [x0,z0]=P[i-1],[x1,z1]=P[i],l=Math.hypot(x1-x0,z1-z0)||1,px=-(z1-z0)/l*.14,pz=(x1-x0)/l*.14;B.quad([x0-px,h,z0-pz],[x0+px,h,z0+pz],[x1+px,h,z1+pz],[x1-px,h,z1-pz],c)}
+  const [x0,z0]=P[P.length-2],[x1,z1]=P[P.length-1],l=Math.hypot(x1-x0,z1-z0)||1,ux=(x1-x0)/l,uz=(z1-z0)/l;B.tri([x1-ux*.9-uz*.55,h+.01,z1-uz*.9+ux*.55],[x1+ux*.2,h+.01,z1+uz*.2],[x1-ux*.9+uz*.55,h+.01,z1-uz*.9-ux*.55],c)}
  for(const [x,y,r] of g.arrows||[]){const [dx,dy]=E.DIRS[r],px=-dy,py=dx,cx=x+.5,cz=y+.5,h=.12,P=(a,l)=>[cx+dx*a+px*l,h,cz+dy*a+py*l],c=[.15,.45,.95];
   B.quad(P(-1.1,-.2),P(.3,-.2),P(.3,.2),P(-1.1,.2),c);B.tri(P(.3,-.6),P(1.3,0),P(.3,.6),c)}}

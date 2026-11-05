@@ -1,9 +1,9 @@
 // BagaStore : moteur de simulation (sans DOM, testable dans Node).
 // S : état sauvegardé (magasin, argent, stocks). R : état d'exécution (clients, employés, files d'attente).
 import * as D from './store-data.js';
+import * as RD from './store-roads.js';
 const W=D.LOT_W,H=D.LOT_H,N=W*H,RY=D.ROAD.y,RE=D.ROAD.y+D.ROAD.h;
-// route principale : rangs RY..RE-1. Vers l'ouest sur la moitié nord (voie RY+1), vers l'est sur la moitié sud (voie RE-2).
-const LANE_W=RY+1,LANE_E=RE-2;
+// route de départ : deux lignes de 2 cases (vers l'ouest sur RY..RY+1, vers l'est sur RY+2..RY+3), trottoirs en RY-1 et RE
 export const DIRS=[[0,1],[-1,0],[0,-1],[1,0]];   // devant d'un meuble selon sa rotation (0 : vers le sud)
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 export const idx=(x,y)=>y*W+x;
@@ -11,7 +11,7 @@ export function mulberry(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a
 
 // ---------------------------------------------------------------- nouvelle partie
 export function newGame(){
- const s=D.START,S={v:1,d:1,hour:D.HOURS.open,open:false,cash:s.cash,loan:{left:s.loan,monthly:s.loanMonthly},rep:s.rep,
+ const s=D.START,S={v:2,d:1,hour:D.HOURS.open,open:false,cash:s.cash,loan:{left:s.loan,monthly:s.loanMonthly},rep:s.rep,
   b:{x0:s.x0,y0:s.y0,x1:s.x1,y1:s.y1},fy:s.y1-1,ent:s.entrance,built:new Array(N).fill(0),wall:new Array(N).fill(0),zone:new Array(N).fill(0),items:[],nid:1,
   reserve:{},staff:{},staffDays:{},budget:5200,eco:31,alloc:{},margin:{},ads:{until:0,boost:0},extraLoans:0,
   month:blankMonth(),dayStats:blankDay(),last:null,history:[],sold:{},over:false};
@@ -23,42 +23,39 @@ export function newGame(){
  for(let y=s.y0;y<s.y0+s.reserveRows;y++)for(let x=s.x0;x<s.x1;x++)S.zone[idx(x,y)]=1;
  const wy=s.y0+s.reserveRows;for(let x=s.x0;x<s.x1;x++)S.wall[idx(x,wy)]=1;
  S.wall[idx((s.x0+s.x1>>1)-1,wy)]=2;
- S.ground=defaultGround(S);S.trees=genTrees(S);S.lw=W;S.lh=H;
+ S.ground=defaultGround(S);defaultRoads(S);S.trees=genTrees(S);S.lw=W;S.lh=H;
  defaultParking(S);
  return S;
 }
-// sol : 0 herbe, 1 goudron, 2 route. La route principale (3 rangs du bas) ne se modifie pas.
-export const isMainRoad=(x,y)=>y>=RY&&y<RE;
-export const isRoad=g=>g===2||g===4||g===5;
-// devant le magasin : trottoir le long de la façade, places de parking, allée de 2 voies qui donne sur la route principale,
-// trottoirs sur les côtés (vers celui de la route) et une allée piétonne devant l'entrée
+// sol (cases) : 0 herbe, 1 goudron, 3 trottoir, 4 passage piéton (sur une voie). Les voies sont des lignes (store-roads.js).
+export const roadAt=(S,x,y)=>inLot(x,y)&&RD.net(S).raster[idx(x,y)]===1;
+export const isMainRoad=()=>false;
+// devant le magasin : trottoir le long de la façade, trottoirs sur les côtés et allée piétonne devant l'entrée jusqu'au trottoir de la route
+// (passages piétons là où ils traversent l'allée du parking)
 function defaultGround(S){const g=new Array(N).fill(0),set=(x,y,t)=>{if(inLot(x,y)&&!inside(S,x,y))g[idx(x,y)]=t};
- for(let y=RY;y<RE;y++)for(let x=0;x<W;x++)g[idx(x,y)]=2;
- const x0=S.b.x0-4,x1=S.b.x1+3,y0=S.fy+1;
- for(let x=x0+2;x<=x1-2;x++)for(let y=RY-2;y<RY;y++)set(x,y,2);
- for(let x=x0;x<=x1;x++)set(x,y0,3);for(let y=y0;y<RY;y++)for(const x of [x0,x0+1,x1-1,x1])set(x,y,3);
- for(let y=y0+1;y<RY-2;y++)for(let x=S.ent;x<=S.ent+1;x++)set(x,y,3);
- addSidewalks(S,g);S.gv=2;return g}
-// anciennes sauvegardes : le goudron n'est plus carrossable. Il devient route, trottoir le long du magasin, et reste sous les places.
-function migrateGround(S){const g=S.ground,under=new Set(),dock=new Set();
- for(const it of S.items){if(it.t==='spot')for(const c of cells(it))under.add(c);if(it.t==='dock')for(const [x,y] of back(it))if(inLot(x,y))dock.add(idx(x,y))}
- for(let i=0;i<N;i++){if(g[i]!==1||under.has(i))continue;const x=i%W,y=i/W|0;
-  g[i]=!dock.has(i)&&DIRS.some(([dx,dy])=>inside(S,x+dx,y+dy))?3:2}
- S.gv=2}
+ const x0=S.b.x0-4,x1=S.b.x1+3,y0=S.fy+1,ped=(x,y)=>set(x,y,y>=RY-3?4:3);
+ for(let x=x0;x<=x1;x++)set(x,y0,3);for(let y=y0;y<RY-1;y++)for(const x of [x0,x0+1,x1-1,x1])ped(x,y);
+ for(let y=y0+1;y<RY-1;y++)for(let x=S.ent;x<=S.ent+1;x++)ped(x,y);
+ addSidewalks(S,g);S.gv=3;return g}
+// voies de départ : la route (2 lignes), l'allée du parking devant le magasin (sens unique, branchée sur la voie vers l'ouest)
+// et un demi-tour pour ceux qui arrivent de l'ouest
+function defaultRoads(S){S.lanes=[];S.yields=[];S.laneNext=0;const L=pts=>RD.addLane(S,{pts});
+ L([[W,RY+1],[0,RY+1]]);L([[0,RE-1],[W,RE-1]]);
+ L([[52,RY+1],[49,RY-2],[15,RY-2],[12,RY+1]]);
+ L([[58,RE-1],[58,RY+1]]);RD.roadsChanged(S)}
 // trottoirs : le long de la route principale et tout autour du magasin
 function addSidewalks(S,g){for(let x=0;x<W;x++)for(const y of [RY-1,RE])if(!g[idx(x,y)]&&!S.built[idx(x,y)])g[idx(x,y)]=3;
  for(let y=0;y<RY;y++)for(let x=0;x<W;x++){const i=idx(x,y);if(g[i]||S.built[i])continue;let near=false;for(let dy=-1;dy<=1&&!near;dy++)for(let dx=-1;dx<=1;dx++)if(inside(S,x+dx,y+dy)){near=true;break}if(near)g[i]=3}}
 function genTrees(S){const o=[],used=new Set();let s=11;const r=()=>(s=(s*16807)%2147483647)/2147483647;
  const want=Math.round(N/40);for(let k=0;k<want*2&&o.length<want;k++){const x=Math.floor(r()*W),y=Math.floor(r()*H),i=idx(x,y);
-  if(used.has(i)||S.ground[i]||(y>=RY-1&&y<=RE)||x>=S.b.x0-2&&x<S.b.x1+2&&y>=S.b.y0-2&&y<=S.fy+1)continue;let near=false;for(const j of used){const dx=j%W-x,dy=(j/W|0)-y;if(dx*dx+dy*dy<5){near=true;break}}if(near)continue;
+  if(used.has(i)||S.ground[i]||(S.lanes&&roadAt(S,x,y))||(y>=RY-1&&y<=RE)||x>=S.b.x0-6&&x<S.b.x1+6&&y>=S.b.y0-2&&y<=RY)continue;let near=false;for(const j of used){const dx=j%W-x,dy=(j/W|0)-y;if(dx*dx+dy*dy<5){near=true;break}}if(near)continue;
   used.add(i);o.push([x,y,+(.7+r()*.6).toFixed(2)])}return o}
 export function treeAt(S,x,y){return (S.trees||[]).findIndex(t=>t[0]===x&&t[1]===y)}
 export function clearTrees(S,cellsIdx){const set=new Set(cellsIdx);const n=(S.trees||[]).length;S.trees=(S.trees||[]).filter(t=>!set.has(idx(t[0],t[1])));return n-S.trees.length}
 // magasin de départ : trottoirs, accès camion, quai, racks, rayons d'épicerie et caisses (sans frais ni coupe)
-export function starter(S){const g=S.ground,G=(x,y,t)=>{if(inLot(x,y)&&!inside(S,x,y)&&!isMainRoad(x,y))g[idx(x,y)]=t};
- for(let y=10;y<RY;y++)for(let x=10;x<=12;x++)G(x,y,2);for(let y=10;y<=12;y++)for(let x=13;x<=18;x++)G(x,y,2);
- for(let y=10;y<=17;y++)for(let x=19;x<=24;x++)G(x,y,2);
- S.trees=(S.trees||[]).filter(t=>!g[idx(t[0],t[1])]);dirty(S);
+export function starter(S){
+ // voie de service pour le camion : part de la route vers l'ouest, passe derrière le magasin (contre le quai) et rejoint l'allée du parking
+ RD.addLane(S,{pts:[[6,RY+1],[6,17],[46,17],[46,RY-2]]});RD.roadsChanged(S);clearTrees(S,RD.laneCells(S,S.laneNext));dirty(S);
  const P=(t,x,y,r,cat)=>{const why=canPlace(S,t,x,y,r);if(why)throw new Error('starter '+t+' '+x+','+y+': '+why);S.items.push({id:S.nid++,t,x,y,r,cat:cat||null,stock:0});dirty(S)};
  P('dock',20,18,0);for(const x of [24,26,30,32])P('rack',x,18,0);
  const am=['epicerie','boissons','sucre','epicerie','petitdej','hygiene','boissons','epicerie','sucre','alcool','entretien','petitdej'];let k=0;
@@ -121,7 +118,7 @@ export function entrancePlan(S,x,y){if(!inside(S,x,y))return {why:'Touche le bor
   if(c.some(([cx,cy])=>isEntrance(S,cx,cy))){why='Il y a déjà une entrée ici.';continue}
   if(c.some(([cx,cy])=>S.zone[idx(cx,cy)])){why='Une entrée donne sur le magasin, pas sur la réserve.';continue}
   if(c.some(([cx,cy])=>L.occ[idx(cx,cy)]||S.wall[idx(cx,cy)]||L.occ[idx(cx-e.dx,cy-e.dy)]||S.wall[idx(cx-e.dx,cy-e.dy)])){why='Libère la place derrière la porte (meuble ou mur).';continue}
-  const out=c.map(([cx,cy])=>[cx+e.dx,cy+e.dy]);if(out.some(([ox,oy])=>!inLot(ox,oy)||isMainRoad(ox,oy))){why='Il faut de la place dehors.';continue}
+  const out=c.map(([cx,cy])=>[cx+e.dx,cy+e.dy]);if(out.some(([ox,oy])=>!inLot(ox,oy)||roadAt(S,ox,oy))){why='Il faut de la place dehors.';continue}
   if(out.some(([ox,oy])=>L.occ[idx(ox,oy)])){why='Libère la place devant la porte, dehors.';continue}
   const pave=out.filter(([ox,oy])=>!S.ground[idx(ox,oy)]).length;return {door:e,cells:c,out,why:null,cost:D.ENTRANCE_COST+pave*GROUND_COST[3]}}
  return {why}}
@@ -133,17 +130,18 @@ export function addEntrance(S,x,y){const p=entrancePlan(S,x,y);if(p.why)return p
 // ---------------------------------------------------------------- grille de passage et champs de distance
 // mode 'c' : clients (pas la réserve), 's' : employés.
 export function layout(S){if(S._L)return S._L;
- const occ=new Int32Array(N);for(const it of S.items)for(const c of cells(it))occ[c]=it.id;
+ const occ=new Int32Array(N),RR=RD.net(S).raster;for(const it of S.items)for(const c of cells(it))occ[c]=it.id;
  const pc=new Uint8Array(N),ps=new Uint8Array(N);
  for(let y=0;y<H;y++)for(let x=0;x<W;x++){const i=idx(x,y);
-  if(!inside(S,x,y)){const o=occ[i]&&S.items.find(it=>it.id===occ[i]);if(o&&o.t==='corral')continue;if(!S.ground||S.ground[i]||(o&&o.t==='busstop')){pc[i]=ps[i]=1}continue}
+  if(!inside(S,x,y)){const o=occ[i]&&S.items.find(it=>it.id===occ[i]);if(o&&o.t==='corral')continue;if(!S.ground||S.ground[i]||RR[i]||(o&&o.t==='busstop')){pc[i]=ps[i]=1}continue}
   if(occ[i]||S.wall[i]===1)continue;ps[i]=1;if(!S.zone[i])pc[i]=1}
  for(const [tx,ty] of S.trees||[]){const i=idx(tx,ty);pc[i]=ps[i]=0}
  // coût de marche : trottoir, passage piéton et intérieur 1, goudron 2, place de parking 6, bord de route 4, milieu de la route 14
  // (on sort de la voiture vers le trottoir le plus proche, sinon on longe le bord de la route ; on ne traverse que si besoin)
  const wc=new Uint8Array(N).fill(1),G=S.ground;
- if(G)for(let i=0;i<N;i++){if(S.built[i])continue;const g=G[i];if(g===1)wc[i]=occ[i]&&S.items.find(it=>it.id===occ[i])?.t==='spot'?6:2;
-  else if(g===4)wc[i]=1;else if(g===2||g===5){const x=i%W,y=i/W|0;wc[i]=DIRS.some(([dx,dy])=>inLot(x+dx,y+dy)&&!isRoad(G[idx(x+dx,y+dy)]))?4:14}}
+ if(G)for(let i=0;i<N;i++){if(S.built[i])continue;const g=G[i];
+  if(RR[i]){if(g===4){wc[i]=1;continue}const x=i%W,y=i/W|0;wc[i]=DIRS.some(([dx,dy])=>inLot(x+dx,y+dy)&&!RR[idx(x+dx,y+dy)])?4:14;continue}
+  if(g===1)wc[i]=occ[i]&&S.items.find(it=>it.id===occ[i])?.t==='spot'?6:2}
  S._L={occ,pc,ps,wc,fields:new Map()};assign(S);return S._L}
 export const dirty=S=>{S._L=null};
 function canStep(S,P,x,y,nx,ny){if(!inLot(nx,ny)||!P[idx(nx,ny)])return false;
@@ -158,7 +156,7 @@ export function field(S,key,mode){const L=layout(S),k=mode+key;let f=L.fields.ge
   for(const [dx,dy] of DIRS){const nx=x+dx,ny=y+dy;if(!canStep(S,P,x,y,nx,ny))continue;const j=idx(nx,ny),nd=d+cost(j);if(f[j]<0||nd<f[j]){f[j]=nd;(B[nd]||(B[nd]=[])).push(j);nb++}}}B[d]=null}
  L.fields.set(k,f);return f}
 function targets(S,key){
- if(key==='street'){const o=[];for(let y=0;y<H;y++)if(!isMainRoad(0,y))o.push([0,y],[W-1,y]);return o}
+ if(key==='street'){const o=[];for(let y=0;y<H;y++){if(!roadAt(S,0,y))o.push([0,y]);if(!roadAt(S,W-1,y))o.push([W-1,y])}return o}
  if(key.startsWith('item:')){const it=S.items.find(o=>o.id===+key.slice(5));if(it&&it.t==='busstop')return cells(it).map(c=>[c%W,c/W|0])}
  if(key==='ent')return entCells(S);
  if(key.startsWith('cell:')){const i=+key.slice(5);return [[i%W,i/W|0]]}
@@ -169,11 +167,12 @@ function targets(S,key){
 export function canPlace(S,t,x,y,r){const d=def(t),it={t,x,y,r},L=layout(S);
  if(d.zone===2){for(const c of cells(it)){const cx=c%W,cy=c/W|0;
    if(!inLot(cx,cy)||inside(S,cx,cy))return 'Dehors, sur le parking.';
-   if(isMainRoad(cx,cy)||isRoad(S.ground[c]))return 'Pas sur la route.';
+   if(roadAt(S,cx,cy))return 'Pas sur la route.';
    if(L.occ[c])return 'Place déjà prise.';
    if((cx>=S.ent-1&&cx<=S.ent+2&&cy<=S.fy+2)||entApron(S,cx,cy))return 'Laisse l’accès à l’entrée.';
-   if(d.kind==='bus'&&cy!==RY-1&&cy!==RE)return 'L’arrêt de bus se place au bord de la route.'}
-  if(d.kind==='spot'&&!front(it).every(([fx,fy])=>inLot(fx,fy)&&isRoad(S.ground[idx(fx,fy)])&&!inside(S,fx,fy)))return 'L’entrée de la place doit donner sur une route.';
+  }
+  if(d.kind==='spot'&&(!front(it).every(([fx,fy])=>roadAt(S,fx,fy))||!accessOf(S,it)))return 'L’entrée de la place doit donner sur le côté d’une voie.';
+  if(d.kind==='bus'&&(!front(it).every(([fx,fy])=>roadAt(S,fx,fy))||!accessOf(S,it)))return 'L’arrêt de bus se place au bord d’une voie (devant tourné vers la voie).';
   return null}
  for(const c of cells(it)){const cx=c%W,cy=c/W|0;
   if(!inside(S,cx,cy))return 'Hors du magasin.';
@@ -181,7 +180,7 @@ export function canPlace(S,t,x,y,r){const d=def(t),it={t,x,y,r},L=layout(S);
   if(L.occ[c])return 'Place déjà prise.';
   if(S.zone[c]!==d.zone)return d.zone?'À placer dans la réserve.':'À placer dans le magasin, pas dans la réserve.';
   if(nearEntrance(S,cx,cy))return 'Laisse l’entrée libre.'}
- if(d.kind==='dock'){if(!back(it).every(([bx,by])=>inLot(bx,by)&&!inside(S,bx,by)&&!isMainRoad(bx,by)))return 'Le quai se place contre un mur extérieur.'}
+ if(d.kind==='dock'){if(!back(it).every(([bx,by])=>inLot(bx,by)&&!inside(S,bx,by)))return 'Le quai se place contre un mur extérieur.'}
  if(d.kind!=='decor'){const f=front(it);
   if(!f.some(([fx,fy])=>inside(S,fx,fy)&&!S.wall[idx(fx,fy)]&&!L.occ[idx(fx,fy)]&&(d.zone||!S.zone[idx(fx,fy)])))return 'Il faut une case libre devant.'}
  // ne pas couper l'accès aux autres meubles
@@ -216,7 +215,7 @@ export function undo(S){const u=S._undo;S._undo=null;if(!u||Date.now()-u.at>UNDO
  if(u.type==='item'){const k=S.items.findIndex(o=>o.id===u.id);if(k<0)return 'Déjà retiré.';const it=S.items[k];if(it.cat&&it.stock)S.reserve[it.cat]+=it.stock;S.items.splice(k,1)}
  if(u.type==='wall')for(const i of u.cells)S.wall[i]=0;
  if(u.type==='ground')u.cells.forEach((i,k)=>S.ground[i]=u.prev[k]);
- if(u.type==='oneway')u.cells.forEach((i,k)=>{S.oneway[i]=u.prev[k];if(S.owid&&u.pid)S.owid[i]=u.pid[k]});
+ if(u.type==='lanes'){const o=JSON.parse(u.prev);S.lanes=o.lanes;S.yields=o.yields;S.laneNext=o.laneNext;RD.roadsChanged(S)}
  if(u.type==='extend'){const L=layout(S);if(u.cells.some(i=>L.occ[i]||S.wall[i]))return 'Des objets sont posés sur l’extension.';for(const i of u.cells)S.built[i]=0;bounds(S)}
  S.cash+=u.cost;S.month.build-=u.cost;dirty(S);return null}
 function pay(S,v,k){S.cash-=v;S.month[k]+=v;if(S.dayStats&&k in S.dayStats)S.dayStats[k]+=v}
@@ -228,53 +227,58 @@ export function buildWall(S,a,b){const c=wallPlan(S,a,b);if(!c.length)return 'Ri
  for(const [x,y] of c)S.wall[idx(x,y)]=1;dirty(S);const bad=reachProblem(S);if(bad){for(const [x,y] of c)S.wall[idx(x,y)]=0;dirty(S);return bad}
  pay(S,cost,'build');remember(S,{type:'wall',cells:c.map(([x,y])=>idx(x,y)),cost});return null}
 export function makeDoor(S,x,y){const i=idx(x,y);if(S.wall[i]!==1)return 'Touche un mur.';if(S.cash<D.DOOR_COST)return 'Pas assez d’argent.';S.wall[i]=2;dirty(S);pay(S,D.DOOR_COST,'build');return null}
-// ensembles démolis d'un coup : un bloc de sens unique (ou, pour un ancien tracé, les cases voisines de même sens) ; une ligne de passage piéton ou de cédez-le-passage
-export function owGroup(S,i){const id=S.owid?.[i];if(id){const o=[];for(let k=0;k<N;k++)if(S.owid[k]===id&&S.oneway[k]>=0)o.push(k);return o}
- const d=S.oneway[i];return flood(i,k=>S.oneway[k]===d&&!(S.owid?.[k]))}
+// ensembles démolis d'un coup : une ligne de passage piéton
 export function groundGroup(S,i){const g=S.ground[i];return flood(i,k=>S.ground[k]===g&&!inside(S,k%W,k/W|0))}
 function flood(i,ok){const seen=new Set([i]),st=[i];while(st.length){const c=st.pop(),x=c%W,y=c/W|0;for(const [dx,dy] of DIRS){const nx=x+dx,ny=y+dy;if(!inLot(nx,ny))continue;const j=idx(nx,ny);if(!seen.has(j)&&ok(j)){seen.add(j);st.push(j)}}}return [...seen]}
+// démolir : meuble, entrée, mur, arbre, passage piéton (toute la ligne), cédez-le-passage, voie (toute la ligne), sol
+const yieldNear=(S,x,z)=>(S.yields||[]).findIndex(y=>Math.hypot(y.x-x,y.y-z)<1.3);
 export function eraseAt(S,x,y){if(!inLot(x,y))return 'Rien à démolir ici.';const i=idx(x,y),L=layout(S);
  if(L.occ[i]){removeItem(S,L.occ[i]);return null}
  {const e=entAt(S,x,y);if(e&&e.door){S.doors.splice(S.doors.indexOf(e.door),1);S.cash+=Math.round(D.ENTRANCE_COST*D.REFUND);dirty(S);return null}}
  if(S.wall[i]){S.cash+=Math.round((S.wall[i]===2?D.DOOR_COST:D.WALL_COST)*D.REFUND);S.wall[i]=0;dirty(S);return null}
  const t=treeAt(S,x,y);if(t>=0){S.trees.splice(t,1);dirty(S);return null}
- if(S.oneway&&S.oneway[i]>=0){for(const c of owGroup(S,i)){S.oneway[c]=-1;if(S.owid)S.owid[c]=0}dirty(S);return null}
- if(S.ground[i]===4||S.ground[i]===5){for(const c of groundGroup(S,i))S.ground[c]=2;dirty(S);return null}
- if(!inside(S,x,y)&&S.ground[i]&&!isMainRoad(x,y)){S.ground[i]=0;if(S.oneway)S.oneway[i]=-1;if(S.owid)S.owid[i]=0;dirty(S);return null}
+ if(S.ground[i]===4){for(const c of groundGroup(S,i))S.ground[c]=0;dirty(S);return null}
+ {const k=yieldNear(S,x+.5,y+.5);if(k>=0){const snap=snapRoads(S);S.yields.splice(k,1);RD.roadsChanged(S);dirty(S);remember(S,{type:'lanes',prev:snap,cost:0});return null}}
+ {const q=RD.laneAt(S,x+.5,y+.5,1.05);if(q){const snap=snapRoads(S),r=RD.removeLane(S,q.id);S.cash+=r;dirty(S);remember(S,{type:'lanes',prev:snap,cost:-r});return null}}
+ if(!inside(S,x,y)&&S.ground[i]){S.ground[i]=0;dirty(S);return null}
  return 'Rien à démolir ici.'}
 export function eraseInfo(S,x,y){if(!inLot(x,y))return null;const i=idx(x,y),L=layout(S);
  if(L.occ[i]){const it=S.items.find(o=>o.id===L.occ[i]);return {label:def(it.t).name,refund:Math.round(def(it.t).price*D.REFUND),cells:cells(it),lost:reserveLoss(S,it.id)}}
  {const e=entAt(S,x,y);if(e&&e.door)return {label:'Entrée',refund:Math.round(D.ENTRANCE_COST*D.REFUND),cells:e.cells.map(([a,b])=>idx(a,b))}}
  if(S.wall[i])return {label:S.wall[i]===2?'Porte':'Mur',refund:Math.round((S.wall[i]===2?D.DOOR_COST:D.WALL_COST)*D.REFUND),cells:[i]};
  if(treeAt(S,x,y)>=0)return {label:'Arbre',refund:0,cells:[i]};
- if(S.oneway&&S.oneway[i]>=0)return {label:'Sens unique',refund:0,cells:owGroup(S,i)};
- if(S.ground[i]===4||S.ground[i]===5)return {label:S.ground[i]===4?'Passage piéton':'Cédez le passage',refund:0,cells:groundGroup(S,i)};
- if(!inside(S,x,y)&&S.ground[i]&&!isMainRoad(x,y))return {label:['','Goudron','Route','Trottoir'][S.ground[i]],refund:0,cells:[i]};
+ if(S.ground[i]===4)return {label:'Passage piéton',refund:0,cells:groundGroup(S,i)};
+ {const k=yieldNear(S,x+.5,y+.5);if(k>=0)return {label:'Cédez le passage',refund:0,cells:[i]}}
+ {const q=RD.laneAt(S,x+.5,y+.5,1.05);if(q){const l=S.lanes.find(o=>o.id===q.id);return {label:l.ring?'Rond-point':'Route',refund:Math.round(RD.laneCost(l)*D.REFUND),cells:RD.laneCells(S,q.id),lane:q.id}}}
+ if(!inside(S,x,y)&&S.ground[i])return {label:['','Goudron','','Trottoir'][S.ground[i]]||'Sol',refund:0,cells:[i]};
  return null}
-// goudron (rectangle), route (3 cases de large), trottoir (1 case), passage piéton (2 cases, sur une route)
-export const GROUND_COST={1:40,2:60,3:30,4:20,5:10,6:5};
-// tracés en ligne droite : on garde l'axe dominant (horizontal ou vertical)
+// goudron (rectangle), trottoir (1 case), passage piéton (1 case de large, sur une voie)
+export const GROUND_COST={1:40,3:30,4:20};
 export function straight(a,b){return Math.abs(b[0]-a[0])>=Math.abs(b[1]-a[1])?[b[0],a[1]]:[a[0],b[1]]}
-const ONEWAY_ROAD=g=>g===2||g===4||g===5;
-export function groundPlan(S,a,b,type){const L=layout(S),set=new Set();if(type!==1)b=straight(a,b);
+export function groundPlan(S,a,b,type){const L=layout(S),RR=RD.net(S).raster,set=new Set();if(type!==1)b=straight(a,b);
  if(type===1){for(let y=Math.min(a[1],b[1]);y<=Math.max(a[1],b[1]);y++)for(let x=Math.min(a[0],b[0]);x<=Math.max(a[0],b[0]);x++)set.add(idx(x,y))}
- else{const ks=type===2||type===6?[-1,0,1]:[0];for(const [x,y] of lineCells(a,b)){const hor=Math.abs(a[0]-b[0])>=Math.abs(a[1]-b[1]);for(const k of ks){const cx=hor?x:x+k,cy=hor?y+k:y;if(inLot(cx,cy))set.add(idx(cx,cy))}}}
- if(type===6){const dir=dirOf(a,b),cl=[...set].filter(i=>!isMainRoad(i%W,i/W|0)&&ONEWAY_ROAD(S.ground[i])&&S.oneway?.[i]!==dir);
-  return {cells:cl,dir,cost:cl.length*GROUND_COST[6],why:dir<0?'Trace le sens unique dans le sens de circulation.':cl.length?null:'Le sens unique se trace sur une route.'}}
+ else for(const [x,y] of lineCells(a,b))if(inLot(x,y))set.add(idx(x,y));
  const cl=[];for(const i of set){const x=i%W,y=i/W|0;if(!inLot(x,y)||inside(S,x,y)||S.ground[i]===type)continue;
-  if(type===4||type===5?S.ground[i]!==2:isMainRoad(x,y))continue;const o=L.occ[i]&&S.items.find(it=>it.id===L.occ[i]);if(o&&o.t!=='spot')continue;cl.push(i)}
- return {cells:cl,cost:cl.length*GROUND_COST[type],why:cl.length?null:type===4?'Le passage piéton se trace sur une route.':type===5?'Le cédez-le-passage se trace sur une route.':'Rien à construire ici.'}}
-// sens unique : un bloc de 3 × 3 posé d'un toucher, centré sur la case touchée ; r = sens (index de DIRS)
-export function onewayPlan(S,x,y,r){const cl=[];for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const cx=x+dx,cy=y+dy;if(!inLot(cx,cy)||isMainRoad(cx,cy))continue;const i=idx(cx,cy);if(ONEWAY_ROAD(S.ground[i])&&S.oneway?.[i]!==r)cl.push(i)}
- const any=[];for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)if(inLot(x+dx,y+dy)&&ONEWAY_ROAD(S.ground[idx(x+dx,y+dy)]))any.push(1);
- return {cells:cl,dir:r,cost:cl.length*GROUND_COST[6],why:cl.length?null:isMainRoad(x,y)?'La route principale a déjà son sens.':any.length?'Ce sens unique est déjà posé ici.':'Le sens unique se pose sur une route.'}}
-export function placeOneway(S,x,y,r){const p=onewayPlan(S,x,y,r);if(p.why)return p.why;if(S.cash<p.cost)return 'Pas assez d’argent.';
- if(!S.oneway)S.oneway=new Array(N).fill(-1);if(!S.owid)S.owid=new Array(N).fill(0);const prev=p.cells.map(i=>S.oneway[i]),pid=p.cells.map(i=>S.owid[i]),id=S.owNext=(S.owNext||0)+1;
- for(const i of p.cells){S.oneway[i]=r;S.owid[i]=id}pay(S,p.cost,'build');dirty(S);remember(S,{type:'oneway',cells:p.cells,prev,pid,cost:p.cost});return null}
-const dirOf=(a,b)=>{const dx=Math.sign(b[0]-a[0]),dy=Math.sign(b[1]-a[1]);return dx||dy?DIRS.findIndex(([x,y])=>x===dx&&y===dy):-1};
+  if(type===4?!RR[i]:RR[i])continue;const o=L.occ[i]&&S.items.find(it=>it.id===L.occ[i]);if(o&&o.t!=='spot')continue;cl.push(i)}
+ return {cells:cl,cost:cl.length*GROUND_COST[type],why:cl.length?null:type===4?'Le passage piéton se trace sur une route.':'Rien à construire ici.'}}
 export function paintGround(S,a,b,type){const p=groundPlan(S,a,b,type);if(p.why)return p.why;if(S.cash<p.cost)return 'Pas assez d’argent.';
- if(type===6){if(!S.oneway)S.oneway=new Array(N).fill(-1);const prev=p.cells.map(i=>S.oneway[i]);for(const i of p.cells)S.oneway[i]=p.dir;pay(S,p.cost,'build');dirty(S);remember(S,{type:'oneway',cells:p.cells,prev,cost:p.cost});return null}
  const prev=p.cells.map(i=>S.ground[i]);for(const i of p.cells)S.ground[i]=type;clearTrees(S,p.cells);pay(S,p.cost,'build');dirty(S);remember(S,{type:'ground',cells:p.cells,prev,cost:p.cost});return null}
+// ---- routes : tracer, raccourcir, rond-point, cédez-le-passage (géométrie dans store-roads.js)
+const snapRoads=S=>JSON.stringify({lanes:S.lanes||[],yields:S.yields||[],laneNext:S.laneNext||0});
+const laneBlocked=S=>{const L=layout(S);return i=>inside(S,i%W,i/W|0)||!!L.occ[i]};
+export function lanePlan(S,pts){return RD.lanePlan(S,pts,laneBlocked(S))}
+function roadsEdited(S,snap,cost,cellsCleared){if(cellsCleared){const set=new Set();for(const i of cellsCleared){const x=i%W,y=i/W|0;for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)if(inLot(x+dx,y+dy))set.add(idx(x+dx,y+dy))}clearTrees(S,[...set])}RD.roadsChanged(S);dirty(S);remember(S,{type:'lanes',prev:snap,cost})}
+export function buildLane(S,pts){const p=lanePlan(S,pts);if(p.why)return p.why;if(S.cash<p.cost)return 'Pas assez d’argent.';const snap=snapRoads(S);RD.addLane(S,p);pay(S,p.cost,'build');roadsEdited(S,snap,p.cost,p.cells);return null}
+export function ringPlan(S,cx,cy,r){return RD.ringPlan(S,cx,cy,r,laneBlocked(S))}
+export function buildRing(S,cx,cy,r){const p=ringPlan(S,cx,cy,r);if(p.why)return p.why;if(S.cash<p.cost)return 'Pas assez d’argent.';const snap=snapRoads(S);RD.addRing(S,p);pay(S,p.cost,'build');roadsEdited(S,snap,p.cost,p.cells.concat(p.island));return null}
+export const trimPlan=(S,id,end,x,y)=>RD.trimPlan(S,id,end,x,y);
+// bout de voie près d'un rond-point : accroché au coin de case le plus proche du cercle (même objet renvoyé sinon)
+export function snapRing(S,p){for(const l of S.lanes||[]){if(!l.ring)continue;const {cx,cy,r}=l.ring;if(Math.abs(Math.hypot(p[0]-cx,p[1]-cy)-r)>1.6)continue;let best=null;
+  for(let y=Math.round(p[1])-2;y<=Math.round(p[1])+2;y++)for(let x=Math.round(p[0])-2;x<=Math.round(p[0])+2;x++){const e=Math.abs(Math.hypot(x-cx,y-cy)-r);if(e>.75)continue;const d=Math.hypot(x-p[0],y-p[1]);if(!best||d<best.d)best={d,q:[x,y]}}
+  if(best)return best.q}return p}
+export function trimLane(S,id,end,x,y){const p=RD.trimPlan(S,id,end,x,y);if(p.why)return p.why;const snap=snapRoads(S);RD.trimLane(S,id,p);S.cash+=p.refund;roadsEdited(S,snap,-p.refund);return null}
+export function placeYield(S,x,z){const snap=snapRoads(S),w=RD.setYield(S,x,z);if(w)return w;roadsEdited(S,snap,0);return null}
+export function reverseLane(S,id){const snap=snapRoads(S),w=RD.reverseLane(S,id);if(w)return w;roadsEdited(S,snap,0);return null}
 export function paintZone(S,a,b,z){const L=layout(S);let n=0;
  for(let y=Math.min(a[1],b[1]);y<=Math.max(a[1],b[1]);y++)for(let x=Math.min(a[0],b[0]);x<=Math.max(a[0],b[0]);x++){const i=idx(x,y);
   if(!inside(S,x,y)||nearEntrance(S,x,y)||S.zone[i]===z)continue;
@@ -285,7 +289,7 @@ export function paintZone(S,a,b,z){const L=layout(S);let n=0;
 export function extendPlan(S,a,b){const m=D.EXTEND.margin,cells=[];let why=null,touch=false;
  for(let y=Math.min(a[1],b[1]);y<=Math.max(a[1],b[1]);y++)for(let x=Math.min(a[0],b[0]);x<=Math.max(a[0],b[0]);x++){
   if(inside(S,x,y))continue;
-  if(x<m||y<m||x>=W-m||y>=H-m||isMainRoad(x,y))why='Le terrain s’arrête ici.';else if((x>=S.ent-1&&x<=S.ent+2&&y>S.fy&&y<=S.fy+3)||entApron(S,x,y))why='Laisse l’accès à l’entrée.';
+  if(x<m||y<m||x>=W-m||y>=H-m)why='Le terrain s’arrête ici.';else if(roadAt(S,x,y))why='Il y a une route sur la zone.';else if((x>=S.ent-1&&x<=S.ent+2&&y>S.fy&&y<=S.fy+3)||entApron(S,x,y))why='Laisse l’accès à l’entrée.';
   else{const o=layout(S).occ[idx(x,y)];if(o)why='Il y a un objet sur la zone.'}
   cells.push([x,y]);for(const [dx,dy] of DIRS)if(inside(S,x+dx,y+dy))touch=true}
  if(!cells.length)why=why||'Trace la zone hors du magasin.';else if(!touch&&!why)why='La zone doit toucher le magasin.';
@@ -347,7 +351,9 @@ export function problems(S){const p=[],has=k=>S.items.some(o=>def(o.t).kind===k)
  else if(!S.staff.caissier&&!has('self'))p.push('Embauche un·e caissier·ère.');
  if(!has('reserve'))p.push('Installe des racks dans la réserve.');
  if(!has('dock'))p.push('Il faut un quai de livraison dans la réserve.');
- {const dock=S.items.find(o=>o.t==='dock');if(dock&&!dockReady(S,dock))p.push('Il faut une route jusqu’au quai, avec 7 m de route en face pour manœuvrer.')}
+ if(!RD.net(S).entries.length)p.push('Aucune route n’entre sur le terrain : trace une ligne depuis un bord.');
+ {const dock=S.items.find(o=>o.t==='dock');if(dock&&!dockReady(S,dock))p.push('Le camion ne peut pas venir au quai : fais passer une voie juste derrière, reliée à une entrée et à une sortie du terrain.')}
+ {const sp=S.items.filter(o=>o.t==='spot');if(sp.length&&!sp.some(o=>spotReady(S,o)))p.push('Les places de parking ne sont reliées à aucune entrée ou sortie du terrain.')}
  if(!S.staff.rayon)p.push('Embauche un·e employé·e de rayon.');
  {const al=Object.values(stockAlerts(S)).filter(v=>v==='low').length;if(al)p.push(`Stock bas sur ${al} rayon${al>1?'s':''} (voir Stock).`)}
  if(!S.budget)p.push('Budget d’achat à 0 : aucune livraison.');
@@ -393,132 +399,92 @@ export function makeCustomer(S,R,x,y,extra){const r=R.rnd;
   shirt:pal[Math.floor(r()*pal.length)],pants:pal[Math.floor(r()*pal.length)],skin:[[.98,.84,.7],[.85,.65,.5],[.6,.42,.3],[.45,.3,.22]][Math.floor(r()*4)],
   hair:[[.23,.16,.11],[.12,.1,.09],[.85,.69,.36],[.55,.3,.15],[.7,.7,.72]][Math.floor(r()*5)],style:Math.floor(r()*5),scale:.92+r()*.16,retry:0,dirt:0,steps:0};
  R.agents.push(a);return a}
-// véhicules : ne roulent que sur les routes (et dans leur place), en serrant la droite, case par case (champ de distance)
-function drivable(S,i,own){if(S.built[i])return false;const o=S._L.occ[i];if(o)return o===own&&S.items.find(x=>x.id===o)?.t==='spot';return isRoad(S.ground[i])}
-function vTargets(S,key){if(key.startsWith('vstage:')){const it=S.items.find(o=>o.id===+key.slice(7));const g=it&&dockGeo(S,it);return g&&g.ok?[g.stage]:[]}
- if(key==='vroad'||key.startsWith('vleave:'))return [idx(0,LANE_W),idx(W-1,LANE_E)]
- const it=S.items.find(o=>o.id===+key.slice(key.indexOf(':')+1));if(!it)return [];
- if(key.startsWith('vspot:'))return cells(it);
- if(key.startsWith('vfront:'))return front(it).filter(([x,y])=>inLot(x,y)).map(([x,y])=>idx(x,y));
- if(key.startsWith('vdock:'))return back(it).filter(([x,y])=>inLot(x,y)).map(([x,y])=>idx(x,y));return []}
-export function vfield(S,key){const L=layout(S),k='v'+key;let f=L.fields.get(k);if(f)return f;f=new Int16Array(N).fill(-1);const q=[];
- const own=key.startsWith('vspot:')?+key.slice(key.indexOf(':')+1):-1;
- for(const i of vTargets(S,key))if(drivable(S,i,own)&&f[i]<0){f[i]=0;q.push(i)}
- // route principale : sens unique par moitié (ouest au nord, est au sud). On remonte le champ depuis la cible : le véhicule va de j vers i.
- for(let h=0;h<q.length;h++){const i=q[h],x=i%W,y=i/W|0;for(const [dx,dy] of DIRS){const nx=x+dx,ny=y+dy;if(!inLot(nx,ny))continue;const j=idx(nx,ny);
-  if(dy===0&&isMainRoad(x,y)&&(y<RY+3?dx<0:dx>0))continue;
-  if(S.oneway&&((S.oneway[j]>=0&&DIRS[S.oneway[j]][0]===dx&&DIRS[S.oneway[j]][1]===dy)||(S.oneway[i]>=0&&DIRS[S.oneway[i]][0]===dx&&DIRS[S.oneway[i]][1]===dy)))continue;
-  if(f[j]<0&&drivable(S,j,own)){f[j]=f[i]+1;q.push(j)}}}
- L.fields.set(k,f);return f}
-const ENTRY_L=()=>idx(0,LANE_E),IN_L=()=>idx(0,LANE_E),IN_R=()=>idx(W-1,LANE_W);
-export function reachable(S,key){const f=vfield(S,key);return f[ENTRY_L()]>=0}
-function vehicle(R,c,extra){const v={id:R.nid++,c,x:c%W+.5,z:(c/W|0)+.5,nx:-1,ang:Math.PI/2,...extra};return v}
-// ---- gabarits : chaque véhicule est une boîte orientée [demi-longueur, demi-largeur, décalage du centre le long de l'axe].
-// Un véhicule n'avance jamais si sa boîte (avec 6 cm de marge) touche celle d'un autre : ils ne se chevauchent plus.
-const VDIM={car:[1.3,.58,0],truck:[3.75,.95,-.5],bus:[5.6,1.02,0]};
+// ---------------------------------------------------------------- circulation : les véhicules suivent les lignes (store-roads.js)
+const VDIM=RD.VDIM;
 const vkind=v=>v.big?'truck':v.kind||'car';
-function vbox(v,x=v.x,z=v.z,ang=v.ang,grow=0,ahead=0){const [hl,hw,off]=VDIM[vkind(v)],ux=Math.sin(ang),uz=Math.cos(ang);
- if(ahead)return {x:x+ux*(off+hl+ahead/2),z:z+uz*(off+hl+ahead/2),ux,uz,hl:ahead/2,hw:hw*.9};
- return {x:x+ux*off,z:z+uz*off,ux,uz,hl:hl+grow,hw:hw+grow}}
-// séparation des axes (deux rectangles orientés se touchent-ils ?)
+function vbox(v,x=v.x,z=v.z,ang=v.ang,grow=0){const [hl,hw,off]=VDIM[vkind(v)],ux=Math.sin(ang),uz=Math.cos(ang);return {x:x+ux*off,z:z+uz*off,ux,uz,hl:hl+grow,hw:hw+grow}}
 export function boxHit(a,b){for(const [ax,az] of [[a.ux,a.uz],[-a.uz,a.ux],[b.ux,b.uz],[-b.uz,b.ux]]){
   const pa=Math.abs(a.hl*(a.ux*ax+a.uz*az))+Math.abs(a.hw*(-a.uz*ax+a.ux*az)),pb=Math.abs(b.hl*(b.ux*ax+b.uz*az))+Math.abs(b.hw*(-b.uz*ax+b.ux*az));
   if(Math.abs((b.x-a.x)*ax+(b.z-a.z)*az)>pa+pb)return false}return true}
 export const vehicles=R=>R.cars.concat(R.truck?[R.truck]:[],R.bus?[R.bus]:[]);
 export {vbox};
-// qui gêne cette nouvelle position ? (si on chevauche déjà quelqu'un, on a le droit de s'en éloigner)
-function blocker(R,v,x,z,ang){const me=vbox(v,x,z,ang,.06);for(const o of vehicles(R)){if(o===v)continue;const ob=vbox(o);if(!boxHit(me,ob))continue;
-  if(boxHit(vbox(v,v.x,v.z,v.ang,.06),ob)&&Math.hypot(x-o.x,z-o.z)>Math.hypot(v.x-o.x,v.z-o.z))continue;return o}return null}
 const cellAt=(x,z)=>idx(clamp(Math.floor(x),0,W-1),clamp(Math.floor(z),0,H-1));
-// doit céder le passage : sur un marquage « cédez le passage », ou en entrant sur la route principale
-function yields(S,v){if(v.kind==='bus')return false;const c=cellAt(v.x,v.z),n=v.nx>=0?v.nx:c;
- return S.ground[c]===5||S.ground[n]===5||(!isMainRoad(c%W,c/W|0)&&isMainRoad(n%W,n/W|0))}
-const prio=(S,v)=>(yields(S,v)?0:2)+(v.big||v.kind==='bus'?1:0);
-// faut-il s'arrêter ? quelqu'un dans la zone devant soi (on le suit, ou il traverse), conflit réglé par la priorité, cédez-le-passage
-function mustWait(S,R,v,dx,dz){const ang=Math.atan2(dx,dz),pr=vbox(v,v.x,v.z,ang,0,1.5),me=vbox(v,v.x,v.z,ang);
- // zones réservées : manœuvre en cours, ou manœuvre qui attend de pouvoir commencer
- for(const o of vehicles(R)){if(o===v)continue;const zs=o.man?o.man.zone:(o.wait||0)>6?o.want:null;if(!zs||zs.some(z=>boxHit(me,z)))continue;// déjà dedans : on avance pour la libérer
-  for(const z of zs)if(boxHit(pr,z))return o}
- for(const o of vehicles(R)){if(o===v||o.st==='parked'||o.man)continue;const ob=vbox(o);if(!boxHit(pr,ob))continue;
-  // en face, sur l'autre voie : on se croise, on ne le suit pas (la boîte de collision empêche quand même tout contact)
-  {const ux=Math.sin(ang),uz=Math.cos(ang);if(Math.sin(o.ang)*ux+Math.cos(o.ang)*uz<-.6&&Math.abs((o.x-v.x)*uz-(o.z-v.z)*ux)>.9)continue}
-  if(!boxHit(vbox(o,o.x,o.z,o.ang,0,1.5),me))return o;// il ne nous voit pas devant lui : on attend derrière lui
-  const pv=prio(S,v),po=prio(S,o);if(pv!==po){if(pv<po)return o;continue}
-  // à égalité : priorité à droite
-  if((o.x-v.x)*-Math.cos(ang)+(o.z-v.z)*Math.sin(ang)>0)return o;if((v.id||0)>(o.id||0)&&(v.x-o.x)*-Math.cos(o.ang)+(v.z-o.z)*Math.sin(o.ang)>0)return o}
- // piétons : priorité absolue, on s'arrête devant eux
- const pp=vbox(v,v.x,v.z,ang,0,1.6);pp.hw+=.35;for(const a of R.agents){if(a.st==='waitBus'||inside(S,a.x|0,a.y|0))continue;if(Math.abs(a.x-pp.x)>4||Math.abs(a.y-pp.z)>4)continue;
-  if(boxHit(pp,{x:a.x,z:a.y,ux:1,uz:0,hl:.25,hw:.25}))return {id:'piéton',ped:1}}
- // cédez le passage : on attend qu'aucun véhicule prioritaire n'approche (sauf après 12 s d'attente)
- // (seulement ceux qui roulent sur la voie prioritaire et viennent vers nous, pas ceux qui nous suivent)
- if(yields(S,v)&&!((v.wait||0)>12)){const c=cellAt(v.x,v.z),toMain=S.ground[c]!==5&&!isMainRoad(c%W,c/W|0);
-  for(const o of vehicles(R)){if(o===v||o.st==='parked'||o.man||(o.wait||0)>2||yields(S,o))continue;const oc=cellAt(o.x,o.z);if(toMain&&!isMainRoad(oc%W,oc/W|0))continue;
-   const ex=v.x-o.x,ez=v.z-o.z,dd=Math.hypot(ex,ez);if(dd>9)continue;if(dx*-ex+dz*-ez<0&&Math.cos(o.ang-ang)>.5)continue;
-   if(Math.sin(o.ang)*ex+Math.cos(o.ang)*ez>dd*.3)return o}}
- return null}
-// attente en boucle (A attend B qui attend… A) : on ignore les règles de politesse pour en sortir (jamais les collisions)
-// (un seul membre de la boucle passe : celui qui roule sur la voie prioritaire, sinon le plus ancien)
-function inCycle(R,v){const all=vehicles(R),m=[v];let o=v;for(let k=0;k<12;k++){const n=o.wf!=null&&all.find(q=>q.id===o.wf);if(!n)return false;if(n===v)break;m.push(n);o=n;if(k===11)return false}
- const S2=RS,rank=q=>(String(q.why||'').startsWith('bloqué')||q.st==='parked'?-1e9:0)+(S2?prio(S2,q):0)*1e6-(q.id||0);return m.reduce((a,q)=>rank(q)>rank(a)?q:a)===v}
-// bloqué pour de bon (attente en boucle depuis 20 s, ou plus d'une minute) : la voiture renonce et disparaît
-let RT=null,RS=null;function hold(v,dt){v.wait=(v.wait||0)+dt;const gone=!v.big&&v.kind!=='bus'&&(v.wait>60||(v.wait>20&&RT&&inCycle(RT,v)));if(gone&&RS)th(RS,'jam');if(v.wait>15&&RT)RT.jamT=RS?.hour;return gone?null:false}
-// prochaine case sur le champ de distance : on serre la droite, puis on va tout droit
-function nextCell(S,f,c,pd,own){const x=c%W,y=c/W|0,cand=[];for(const [dx,dy] of DIRS){const nx=x+dx,ny=y+dy;if(inLot(nx,ny)&&f[idx(nx,ny)]>=0&&f[idx(nx,ny)]===f[c]-1)cand.push(idx(nx,ny))}if(!cand.length)return -1;
- const main=isMainRoad(x,y),sc=k=>{const cx=k%W,cy=k/W|0,dx=cx-x,dy=cy-y,rx=cx-dy,ry=cy+dx;return (!inLot(rx,ry)||!drivable(S,idx(rx,ry),own)?2:0)+(DIRS.findIndex(([a,b])=>a===dx&&b===dy)===pd?1:0)};
- if(cand.length>1)cand.sort((a,b)=>sc(b)-sc(a));return cand[0]}
-// point visé dans une case : le long du bord droit, décalé d'un quart de case vers le milieu (deux voitures se croisent sur 3 cases)
-// on roule à 0,75 m du bord droit de la chaussée (au milieu de sa moitié sur la route principale)
-function lanePt(S,from,to,own){const x=from%W,y=from/W|0,mx=to%W-x,my=(to/W|0)-y,tx=to%W,ty=to/W|0,pd=DIRS.findIndex(([a,b])=>a===mx&&b===my);
- // route principale : milieu de la case, décalé de 30 cm vers l'intérieur sur la voie du bord (on ne mord pas le trottoir)
- if(isMainRoad(tx,ty)){const rx=tx-my,ry=ty+mx,a=pd>=0&&!isMainRoad(rx,ry)&&!(inLot(rx,ry)&&drivable(S,idx(rx,ry),own))?-.3:0;return [tx+.5-my*a,ty+.5+mx*a,pd]}
- let k=0;while(k<3){const cx=tx-my*(k+1),cy=ty+mx*(k+1);if(!inLot(cx,cy)||isMainRoad(cx,cy)||!drivable(S,idx(cx,cy),own))break;k++}
- const a=k===0?-.25:k===1?.75:1.5;return [tx+.5-my*a,ty+.5+mx*a,pd]}
-// case de virage : on vise le croisement des deux voies (voie d'arrivée × voie de sortie), pas le centre de la case :
-// on reste sur sa voie au lieu de couper vers l'intérieur ou de déborder à l'extérieur
-function corner(v,q,nx,nz,d2){const i=v.path.indexOf(q),pv=i>0?v.path[i-1]:{x:v.x,z:v.z},[ax,ay]=DIRS[q.pd]||[0,0],[bx,by]=DIRS[d2];
- if(ax*bx+ay*by!==0||(!ax&&!ay)){q.x=q.c%W+.5;q.z=(q.c/W|0)+.5;return}
- const cx=ax?nx:pv.x,cz=ax?pv.z:nz,x0=q.c%W,y0=q.c/W|0;q.x=clamp(cx,x0+.2,x0+.8);q.z=clamp(cz,y0+.2,y0+.8)}
-// conduite : on suit les cases à venir en visant un point un peu plus loin sur le chemin (virages arrondis, pas de pivot sur place)
-function moveV(S,v,key,speed,dt,R){const f=vfield(S,key),own=key.startsWith('vspot:')?v.spot:-1;if(f[v.c]<0)return null;
- // coincé contre une voiture garée : petite marche arrière, puis on reprend le virage plus serré (manœuvre en deux temps)
- if(v.backup>0&&R){const st=Math.min(v.backup,speed*.4*dt),bx=v.x-Math.sin(v.ang)*st,bz=v.z-Math.cos(v.ang)*st;if(blocker(R,v,bx,bz,v.ang)){v.backup=0}else{v.x=bx;v.z=bz;v.backup-=st;return false}}
- if(v.tight>0)v.tight-=dt;
- if(!v.path||v.pkey!==key||v.path.some(p=>f[p.c]<0)){v.path=[];v.pkey=key}
- let last=v.path.length?v.path[v.path.length-1].c:v.c,pd=v.path.length?v.path[v.path.length-1].pd:v.pd||0;
- while(v.path.length<5&&f[last]>0){const n=nextCell(S,f,last,pd,own);if(n<0)break;const [px,pz,d2]=lanePt(S,last,n,own);const q=v.path[v.path.length-1];if(q&&q.pd!==d2&&!isMainRoad(q.c%W,q.c/W|0))corner(v,q,px,pz,d2);v.path.push({c:n,x:px,z:pz,pd:d2});pd=d2;last=n}
- // point dépassé : trop près, ou déjà plus près du suivant que lui (virage coupé)
- const passed=()=>{const p=v.path[0],q=v.path[1];if(Math.hypot(p.x-v.x,p.z-v.z)<.4)return true;return q&&Math.hypot(q.x-v.x,q.z-v.z)<Math.hypot(q.x-p.x,q.z-p.z)};
- while(v.path.length&&passed()){const p=v.path.shift();v.c=p.c;v.pd=p.pd;if(!v.path.length){let l=v.c,d0=v.pd;while(v.path.length<5&&f[l]>0){const n=nextCell(S,f,l,d0,own);if(n<0)break;const [px,pz,d2]=lanePt(S,l,n,own);v.path.push({c:n,x:px,z:pz,pd:d2});d0=d2;l=n}}}
- if(!v.path.length)return f[v.c]===0?true:null;
- v.nx=v.path[0].c;
- const look=v.tight>0?.3:v.big?2.6:v.kind==='bus'?3:2;let L=look,px=v.x,pz=v.z,tx=v.path[0].x,tz=v.path[0].z;
- for(const p of v.path){const d=Math.hypot(p.x-px,p.z-pz);if(d>=L){tx=px+(p.x-px)/d*L;tz=pz+(p.z-pz)/d*L;break}L-=d;px=p.x;pz=p.z;tx=p.x;tz=p.z}
- const dx=tx-v.x,dz=tz-v.z,d=Math.hypot(dx,dz);if(d<1e-3){const p=v.path.shift();v.c=p.c;return false}
- {const w=R&&!inCycle(R,v)&&mustWait(S,R,v,dx/d,dz/d);if(w){v.why='suit '+w.id;v.wf=w.ped?null:w.id;if(w.ped){v.wait=(v.wait||0)+dt;return false}return hold(v,dt)}}
- const s=Math.min(speed*dt,d);let da=Math.atan2(dx,dz)-v.ang;while(da>Math.PI)da-=2*Math.PI;while(da<-Math.PI)da+=2*Math.PI;
- const na=v.ang+da*Math.min(1,dt*9),nx2=v.x+dx/d*s,nz2=v.z+dz/d*s;
- {const b2=R&&blocker(R,v,nx2,nz2,na);if(b2){v.why='bloqué '+b2.id;v.wf=b2.id;if((b2.st==='parked'||(b2.wf===v.id&&(b2.want||(RS&&prio(RS,v)*1e6-(v.id||0)<prio(RS,b2)*1e6-(b2.id||0)))))&&(v.wait||0)>2&&!(v.tight>0)){v.backup=1.6;v.tight=5}return hold(v,dt)}}
- v.ang=na;v.wait=0;v.wf=null;v.x=nx2;v.z=nz2;return false}
-// manœuvres de parking : courbe (entrée en marche avant, sortie en marche arrière), suivie pas à pas sans toucher personne
+// point de voie d'un objet : places et arrêt de bus par l'avant, quai par l'arrière (mémorisé tant que les routes ne changent pas)
+export function accessOf(S,it){const NT=RD.net(S),key=it.id+','+it.x+','+it.y+','+it.r;NT.acc=NT.acc||new Map();if(NT.acc.has(key))return NT.acc.get(key);
+ const k=def(it.t).kind,[w,d]=size(it),f=DIRS[k==='dock'?(it.r+2)%4:it.r],F=[it.x+w/2+f[0]*w/2,it.y+d/2+f[1]*d/2],a=RD.access(S,F,f);NT.acc.set(key,a);return a}
+// itinéraire depuis une entrée du terrain (la moins encombrée) jusqu'à un point de voie
+function fromEntry(S,R,dst,list){const NT=RD.net(S);let best=null;for(const e of NT.entries){const r=RD.route(NT,e,[dst]);if(!r)continue;
+  const busy=list.filter(o=>o.lane===e.lane&&o.s<10).length;const sc=RD.routeLen(r)+busy*60;if(!best||sc<best.sc)best={sc,r,busy}}return best}
+const toExit=(S,src)=>{const NT=RD.net(S);return RD.route(NT,src,NT.exits)};
+// place utilisable : reliée à une entrée et, en sortant, à une sortie du terrain
+export function spotReady(S,it){const a=accessOf(S,it);if(!a)return false;const NT=RD.net(S),g=NT.geo.get(a.lane),si=a.s-1.4,so=a.s-1.8;if(!g||(!g.closed&&si<.3))return false;
+ NT.sr=NT.sr||new Map();const k=it.id+','+a.lane+','+a.s.toFixed(2);if(NT.sr.has(k))return NT.sr.get(k);
+ const ok=NT.entries.some(e=>RD.route(NT,e,[{lane:a.lane,s:si}]))&&!!RD.route(NT,{lane:a.lane,s:so},NT.exits);NT.sr.set(k,ok);return ok}
+export function dockReady(S,it){const a=accessOf(S,it);if(!a)return false;const NT=RD.net(S);return NT.entries.some(e=>RD.route(NT,e,[a]))&&!!RD.route(NT,a,NT.exits)}
+export function reachable(S,key){const it=S.items.find(o=>o.id===+key.slice(key.indexOf(':')+1));if(!it)return false;return it.t==='spot'?spotReady(S,it):dockReady(S,it)}
+function spotGeo(it){const [w,d]=size(it),fc=front(it),fx=fc.reduce((a,[x])=>a+x,0)/fc.length,fy=fc.reduce((a,[,y])=>a+y,0)/fc.length;
+ let exit=-1,bd=-1;for(const c of cells(it)){const dd=Math.abs(c%W-fx)+Math.abs((c/W|0)-fy);if(dd>bd){bd=dd;exit=c}}
+ const [ox,oz]=DIRS[it.r];return {cx:it.x+w/2,cz:it.y+d/2,exit,ox,oz,ang:Math.atan2(-ox,-oz)}}
 function bez(p0,p1,p2,p3,n=26){const o=[];for(let i=1;i<=n;i++){const t=i/n,u=1-t;o.push([u*u*u*p0[0]+3*u*u*t*p1[0]+3*u*t*t*p2[0]+t*t*t*p3[0],u*u*u*p0[1]+3*u*u*t*p1[1]+3*u*t*t*p2[1]+t*t*t*p3[1]])}return o}
-// zone balayée par une manœuvre (boîtes le long de la courbe, un peu élargies)
-function sweep(v,pts,rev){const z=[];let px=v.x,pz=v.z;for(let i=0;i<pts.length;i+=2){const [x,y]=pts[i],a=rev?Math.atan2(px-x,pz-y):Math.atan2(x-px,y-pz);z.push(vbox(v,x,y,a,.15));px=x;pz=y}return z}
-// la manœuvre peut-elle commencer ? personne dans la zone ni juste devant elle
-function sweepFree(R,v,zone){const cyc=inCycle(R,v);for(const o of vehicles(R)){if(o===v||o.st==='parked')continue;const ob=vbox(o),op=(o.wait||0)>.3||cyc?null:vbox(o,o.x,o.z,o.ang,0,2.5);
-  for(const z of zone)if(boxHit(z,ob)||(op&&boxHit(z,op))){v.why='zone '+o.id;v.wf=o.id;return false}const zs=o.man?o.man.zone:o.want&&o.id<v.id&&!cyc?o.want:null;if(zs)for(const z2 of zs)for(const z of zone)if(boxHit(z,z2)){v.why='zone* '+o.id;v.wf=o.id;return false}}v.wf=null;return true}
-function follow(R,v,speed,dt){const m=v.man;let b=speed*dt;
+// manœuvre (entrer dans sa place / en sortir en marche arrière) : on suit la courbe
+function follow(v,speed,dt){const m=v.man;let b=speed*dt;
  while(b>1e-4&&m.i<m.pts.length){const [tx,tz]=m.pts[m.i],dx=tx-v.x,dz=tz-v.z,d=Math.hypot(dx,dz);if(d<1e-4){m.i++;continue}
-  const s=Math.min(b,d),na=m.rev?Math.atan2(-dx,-dz):Math.atan2(dx,dz),nx=v.x+dx/d*s,nz=v.z+dz/d*s;
-  {const b2=blocker(R,v,nx,nz,na);if(b2){v.wf=b2.id;return hold(v,dt)}}
-  {const me=vbox(v,nx,nz,na,.3);if(RT&&RT.agents.some(a=>a.st!=='waitBus'&&Math.abs(a.x-nx)<3&&Math.abs(a.y-nz)<3&&boxHit(me,{x:a.x,z:a.y,ux:1,uz:0,hl:.2,hw:.2}))){v.wait=(v.wait||0)+dt;return false}}
-  v.wait=0;v.wf=null;v.x=nx;v.z=nz;v.ang=na;b-=s;if(s>=d-1e-6)m.i++}
+  const st=Math.min(b,d);v.x+=dx/d*st;v.z+=dz/d*st;v.ang=m.rev?Math.atan2(-dx,-dz):Math.atan2(dx,dz);b-=st;if(st>=d)m.i++}
  return m.i>=m.pts.length}
-// quai : cases derrière, sens vers l'extérieur, aire de manœuvre 7 m plus loin, position garée (arrière contre le mur)
-export function dockGeo(S,it){layout(S);const bk=back(it).filter(([x,y])=>inLot(x,y));if(!bk.length)return null;const [fx,fy2]=DIRS[it.r],nx=-fx,ny=-fy2;
- const cx=bk.reduce((a,[x])=>a+x+.5,0)/bk.length,cz=bk.reduce((a,[,y])=>a+y+.5,0)/bk.length,sx=Math.floor(cx+nx*7),sy=Math.floor(cz+ny*7);
- let ok=inLot(sx,sy);if(ok)for(let k=0;k<=7;k++){const x=Math.floor(cx+nx*k),y=Math.floor(cz+ny*k);if(!inLot(x,y)||!drivable(S,idx(x,y),-1)){ok=false;break}}
- return {ok,stage:ok?idx(sx,sy):-1,park:[cx+nx*3.4,cz+ny*3.4],ang:Math.atan2(nx,ny)}}
-export function dockReady(S,it){const g=dockGeo(S,it);return !!(g&&g.ok&&reachable(S,'vstage:'+it.id))}
+const CARCOL=[[.85,.2,.2],[.2,.4,.8],[.95,.95,.95],[.2,.2,.22],[.95,.75,.2],[.35,.65,.4],[.6,.6,.65]];
+function onLane(R,v,r,kind,vmax){v.kind=kind;v.route=r;v.ri=0;v.u=0;v.sp=0;v.vmax=vmax;v.stopT=0;return v}
+function spawnCar(S,R,it){const a=accessOf(S,it),list=vehicles(R);const e=fromEntry(S,R,{lane:a.lane,s:a.s-1.4},list);if(!e||e.busy)return false;
+ const g=spotGeo(it),car=onLane(R,{id:R.nid++,spot:it.id,st:'in',exit:g.exit,cx:g.cx,cz:g.cz,f:[g.ox,g.oz],pang:g.ang,acc:a,col:CARCOL[Math.floor(R.rnd()*CARCOL.length)]},e.r,'car',D.TRAFFIC.carSpeed);
+ RD.placeOn(RD.net(S),car);R.spotTaken.set(it.id,car.id);R.cars.push(car)}
+function carLeave(S,R,car){if(car.leaving||car.st==='out')return;car.leaving=true}
+// fenêtre de voie libre pour sortir de sa place (personne dedans, personne qui arrive tout près)
+function exitFree(S,R,car,list){const NT=RD.net(S),g=NT.geo.get(car.acc.lane);if(!g)return false;const s0=car.acc.s-1.8-3,L=5.5;
+ for(const o of list.concat(R.blocks.filter(b=>b.id!=='w'+car.id))){if(o===car||o.lane==null)continue;const d=RD.distTo(NT,o,car.acc.lane,s0,30);if(d==null)continue;const h=RD.half(o);if(d<h+(car.exitWait>4?0:2.5+(o.sp||0)*1.2)&&d>-L-h)return false}return true}
+function traffic(S,R,dt){const T=D.TRAFFIC,NT=RD.net(S);R.blocks=[];
+ const gone=car=>{R.cars.splice(R.cars.indexOf(car),1);R.spotTaken.delete(car.spot)};
+ // voitures garées qui manœuvrent : obstacles sur la voie
+ for(const car of R.cars){if(car.man&&car.man.block)R.blocks.push({id:'m'+car.id,lane:car.man.block.lane,s:car.man.block.s,h:car.man.block.h});
+  if(car.st==='parked'&&car.leaving&&car.exitWait>4)R.blocks.push({id:'w'+car.id,lane:car.acc.lane,s:car.acc.s-1.8-3.2,h:0})}
+ // camion de livraison : appelé le matin (ou en express), il s'arrête sur la voie derrière le quai
+ const dock=S.items.find(o=>o.t==='dock');
+ if(!R.truck&&(R.dawn||S.pending&&R.truckDay!==S.d)&&S.hour>=D.HOURS.start&&S.hour<D.HOURS.close){const o=R.dawn?R.dawnOrder:S.pending;R.truckDay=S.d;
+  const a=dock&&dockReady(S,dock)&&accessOf(S,dock),e=a&&fromEntry(S,R,a,vehicles(R));
+  if(e&&!e.busy){R.truck=onLane(R,{id:R.nid++,st:'in',dock:dock.id,big:true,dawn:!!R.dawn,order:o,total:Object.values(o.u).reduce((x,y)=>x+y,0),done:0,paid:false},e.r,'truck',T.carSpeed*.8);RD.placeOn(NT,R.truck);if(R.dawn){R.dawn=false;R.dawnOrder=null}else S.pending=null}
+  else if(!a){ev(R,{t:'noroad'});if(R.dawn){R.dawn=false;R.dawnOrder=null}else S.pending=null}
+  else R.truckDay=-1}
+ // bus : passe toutes les demi-heures s'il y a du monde à déposer ou à prendre
+ const stop=S.items.find(o=>o.t==='busstop');R.busT+=dt/D.HOURS.realSecPerHour;const waiting=R.agents.filter(a=>a.st==='waitBus');
+ if(!R.bus&&stop&&R.busT>=T.busEvery&&(R.busWaiting>0||waiting.length)){const a=accessOf(S,stop),e=a&&fromEntry(S,R,a,vehicles(R));
+  if(e&&!e.busy){R.busT=0;R.bus=onLane(R,{id:R.nid++,st:'in',stop:stop.id},e.r,'bus',T.busSpeed);RD.placeOn(NT,R.bus)}}
+ // tout ce qui roule sur les voies
+ const all=vehicles(R).filter(v=>v.route&&!v.man);
+ const outside=R.agents.filter(a=>!inside(S,a.x|0,a.y|0)&&a.st!=='waitBus');
+ const arrived=RD.drive(S,R,all,dt,outside);
+ for(const v of arrived){
+  if(v.kind==='car'){if(v.st==='in'){const p=bez([v.x,v.z],[v.x+Math.sin(v.ang)*1.2,v.z+Math.cos(v.ang)*1.2],[v.cx+v.f[0]*2.6,v.cz+v.f[1]*2.6],[v.cx,v.cz]);
+     v.man={pts:p,i:0,rev:false,end:'park',block:{lane:v.lane,s:v.s,h:1.3}};v.route=null;v.lane=null;v.s=null}
+   else if(v.st==='out')gone(v)}
+  else if(v.kind==='truck'){if(v.st==='in'){v.st='unload';ev(R,{t:'truck'});if(!v.paid){v.paid=true;const cost=orderCost(v.order);pay(S,cost,'buy');v.cost=cost}}else if(v.st==='out')R.truck=null}
+  else if(v.kind==='bus'){if(v.st==='in'){v.st='stop';v.t=3;const st2=S.items.find(o=>o.id===v.stop);
+    if(st2){const n=Math.min(T.busMax,R.busWaiting);R.busWaiting-=n;const cs=cells(st2);for(let k=0;k<n;k++){const c=cs[k%cs.length],a=makeCustomer(S,R,c%W,c/W|0,0);a.bus=true;a.x+=R.rnd()*.4-.2}
+     for(const a of waiting)R.agents.splice(R.agents.indexOf(a),1);ev(R,{t:'bus',n})}}
+   else if(v.st==='out')R.bus=null}}
+ // manœuvres de parking
+ for(const car of R.cars.slice()){
+  if(car.man){const m=car.man;if(m.block&&m.i>m.pts.length*.6&&m.end==='park')m.block=null;if(!follow(car,T.carSpeed*.5,dt))continue;car.man=null;
+   if(m.end==='park'){car.st='parked';car.x=car.cx;car.z=car.cz;car.ang=car.pang;const a=makeCustomer(S,R,car.exit%W,car.exit/W|0,T.carExtra);a.car=car.id}
+   else{const r=toExit(S,{lane:car.acc.lane,s:car.acc.s-1.8});if(!r){gone(car);continue}car.st='out';onLane(R,car,r,'car',T.carSpeed*1.2);RD.placeOn(NT,car)}continue}
+  if(car.st==='parked'&&car.leaving){car.exitWait=(car.exitWait||0)+dt;if(!exitFree(S,R,car,vehicles(R)))continue;
+   const P=RD.pos(NT.geo.get(car.acc.lane),car.acc.s-1.8),t=[Math.sin(P.ang),Math.cos(P.ang)];if(!NT.geo.get(car.acc.lane)){gone(car);continue}
+   car.man={pts:bez([car.cx,car.cz],[car.cx+car.f[0]*2.4,car.cz+car.f[1]*2.4],[P.x+t[0]*1.6,P.z+t[1]*1.6],[P.x,P.z]),i:0,rev:true,end:'road',block:{lane:car.acc.lane,s:car.acc.s-1.8,h:1.6}};car.leaving=false;car.st='unpark';R.blocks.push({id:'m'+car.id,...car.man.block})}}
+ // camion : déchargé par l'équipe, puis repart
+ if(R.truck){const t=R.truck;
+  if(t.st==='unload'&&(t.done>=t.total||!Object.values(t.order.u).some(n=>n>0))){refundRest(S,t);ev(R,{t:'delivery',cost:t.cost||0});const r=toExit(S,{lane:t.lane,s:t.s});if(r){t.st='out';onLane(R,t,r,'truck',T.carSpeed)}else R.truck=null}
+  if(t.st==='out'&&t.order&&t.paid&&t.done<t.total)refundRest(S,t)}
+ if(R.bus&&R.bus.st==='stop'){R.bus.t-=dt;if(R.bus.t<=0){const r=toExit(S,{lane:R.bus.lane,s:R.bus.s});if(r){R.bus.st='out';onLane(R,R.bus,r,'bus',T.busSpeed*1.2)}else R.bus=null}}
+ // bloqué pour de bon (2 minutes à l'arrêt) : le véhicule renonce
+ for(const v of vehicles(R)){if(!v.route||v.st==='unload'||v.st==='stop')continue;if((v.stopT||0)>120){th(S,'jam');R.jamT=S.hour;if(v===R.truck){refundRest(S,v);R.truck=null}else if(v===R.bus)R.bus=null;else gone(v)}}}
+
 function refundRest(S,t){if(!t.order||!t.paid)return;let v=0;for(const c in t.order.u){v+=t.order.u[c]*D.CAT[c].cost*(t.order.factor||1);t.order.u[c]=0}v=Math.round(v);if(v){S.cash+=v;S.month.buy-=v;S.dayStats.buy-=v}}
 // l'équipe vide le camion : une palette (jusqu'à 120 articles) d'un rayon qui a de la place en réserve
 export const PALLET=500;
@@ -529,71 +495,6 @@ export function truckPallet(S,R){const t=R.truck;if(!t||t.st!=='unload')return n
   if(items.length)return {store:st,items,n:items.reduce((a,b)=>a+b.n,0)}}
  // plus de place pour ce qui reste : rendu au fournisseur
  for(const c in t.order.u)if(t.order.u[c]>0){t.total-=t.order.u[c]}refundRest(S,t);return null}
-function spotGeo(it){const [w,d]=size(it),f=front(it),fx=f.reduce((a,[x])=>a+x,0)/f.length,fy=f.reduce((a,[,y])=>a+y,0)/f.length;
- let exit=-1,bd=-1;for(const c of cells(it)){const dd=Math.abs(c%W-fx)+Math.abs((c/W|0)-fy);if(dd>bd){bd=dd;exit=c}}
- const [ox,oz]=DIRS[it.r];// vers la route
- return {cx:it.x+w/2,cz:it.y+d/2,exit,vert:w<d,ox,oz,ang:Math.atan2(-ox,-oz)}}
-function spawnCar(S,R,it){const g=spotGeo(it);let left=R.rnd()<.5;
- // entrée encombrée : on arrive par l'autre côté, sinon à pied
- const busy=c=>{const x=c%W+.5,z=(c/W|0)+.5,b=vbox({kind:'car'},x,z,c%W?-Math.PI/2:Math.PI/2,1.5);return vehicles(R).some(o=>boxHit(b,vbox(o))||(o.man&&o.man.zone.some(q=>boxHit(b,q))))};
- if(busy(left?IN_L():IN_R()))left=!left;if(busy(left?IN_L():IN_R()))return false;
- const car=vehicle(R,left?IN_L():IN_R(),{pd:left?3:1,spot:it.id,st:'in',key:'vfront:'+it.id,exit:g.exit,cx:g.cx,cz:g.cz,vert:g.vert,pang:g.ang,ang:left?Math.PI/2:-Math.PI/2,col:[[.85,.2,.2],[.2,.4,.8],[.95,.95,.95],[.2,.2,.22],[.95,.75,.2],[.35,.65,.4],[.6,.6,.65]][Math.floor(R.rnd()*7)]});
- R.spotTaken.set(it.id,car.id);R.cars.push(car)}
-// entrer dans la place : courbe depuis la voie jusqu'au centre, nez dedans
-function pullIn(S,car,R){const it=S.items.find(o=>o.id===car.spot);if(!it)return false;const g=spotGeo(it),ux=Math.sin(car.ang),uz=Math.cos(car.ang),p2=[g.cx+g.ox*3.2,g.cz+g.oz*3.2];
- const a=Math.max(.8,Math.hypot(p2[0]-car.x,p2[1]-car.z)*.5),pts=bez([car.x,car.z],[car.x+ux*a,car.z+uz*a],p2,[g.cx,g.cz]),zone=sweep(car,pts,false);
- if(R&&!sweepFree(R,car,zone)){car.want=zone;return false}car.want=null;car.man={pts,i:0,rev:false,end:'park',zone};return true}
-// sortir : marche arrière en tournant, vers le côté qui mène le plus vite à la sortie
-function pullOut(S,car,R){const it=S.items.find(o=>o.id===car.spot);if(!it)return false;const g=spotGeo(it),f=vfield(S,'vleave:'+car.spot);let best=null;
- for(const k of [1,-1]){const ex=-g.oz*k,ez=g.ox*k,X=[g.cx+g.ox*3-ex*2,g.cz+g.oz*3-ez*2],A=cellAt(X[0]+ex*4,X[1]+ez*4),c=cellAt(X[0],X[1]);
-  if(!drivable(S,c,-1)||f[c]<0)continue;const sc=f[A]>=0?f[A]:f[c]+6;if(!best||sc<best.s)best={s:sc,ex,ez,X,c}}
- if(!best)return false;const {ex,ez,X}=best;
- const pts=bez([g.cx,g.cz],[g.cx+g.ox*2.4,g.cz+g.oz*2.4],[X[0]+ex*1.6,X[1]+ez*1.6],X),zone=sweep(car,pts,true);if(R&&!sweepFree(R,car,zone)){car.want=zone;return false}car.want=null;
- car.man={pts,i:0,rev:true,end:'road',zone,c:best.c,pd:DIRS.findIndex(([a,b])=>a===Math.round(ex)&&b===Math.round(ez))};return true}
-function carLeave(S,R,car){if(car.leaving||car.st==='out')return;car.leaving=true}
-// bus : trajet en ligne droite sur la route principale ; il s'arrête derrière les autres et ne touche personne
-function moveVehicle(S,R,v,speed,dt){let b=speed*dt;while(b>0&&v.i<v.path.length){const [tx,tz]=v.path[v.i],dx=tx-v.x,dz=tz-v.z,d=Math.hypot(dx,dz);if(d>.01)v.ang=Math.atan2(dx,dz);
-  const inLotNow=v.x>-8&&v.x<W+8;if(d>.01&&((inLotNow&&!inCycle(R,v)&&mustWait(S,R,v,dx/d,dz/d))||blocker(R,v,v.x+dx/d*Math.min(b,d),v.z+dz/d*Math.min(b,d),v.ang))){hold(v,dt);return false}
-  if(d<=b){v.x=tx;v.z=tz;b-=d;v.i++}else{v.x+=dx/d*b;v.z+=dz/d*b;b=0}}return v.i>=v.path.length}
-function traffic(S,R,dt){const T=D.TRAFFIC;RT=R;RS=S;
- const gone=car=>{R.cars.splice(R.cars.indexOf(car),1);R.spotTaken.delete(car.spot)};
- for(const car of R.cars.slice()){
-  if(car.st==='parked'){if(car.leaving&&pullOut(S,car,R)){car.st='out';car.leaving=false;car.key='vleave:'+car.spot;car.nx=-1}else{if(car.leaving)car.wait=(car.wait||0)+dt;continue}}
-  // manœuvre de parking en cours
-  if(car.man){const r=follow(R,car,T.carSpeed*.55,dt);if(r===null){gone(car);continue}if(!r)continue;const m=car.man;car.man=null;
-   if(m.end==='park'){car.st='parked';car.x=car.cx;car.z=car.cz;car.ang=car.pang;const a=makeCustomer(S,R,car.exit%W,car.exit/W|0,T.carExtra);a.car=car.id}
-   else{car.c=m.c;car.nx=-1;car.pd=m.pd;car.path=null;const a=Math.atan2(DIRS[m.pd][0],DIRS[m.pd][1]);if(!blocker(R,car,car.x,car.z,a))car.ang=a}continue}
-  // presque devant sa place : on commence à se garer
-  if(car.st==='in'){const it=S.items.find(o=>o.id===car.spot);if(it){const g=spotGeo(it);const rx=car.x-g.cx,rz=car.z-g.cz,along=rx*g.ox+rz*g.oz-2,lat=Math.abs(-rx*g.oz+rz*g.ox);if(along>=0&&along<=2.4&&lat<=2.6){if(!pullIn(S,car,R)&&hold(car,dt)===null)gone(car);continue}}}
-  const done=moveV(S,car,car.key,car.st==='in'?T.carSpeed:T.carSpeed*1.2,dt,R);
-  if(done===null){if(car.st==='in')th(S,'noparking');gone(car);continue}
-  if(done&&car.st==='in'){if(!pullIn(S,car,R)&&hold(car,dt)===null)gone(car);continue}
-  if(done&&car.st==='out')gone(car)}
- // camion de livraison : route → aire de manœuvre → marche arrière jusqu'au quai → déchargé par l'équipe → repart
- const dock=S.items.find(o=>o.t==='dock');
- // livraison du matin : le camion part à 6 h et arrive au quai vers 7 h, une heure avant l'ouverture
- if(!R.truck&&(R.dawn||S.pending&&R.truckDay!==S.d)&&S.hour>=D.HOURS.start&&S.hour<D.HOURS.close){const o=R.dawn?R.dawnOrder:S.pending;R.truckDay=S.d;
-  if(dock&&dockReady(S,dock)){R.truck=vehicle(R,IN_L(),{pd:3,st:'in',key:'vstage:'+dock.id,dock:dock.id,big:true,dawn:!!R.dawn,order:o,total:Object.values(o.u).reduce((a,b)=>a+b,0),done:0,paid:false});if(R.dawn){R.dawn=false;R.dawnOrder=null}else S.pending=null}
-  else{ev(R,{t:'noroad'});if(R.dawn){R.dawn=false;R.dawnOrder=null}else S.pending=null}}
- if(R.truck){const t=R.truck,it=S.items.find(o=>o.id===t.dock),g=it&&dockGeo(S,it);
-  if(!g||!g.ok){if(t.st!=='out'){t.st='out';t.nx=-1}}
-  if(t.st==='in'){const d=moveV(S,t,t.key,T.carSpeed*.8,dt,R);if(d===null){t.st='out'}else if(d){t.st='turn';t.ang0=t.ang;t.k=0}}
-  else if(t.st==='turn'){const k=Math.min(1,t.k+dt*.8);let da=g.ang-t.ang0;while(da>Math.PI)da-=2*Math.PI;while(da<-Math.PI)da+=2*Math.PI;const na=t.ang0+da*k;if(!blocker(R,t,t.x,t.z,na)){t.k=k;t.ang=na}if(t.k>=1){t.st='back';t.ang=g.ang}}
-  else if(t.st==='back'){const dx=g.park[0]-t.x,dz=g.park[1]-t.z,d=Math.hypot(dx,dz),st=1.6*dt;if(d>st&&blocker(R,t,t.x+dx/d*st,t.z+dz/d*st,t.ang)){}else if(d<=st){t.x=g.park[0];t.z=g.park[1];t.st='unload';ev(R,{t:'truck'});
-    if(!t.paid){t.paid=true;const cost=orderCost(t.order);pay(S,cost,'buy');t.cost=cost}}else{t.x+=dx/d*st;t.z+=dz/d*st}}
-  else if(t.st==='unload'){if(t.done>=t.total||!Object.values(t.order.u).some(n=>n>0)){refundRest(S,t);ev(R,{t:'delivery',cost:t.cost||0});t.st='out';t.c=cellAt(t.x,t.z);t.nx=-1;t.path=null;t.key='vroad'}}
-  else if(t.st==='out'){if(t.order&&t.paid&&t.done<t.total)refundRest(S,t);const d=moveV(S,t,'vroad',T.carSpeed,dt,R);if(d||d===null)R.truck=null}}
- // bus : passe toutes les demi-heures s'il y a du monde à déposer ou à prendre
- const stop=S.items.find(o=>o.t==='busstop');R.busT+=dt/D.HOURS.realSecPerHour;
- const waiting=R.agents.filter(a=>a.st==='waitBus');
- if(!R.bus&&stop&&R.busT>=T.busEvery&&(R.busWaiting>0||waiting.length)){R.busT=0;const sx=stop.x+(stop.r%2?.5:1.5),north=stop.y<RY,bz=north?RY+1.5:RE-1.5;R.bus={id:R.nid++,kind:'bus',x:north?W+14:-14,z:bz,ang:north?-Math.PI/2:Math.PI/2,st:'in',path:[[sx,bz]],i:0,t:0,stop:stop.id,north}}
- const bus=R.bus;if(bus){
-  if(bus.st==='in'&&moveVehicle(S,R,bus,T.busSpeed,dt)){bus.st='stop';bus.t=3;const st2=S.items.find(o=>o.id===bus.stop);
-   if(st2){const n=Math.min(T.busMax,R.busWaiting);R.busWaiting-=n;for(let k=0;k<n;k++){const a=makeCustomer(S,R,Math.max(0,Math.min(W-1,st2.x+(k%3))),bus.north===false?RE-1:RY,0);a.bus=true;a.x+=R.rnd()*.4-.2}
-    for(const a of waiting)R.agents.splice(R.agents.indexOf(a),1);ev(R,{t:'bus',n})}}
-  if(bus.st==='stop'){bus.t-=dt;if(bus.t<=0){bus.st='out';bus.path=[[bus.north===false?W+14:-14,bus.z]];bus.i=0}}
-  if(bus.st==='out'&&moveVehicle(S,R,bus,T.busSpeed*1.2,dt))R.bus=null}}
-
 function spawnStaff(S,R){R.staffDay=S.d;R.agents=R.agents.filter(a=>a.k==='c');
  for(const it of S.items)it.inc=0;
  const e=entCells(S);let k=0;
@@ -738,7 +639,7 @@ export const EXPRESS=1.15;
 export function express(S,budget,R,only){const dock=S.items.find(o=>o.t==='dock');if(!dock)return 'Il faut un quai de livraison.';
  const c=capacity(S).cap;if(!c.ambiant&&!c.frais&&!c.surgele)return 'Il faut de la place en réserve.';
  const o=makeOrder(S,budget,EXPRESS,only),cost=orderCost(o);if(!cost)return 'La réserve est pleine.';if(S.cash<cost)return 'Pas assez d’argent.';
- if(!R)return {cost:applyOrder(S,o)};if(!dockReady(S,dock))return 'Il faut une route jusqu’au quai.';
+ if(!R)return {cost:applyOrder(S,o)};if(!dockReady(S,dock))return 'Le camion ne peut pas venir au quai (voie derrière le quai).';
  S.pending=mergeOrder(S.pending,o);if(!R.truck)R.truckDay=-1;return {cost,truck:true}}
 // commander un rayon précis : de quoi remplir ses meubles, plus une réserve
 export function expressCat(S,cat,R){let need=0;for(const it of S.items)if(it.cat===cat)need+=def(it.t).cap-it.stock;need=Math.ceil(need*1.4)+20;return express(S,0,R,{[cat]:need})}
@@ -803,7 +704,7 @@ export function monthEnd(S,R){const m=S.month;
 const pack=a=>{let s='';for(const v of a)s+=v;return s};
 // R (facultatif) : la partie en cours (clients, voitures, camion, employés…) est sauvegardée telle quelle
 export function serialize(S,R){const o={};for(const k in S)if(!k.startsWith('_')&&k!=='dirt')o[k]=S[k];
- o.level=1;o.ground=pack(S.ground);o.built=pack(S.built);o.wall=pack(S.wall);if(S.oneway)o.oneway=S.oneway.map(v=>v<0?'x':v).join('');if(S.owid){const q=[];S.owid.forEach((v,k)=>{if(v)q.push(k,v)});o.owid=q}o.zone=pack(S.zone);o.items=S.items.map(({inc,...it})=>it);
+ o.level=1;o.ground=pack(S.ground);o.built=pack(S.built);o.wall=pack(S.wall);o.zone=pack(S.zone);o.items=S.items.map(({inc,...it})=>it);
  if(R){const inc={};for(const it of S.items)if(it.inc)inc[it.id]=it.inc;const dirt=[];if(S.dirt)for(let i=0;i<N;i++)if(S.dirt[i]>.005)dirt.push(i,Math.round(S.dirt[i]*100));
   o.rt={truck:R.truck,truckDay:R.truckDay,cars:R.cars,spotTaken:[...R.spotTaken],bus:R.bus,busT:R.busT,busWaiting:R.busWaiting,agents:R.agents,
    queues:[...R.queues].map(([k,q])=>[k,q.map(a=>a.id)]),acc:R.acc,nid:R.nid,closing:R.closing,staffDay:R.staffDay,perDay:R.perDay,restockDay:R.restockDay,
@@ -812,24 +713,14 @@ export function serialize(S,R){const o={};for(const k in S)if(!k.startsWith('_')
 // reprend la partie là où on l'a laissée (o : objet sauvegardé, S : résultat de load)
 export function restore(S,o){const t=o&&o.rt;if(!t||!S)return null;const R=runtime();
  for(const k of ['truck','truckDay','cars','bus','busT','busWaiting','agents','acc','nid','closing','staffDay','perDay','restockDay','carrying','dawn','dawnOrder','cartsOut'])if(t[k]!==undefined)R[k]=t[k];
- R.cars=(R.cars||[]).map(c=>c.key?.startsWith('vspot:')?{...c,key:'vfront:'+c.spot,path:null}:c);R.agents=R.agents||[];R.spotTaken=new Map(t.spotTaken||[]);
+ R.cars=R.cars||[];R.agents=R.agents||[];R.spotTaken=new Map(t.spotTaken||[]);
  const byId=new Map(R.agents.map(a=>[a.id,a]));R.queues=new Map((t.queues||[]).map(([k,ids])=>[k,ids.map(i=>byId.get(i)).filter(Boolean)]));
  for(const it of S.items)it.inc=(t.inc&&t.inc[it.id])||0;
  if(t.dirt&&S.dirt)for(let k=0;k<t.dirt.length;k+=2)S.dirt[t.dirt[k]]=t.dirt[k+1]/100;
  return R}
-export function load(o){if(!o||o.v!==1)return null;const S={...o,wall:[...o.wall].map(Number),zone:[...o.zone].map(Number),items:o.items.map(it=>({...it,inc:0}))};
- // terrain d'une ancienne version (60 × 48) : on recopie case par case dans le nouveau, plus grand
- const w0=o.lw||60,h0=o.lh||48,grown=w0!==W||h0!==H,fit=a=>{if(!grown)return a;const n=new Array(N).fill(0);for(let y=0;y<Math.min(h0,H);y++)for(let x=0;x<Math.min(w0,W);x++)n[idx(x,y)]=a[y*w0+x]||0;return n};
- S.wall=fit(S.wall);S.zone=fit(S.zone);if(o.oneway)S.oneway=[...o.oneway].map(c=>c==='x'?-1:+c);if(Array.isArray(o.owid)&&o.owid.length!==N){const a=new Array(N).fill(0);for(let k=0;k<o.owid.length;k+=2)a[o.owid[k]]=o.owid[k+1];S.owid=a}S.lw=W;S.lh=H;if(grown)delete o.rt;
- if(o.built)S.built=fit([...o.built].map(Number));else{S.built=new Array(N).fill(0);for(let y=o.b.y0;y<o.b.y1;y++)for(let x=o.b.x0;x<o.b.x1;x++)S.built[idx(x,y)]=1}
- if(S.fy==null)S.fy=o.b.y1-1;
- // 3.1 : les articles coûtent 30 % de plus (paniers plus gros) : le budget d'achat suit
- if(!S.eco){S.budget=Math.round((S.budget||0)*1.3/50)*50;S.eco=31}
- S.monthCat=S.monthCat||{};S.catHist=S.catHist||[];bounds(S);S.ground=o.ground?fit([...o.ground].map(Number)):defaultGround(S);if(!S.ground.includes(3))addSidewalks(S,S.ground);if(!S.trees)S.trees=genTrees(S);
- if(grown){const g=S.ground;for(let y=0;y<H;y++)for(let x=0;x<W;x++){const i=idx(x,y);if(isMainRoad(x,y))g[i]=g[i]===4?4:2;else if(x>=w0||y>=h0){if((y===RY-1||y===RE)&&!g[i])g[i]=3}}
-  for(let x=0;x<W;x++)if(!g[idx(x,RE)])g[idx(x,RE)]=3;const old=new Set(S.trees.map(t=>idx(t[0],t[1])));
-  S.trees=S.trees.concat(genTrees(S).filter(t=>(t[0]>=w0||t[1]>=h0)&&!old.has(idx(t[0],t[1]))))}if(!S.gv)migrateGround(S);if(!S.plog)S.plog=(S.history||[]).map(h=>[h.d,h.profit,h.cash]);if(!S.items.some(it=>def(it.t).zone===2))defaultParking(S);
- // sans la partie en cours sauvegardée (anciennes versions), on reprend au début de la journée
+// sauvegarde : version 2 (routes en lignes). Les parties d'avant (routes en cases) ne se reprennent pas : nouvelle partie.
+export function load(o){if(!o||o.v!==2||(o.lw&&o.lw!==W)||(o.lh&&o.lh!==H))return null;const S={...o,wall:[...o.wall].map(Number),zone:[...o.zone].map(Number),built:[...o.built].map(Number),ground:[...o.ground].map(Number),items:o.items.map(it=>({...it,inc:0}))};
+ S.lanes=S.lanes||[];S.yields=S.yields||[];S.monthCat=S.monthCat||{};S.catHist=S.catHist||[];bounds(S);if(!S.trees)S.trees=genTrees(S);if(!S.plog)S.plog=(S.history||[]).map(h=>[h.d,h.profit,h.cash]);
  if(!o.rt){if(S.hour>D.HOURS.open)S.hour=D.HOURS.start;S.dayStats=blankDay()}delete S.rt;S.dirt=new Float32Array(N);return S}
 export function withDirt(S){S.dirt=S.dirt||new Float32Array(N);return S}
 
@@ -905,7 +796,7 @@ export function advice(S){const s=stats(S,7),out=[];if(!s.days)return out;
  if(plan.low&&S.budget>0)add(75,'💶',`Budget d’achat trop bas : mets au moins ${eurTxt(plan.budget)} par jour.`);
  if(s.expensive>6){const c=top('cher:',3);if(c)add(72,'€',`Trop cher pour les clients : ${c}. Baisse un peu la marge.`)}
  else if(s.expensive<2){const c=top('cheap:',3);if(c)add(55,'💰',`Les clients trouvent ces rayons bon marché : ${c}. Monte la marge de quelques %.`)}
- if((T.jam||0)>=Math.max(3,cust*days*.01))add(78,'🚗',S.oneway?.some(v=>v>=0)?'Bouchons au parking : évite les allées à double sens qui se croisent, ou ajoute une deuxième sortie.':'Bouchons au parking : trace des sens uniques pour faire une boucle (on entre d’un côté, on sort de l’autre).');
+ if((T.jam||0)>=Math.max(3,cust*days*.01))add(78,'🚗','Bouchons : sépare les entrées et les sorties de parking (lignes à sens unique), et pose des cédez-le-passage aux croisements.');
  if((T.noparking||0)>=cust*days*.05)add(65,'🅿️','Des clients repartent faute de place : ajoute des places de parking.');
  if((T.nocart||0)>=cust*days*.05)add(50,'🛒','Les gros paniers manquent de caddies : ajoute un abri à caddies.');
  if(s.dirt>8&&cust>=180&&!(S.staff.menage>0))add(60,'🧹','Le magasin est sale et les clients le remarquent : embauche un·e agent d’entretien.');

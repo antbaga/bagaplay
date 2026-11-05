@@ -3,7 +3,7 @@
 
 // Terrain et bâtiment de départ (grosse supérette de 400 m², façade au sud, réserve au nord).
 // terrain : 80 × 76 m. La route principale (2 × 3 voies) traverse le terrain, on construit des deux côtés.
-export const LOT_W=80,LOT_H=76,ROAD={y:45,h:6};
+export const LOT_W=80,LOT_H=76,ROAD={y:46,h:4};
 export const START={x0:20,y0:18,x1:40,y1:38,entrance:29,reserveRows:5,cash:140000,starterCash:100000,loan:420000,loanMonthly:2900,rep:50};
 export const EXTEND={perM2:900,margin:2};
 export const HOURS={start:6,open:8,close:20,realSecPerHour:20};   // 6 h–8 h : livraison et mise en place avant l'ouverture       // 12 h d'ouverture = 4 min en ×1

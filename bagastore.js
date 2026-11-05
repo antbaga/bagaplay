@@ -1,6 +1,7 @@
 // BagaStore : jeu de gestion de supermarché en 3D (vue 3/4). Interface : construction, stock, équipe, compta.
 import * as D from './store-data.js';
 import * as E from './store-engine.js';
+import * as RD from './store-roads.js';
 import {createRenderer,camera,viewProj,project,ground,Builder} from './store-gl.js';
 import {buildStatic,buildAgents,buildGhost,buildAccess,item as itemModel} from './store-models.js';
 import {savedRun,saveRun,clearRun} from './runs.js';
@@ -25,7 +26,7 @@ function chart(vals,{line=false,color='#5aa36a',neg='#d9534f',fmt=v=>String(Math
  box.append(s,leg);return box}
 
 export function bagastore(c){
- const saved=!c.fresh&&savedRun(KEY);let S=(saved&&E.load(saved))||null,isNew=!S;if(!S)S=E.starter(E.withDirt(E.newGame()));
+ const saved=!c.fresh&&savedRun(KEY);let S=(saved&&E.load(saved))||null,isNew=!S;const oldSave=!!saved&&!S;if(!S)S=E.starter(E.withDirt(E.newGame()));
  // on reprend exactement où on en était : clients, voitures, camion, employés, heure
  let R=(!isNew&&E.restore(S,saved))||E.runtime();
  // ---- éléments
@@ -78,15 +79,17 @@ export function bagastore(c){
 
  // ---- toucher : glisser = déplacer la vue, pincer = zoom, toucher = action
  const pts=new Map();let pinch=null,drag=null;
- const DRAW=new Set(['wall','zoneR','zoneS','extend','asphalt','road','walk','cross','yield']);const GT={asphalt:1,road:2,walk:3,cross:4,yield:5};
+ const DRAW=new Set(['wall','zoneR','zoneS','extend','asphalt','walk','cross']);const GT={asphalt:1,walk:3,cross:4};
  const cellAt=(px,py)=>{const [gx,gz]=ground(cam,px,py);return [Math.floor(gx),Math.floor(gz)]};
  c.listen(cv,'pointerdown',e=>{cv.setPointerCapture?.(e.pointerId);pts.set(e.pointerId,{x:e.offsetX,y:e.offsetY,x0:e.offsetX,y0:e.offsetY,t:performance.now()});
   if(pts.size===2){const [a,b]=[...pts.values()];pinch={d:Math.hypot(a.x-b.x,a.y-b.y),z:cam.zoom,mx:(a.x+b.x)/2,my:(a.y+b.y)/2};if(drag?.draw&&mode){mode.a=mode.b=null;updatePlace()}drag={moved:true}}
+  else if(mode?.kind==='tool'&&mode.id==='lane'){laneDown(...ground(cam,e.offsetX,e.offsetY));drag={draw:true,moved:false};updatePlace()}
   else if(mode?.kind==='tool'&&DRAW.has(mode.id)){const c0=cellAt(e.offsetX,e.offsetY);mode.a=c0;mode.b=c0;drag={draw:true,moved:false};updatePlace()}
   else{drag={moved:false}}});
  c.listen(cv,'pointermove',e=>{const p=pts.get(e.pointerId);if(!p)return;const px=p.x,py=p.y;p.x=e.offsetX;p.y=e.offsetY;
   if(pts.size>=2&&pinch){const [a,b]=[...pts.values()];cam.zoom=Math.max(4,Math.min(40,pinch.z*pinch.d/Math.max(20,Math.hypot(a.x-b.x,a.y-b.y))));
    const mx=(a.x+b.x)/2,my=(a.y+b.y)/2,g0=ground(cam,pinch.mx,pinch.my),g1=ground(cam,mx,my);cam.tx+=g0[0]-g1[0];cam.tz+=g0[1]-g1[1];pinch.mx=mx;pinch.my=my;clampCam();return}
+  if(drag?.draw&&mode&&mode.id==='lane'){if(laneMove(...ground(cam,p.x,p.y))){drag.moved=true;updatePlace()}return}
   if(drag?.draw&&mode){const c1=cellAt(p.x,p.y);if(!mode.b||c1[0]!==mode.b[0]||c1[1]!==mode.b[1]){mode.b=c1;drag.moved=true;updatePlace()}return}
   if(drag&&(drag.moved||Math.hypot(p.x-p.x0,p.y-p.y0)>8)){drag.moved=true;const g0=ground(cam,px,py),g1=ground(cam,p.x,p.y);cam.tx+=g0[0]-g1[0];cam.tz+=g0[1]-g1[1];clampCam()}});
  const up=e=>{const p=pts.get(e.pointerId);pts.delete(e.pointerId);if(pts.size<2)pinch=null;if(!p)return;
@@ -103,16 +106,17 @@ export function bagastore(c){
    if(t==='door'){const why=E.makeDoor(S,x,y);if(why){msg(why);sfx('error')}else sfx('place');return}
    if(t==='entrance'){const why=E.addEntrance(S,x,y);if(why){msg(why);sfx('error')}else{sfx('place');toast('Entrée ouverte');staticKey=''}return}
    if(t==='erase'){mode.a=[x,y];mode.b=[x,y];updatePlace();return}
-   if(t==='oneway'){if(mode.pos&&mode.pos[0]===x&&mode.pos[1]===y)return applyTool();mode.pos=[x,y];updatePlace();return}
+   if(t==='ring'){const vx=Math.round(gx),vz=Math.round(gz);if(mode.pos&&mode.pos[0]===vx&&mode.pos[1]===vz)return applyTool();mode.pos=[vx,vz];updatePlace();return}
+   if(t==='yield'){const why=E.placeYield(S,gx,gz);if(why){msg(why);sfx('error')}else{sfx('place');save()}updatePlace();return}
    return}
   // sans outil : sélection d'un meuble (contour)
   const L=E.layout(S),id=E.inLot(x,y)?L.occ[E.idx(x,y)]:0;sel=id||null;if(sel){sfx('click');openPanel('item')}else if(panel==='item')closePanel()}
 
  // ---- placement : aperçu, petite bulle ✕ / ✓ au-dessus de l'objet
- const TOOL_NAMES={extend:'Agrandir',asphalt:'Goudron',road:'Route',walk:'Trottoir',cross:'Passage piéton',yield:'Cédez le passage',oneway:'Sens unique'},TOOL_HINT={oneway:'Touche une route pour poser un bloc de 3 × 3. ↻ change le sens.',yield:'Trace la ligne en travers de la voie : les voitures qui y arrivent laissent passer les autres.',cross:'Glisse le doigt en travers d’une route.',extend:'Glisse le doigt pour tracer l’extension.',asphalt:'Glisse le doigt pour goudronner une zone.',walk:'Glisse le doigt pour poser un trottoir.',road:'Glisse le doigt pour tracer une route.',wall:'Glisse le doigt pour tracer le mur.',zoneR:'Glisse le doigt sur la zone.',zoneS:'Glisse le doigt sur la zone.',erase:'Touche ce que tu veux démolir.'};
+ const TOOL_NAMES={extend:'Agrandir',asphalt:'Goudron',lane:'Route',ring:'Rond-point',walk:'Trottoir',cross:'Passage piéton',yield:'Cédez le passage'},TOOL_HINT={lane:'Trace une voie dans le sens de circulation (2 de large). Pars du bout d’une voie pour la rallonger, ou glisse le bout le long d’elle pour la raccourcir.',ring:'Touche le centre du rond-point. ↻ change la taille. Relie ensuite tes voies au cercle.',yield:'Touche une voie juste avant un croisement : elle laisse passer l’autre. Touche-le à nouveau pour l’enlever.',cross:'Glisse le doigt en travers d’une route.',extend:'Glisse le doigt pour tracer l’extension.',asphalt:'Glisse le doigt pour goudronner une zone.',walk:'Glisse le doigt pour poser un trottoir.',road:'Glisse le doigt pour tracer une route.',wall:'Glisse le doigt pour tracer le mur.',zoneR:'Glisse le doigt sur la zone.',zoneS:'Glisse le doigt sur la zone.',erase:'Touche ce que tu veux démolir.'};
  function startMove(id){const it=S.items.find(o=>o.id===id);if(!it)return;mode={kind:'item',t:it.t,r:it.r,pos:[it.x,it.y],move:id};staticKey='';closePanel();bar.hidden=false;updatePlace();msg('Touche la nouvelle place.')}
  function startItem(t){mode={kind:'item',t,r:0,pos:null};closePanel();bar.hidden=false;updatePlace();msg('Touche le sol pour placer.')}
- function startTool(t){mode={kind:'tool',id:t,r:onewayR};closePanel();bar.hidden=false;updatePlace();msg(TOOL_HINT[t]||D.TOOLS.find(o=>o.id===t)?.hint||'')}
+ function startTool(t){mode={kind:'tool',id:t,r:t==='ring'?ringR:0};closePanel();bar.hidden=false;updatePlace();msg(TOOL_HINT[t]||D.TOOLS.find(o=>o.id===t)?.hint||'')}
  function stopMode(){mode=null;staticKey='';bar.hidden=true;pop.hidden=true;anchor=null;ren.upload('ghost',Bg.d,0);ren.upload('access',Bac.d,0);c.hint(E.problems(S)[0]||'')}
  function updatePlace(){bar.innerHTML='';let ok=false,why='',label='',cost=0;const g={};anchor=null;
   let access=[];if(mode.kind==='item'){const d=D.ITEM[mode.t];label=d.name;cost=mode.move?0:mode.pos?E.placeCost(S,mode.t,mode.pos[0],mode.pos[1],mode.r):d.price;
@@ -122,33 +126,57 @@ export function bagastore(c){
    if((t==='zoneR'||t==='zoneS')&&mode.a){const o=[];for(let y=Math.min(mode.a[1],b[1]);y<=Math.max(mode.a[1],b[1]);y++)for(let x=Math.min(mode.a[0],b[0]);x<=Math.max(mode.a[0],b[0]);x++)if(E.inside(S,x,y))o.push([x,y]);g.cells=o;g.h=.06;ok=o.length>0}
    if(t==='extend'&&mode.a){const p=E.extendPlan(S,mode.a,b);g.cells=p.cells;g.h=.12;cost=p.cost;ok=!p.why;why=p.why||'';if(p.m2)label=`Agrandir : ${p.m2} m²`}
    if(GT[t]&&mode.a){const p=E.groundPlan(S,mode.a,b,GT[t]);g.cells=p.cells.map(i=>[i%D.LOT_W,i/D.LOT_W|0]);g.h=.04;cost=p.cost;ok=!p.why;why=p.why||'';if(p.cells.length)label=`${TOOL_NAMES[t]} : ${p.cells.length} m²`}
-   if(t==='oneway'&&mode.pos){const p=E.onewayPlan(S,mode.pos[0],mode.pos[1],mode.r),[dx,dy]=E.DIRS[mode.r];g.cells=p.cells.map(i=>[i%D.LOT_W,i/D.LOT_W|0]);g.h=.04;g.arrows=[[mode.pos[0],mode.pos[1],mode.r]];cost=p.cost;ok=!p.why;why=p.why||'';anchor=[mode.pos[0]+.5,1,mode.pos[1]+.5];if(p.cells.length)label=`Sens unique : ${p.cells.length} m²`}
+   if(t==='lane'&&mode.plan){const p=mode.plan;g.cells=(p.cells||[]).map(i=>[i%D.LOT_W,i/D.LOT_W|0]);g.h=.04;g.poly=mode.poly;ok=!p.why;why=p.why||'';cost=p.refund?-p.refund:(p.cost||0);
+    const e=mode.poly[mode.poly.length-1];anchor=[e[0],1,e[1]];const m=Math.round(mode.len||0);if(m)label=mode.trim?`Raccourcir : ${m} m`:`Route : ${m} m`}
+   if(t==='ring'&&mode.pos){const p=E.ringPlan(S,mode.pos[0],mode.pos[1],RD.RING_R[mode.r]);g.cells=(p.cells||[]).concat(p.island||[]).map(i=>[i%D.LOT_W,i/D.LOT_W|0]);g.h=.04;cost=p.cost||0;ok=!p.why;why=p.why||'';anchor=[mode.pos[0],1,mode.pos[1]];label=`Rond-point · ${RD.RING_R[mode.r]*2+2} m`}
    if(t==='erase'&&mode.a){const inf=E.eraseInfo(S,...mode.a);if(inf){g.cells=inf.cells.map(k=>[k%D.LOT_W,k/D.LOT_W|0]);g.h=.3;label='Démolir : '+inf.label;cost=-inf.refund;ok=true;if(inf.lost)why=inf.lost+' articles de la réserve seront perdus.'}else why='Rien à démolir ici.'}
    if(mode.a)anchor=[b[0]+.5,(g.h||0)+1,b[1]+.5]}
   if(ok&&cost>0&&cost>S.cash){ok=false;why='Pas assez d’argent.'}
   buildGhost(Bg,S,g,view());ren.upload('ghost',Bg.d,Bg.n);buildAccess(Bac,access,view());ren.upload('access',Bac.d,Bac.n);ghostTint=ok?[.3,.85,.4,.45]:[.95,.3,.25,.5];
   const name=el('div','st-place-name');name.append(el('b',null,label),el('small',null,cost?(cost>0?eur(cost):'+'+eur(-cost)):''));bar.append(name);
-  if(mode.kind==='item'||mode.id==='oneway'){const r=el('button','st-pbtn','↻');r.setAttribute('aria-label','Tourner');r.onclick=()=>{mode.r=(mode.r+1)%4;if(mode.id==='oneway')onewayR=mode.r;sfx('click');updatePlace()};bar.append(r)}
+  if(mode.kind==='item'||mode.id==='ring'){const r=el('button','st-pbtn','↻');r.setAttribute('aria-label',mode.id==='ring'?'Taille':'Tourner');r.onclick=()=>{mode.r=(mode.r+1)%(mode.id==='ring'?RD.RING_R.length:4);if(mode.id==='ring')ringR=mode.r;sfx('click');updatePlace()};bar.append(r)}
   if(E.canUndo(S)){const u=el('button','st-pbtn','↶');u.setAttribute('aria-label','Annuler la dernière construction');u.onclick=()=>{const why=E.undo(S);if(why){msg(why);sfx('error')}else{sfx('erase');toast('Construction annulée, remboursée')}updatePlace()};bar.append(u)}
   const x=el('button','st-pbtn done','Fini');x.onclick=()=>{sfx('click');stopMode()};bar.append(x);
-  pop.hidden=!anchor||(mode.kind==='tool'&&!mode.b&&!mode.pos)||!!drag?.draw||(mode.id==='erase'&&!ok);popOk.disabled=!ok;pop.classList.toggle('bad',!ok);popCost.textContent=cost?(cost>0?eur(cost):'+'+eur(-cost)):'';
-  popOk.onclick=()=>mode.kind==='item'?confirmPlace():applyTool();popNo.onclick=()=>{if(mode.kind==='item'||mode.id==='oneway')mode.pos=null;else mode.a=mode.b=null;sfx('click');updatePlace()};
+  pop.hidden=!anchor||(mode.kind==='tool'&&!mode.b&&!mode.pos&&!mode.plan)||!!drag?.draw||(mode.id==='erase'&&!ok);popOk.disabled=!ok;pop.classList.toggle('bad',!ok);popCost.textContent=cost?(cost>0?eur(cost):'+'+eur(-cost)):'';
+  popOk.onclick=()=>mode.kind==='item'?confirmPlace():applyTool();popNo.onclick=()=>{if(mode.kind==='item'||mode.id==='ring')mode.pos=null;else if(mode.id==='lane')laneReset();else mode.a=mode.b=null;sfx('click');updatePlace()};
   c.hint(why||'')}
  function confirmPlace(){if(!mode?.pos)return;if(mode.move){const why=E.moveItem(S,mode.move,mode.pos[0],mode.pos[1],mode.r);if(why){msg(why);sfx('error');return}sfx('place');sel=mode.move;stopMode();return}const r=E.place(S,mode.t,mode.pos[0],mode.pos[1],mode.r);
   if(typeof r==='string'){msg(r);sfx('error');return}sfx('place');mode.pos=null;updatePlace()}
+ // ---- tracé d'une voie : segments droits ou à 45° entre coins de cases ; un changement de direction ajoute un virage
+ function laneReset(){mode.cur=null;mode.pts=null;mode.plan=null;mode.poly=null;mode.trim=null;mode.trim0=false;mode.edit=null;mode.len=0}
+ const V=(x,z)=>[Math.round(x),Math.round(z)];
+ function laneDown(x,z){laneReset();const q=RD.laneAt(S,x,z,1.15);
+  if(q&&q.end){const l=S.lanes.find(o=>o.id===q.id),e=q.end==='end'?l.pts[l.pts.length-1]:l.pts[0];mode.edit={id:q.id,end:q.end,p:e};mode.pts=[[e[0],e[1]]];mode.trim0=q.end==='start'}
+  else{let v=V(x,z);const r=E.snapRing?E.snapRing(S,v):v;mode.pts=[r]}
+  laneMove(x,z,true)}
+ function laneMove(x,z,first){const pts=mode.pts;if(!pts)return false;const key0=JSON.stringify([mode.poly,mode.trim]);
+  // bout d'une voie qu'on fait glisser le long d'elle : on la raccourcit
+  if(mode.edit){const q=RD.laneAt(S,x,z,1.0);if(q&&q.id===mode.edit.id&&Math.hypot(x-mode.edit.p[0],z-mode.edit.p[1])>.6){const p=E.trimPlan(S,q.id,mode.edit.end,x,z);
+    mode.trim={id:q.id,end:mode.edit.end,x,y:z};mode.plan=p;const l=S.lanes.find(o=>o.id===q.id),keep=p.pts||l.pts;mode.poly=keep.map(a=>[a[0],a[1]]);if(mode.edit.end==='start')mode.poly=mode.poly.slice();mode.len=p.refund?p.refund/RD.LANE_COST/D.REFUND:0;return JSON.stringify([mode.poly,mode.trim])!==key0}
+   mode.trim=null}
+  let last=pts[pts.length-1],e=RD.snapSeg(last,[x,z]);
+  if(mode.cur&&pts.length>=1&&RD.dir8(last,mode.cur)>=0&&RD.dir8(last,mode.cur)!==RD.dir8(last,e)&&Math.hypot(mode.cur[0]-last[0],mode.cur[1]-last[1])>=2){pts.push(mode.cur);last=mode.cur;e=RD.snapSeg(last,[x,z])}
+  if(pts.length>=2&&RD.dir8(pts[pts.length-2],last)===RD.dir8(last,e)){pts.pop();last=pts[pts.length-1];e=RD.snapSeg(last,[x,z])}
+  // bout près d'un rond-point : accroché au cercle
+  if(E.snapRing){const r=E.snapRing(S,e);if(r!==e)e=r}
+  mode.cur=e;const all=pts.concat(e[0]!==last[0]||e[1]!==last[1]?[e]:[]);const cand=mode.trim0?all.slice().reverse():all;
+  if(all.length<2){mode.plan=null;mode.poly=null;return false}
+  mode.plan=E.lanePlan(S,cand);mode.poly=cand.map(a=>[a[0],a[1]]);mode.pts=pts;mode.len=0;for(let i=1;i<all.length;i++)mode.len+=Math.hypot(all[i][0]-all[i-1][0],all[i][1]-all[i-1][1]);
+  const ret=JSON.stringify([mode.poly,mode.trim])!==key0;if(!first)return ret;return ret}
  function applyTool(){let why=null;const t=mode.id;
   if(t==='wall')why=E.buildWall(S,mode.a,mode.b);
   if(t==='zoneR'||t==='zoneS')why=E.paintZone(S,mode.a,mode.b,t==='zoneR'?1:0);
   if(t==='erase')why=E.eraseAt(S,...mode.a);
   if(t==='extend'){why=E.extendRect(S,mode.a,mode.b);if(!why)save()}
   if(GT[t])why=E.paintGround(S,mode.a,mode.b,GT[t]);
-  if(t==='oneway'){why=E.placeOneway(S,mode.pos[0],mode.pos[1],mode.r);if(!why)mode.pos=null}
+  if(t==='lane'&&mode.plan){why=mode.trim?E.trimLane(S,mode.trim.id,mode.trim.end,mode.trim.x,mode.trim.y):E.buildLane(S,mode.plan.pts);if(!why){laneReset();save()}}
+  if(t==='ring'&&mode.pos){why=E.buildRing(S,mode.pos[0],mode.pos[1],RD.RING_R[mode.r]);if(!why){mode.pos=null;save()}}
   if(why){msg(why);sfx('error')}else sfx(t==='erase'?'erase':'place');mode.a=mode.b=null;updatePlace()}
 
  // ---- panneaux
  function closePanel(){panel=null;sheet.hidden=true;if(!mode)sel=null}
  function openPanel(name){if(mode&&name!=='item')stopMode();panel=name;sheet.hidden=false;renderPanel()}
- let onewayR=3,buildTab='rayons',stockTab='stock',moneyTab='tresor',cashSpan=30,loanAmt=50000,repayAmt=10000;
+ let ringR=1,buildTab='rayons',stockTab='stock',moneyTab='tresor',cashSpan=30,loanAmt=50000,repayAmt=10000;
  function head(title,tabs,cur,set){sheet.innerHTML='';const h=el('div','st-head');h.append(el('b',null,title));
   const x=el('button','st-x','✕');x.setAttribute('aria-label','Fermer');x.onclick=()=>{sfx('click');closePanel()};h.append(x);sheet.append(h);
   if(tabs){const t=el('div','st-tabs');for(const [id,name] of tabs)t.append(btn(name,()=>{set(id);renderPanel()},'st-tab'+(id===cur?' on':'')));sheet.append(t)}
@@ -163,7 +191,7 @@ export function bagastore(c){
   const nb=sheet.querySelector('.st-body');if(nb&&key===panelKey)nb.scrollTop=top;panelKey=key}
  function pBuild(){const body=head('Construire · '+eur(S.cash),D.TABS,buildTab,v=>buildTab=v);const grid=el('div','st-cards');body.append(grid);
   if(buildTab==='murs'){for(const t of D.TOOLS){const b=card(t.name,t.price?eur(t.price)+(t.id==='wall'?' / m':''):'');b.onclick=()=>{sfx('click');startTool(t.id)};grid.append(b)}return}
-  if(buildTab==='parking'){for(const [id,name,price,sub] of [['walk','Trottoir',E.GROUND_COST[3],'Chemin des piétons (1 de large)'],['cross','Passage piéton',E.GROUND_COST[4],'Traverser une route'],['yield','Cédez le passage',E.GROUND_COST[5],'Les voitures y laissent passer'],['oneway','Sens unique',E.GROUND_COST[6],'Bloc 3 × 3 à poser : circulation en boucle'],['asphalt','Goudron',E.GROUND_COST[1],'Sol des places, piétons'],['road','Route',E.GROUND_COST[2],'Voitures et camions (3 de large)']]){const b=card(name,id==='oneway'?eur(price*9)+' le bloc':eur(price)+' / m²',sub);b.onclick=()=>{sfx('click');startTool(id)};grid.append(b)}}
+  if(buildTab==='parking'){for(const [id,name,price,sub] of [['lane','Route',RD.LANE_COST+' € / m','Une voie à sens unique, 2 de large'],['ring','Rond-point',eur(RD.laneCost({ring:{r:4}})),'Les voies qui arrivent cèdent'],['yield','Cédez le passage','Gratuit','À poser avant un croisement'],['cross','Passage piéton',eur(E.GROUND_COST[4])+' / m²','Sur une voie, 1 de large'],['walk','Trottoir',eur(E.GROUND_COST[3])+' / m²','Chemin des piétons (1 de large)'],['asphalt','Goudron',eur(E.GROUND_COST[1])+' / m²','Sol des places, piétons']]){const b=card(name,price,sub);b.onclick=()=>{sfx('click');startTool(id)};grid.append(b)}}
   if(buildTab==='agrandir'){const b=card('Agrandir le magasin',eur(D.EXTEND.perM2)+' / m²','Sol et murs compris');b.onclick=()=>{sfx('click');startTool('extend')};grid.append(b);
    body.append(el('p','st-note',`Surface : ${E.area(S)} m² · vente ${E.salesArea(S)} m²`));return}
   for(const d of D.ITEMS.filter(i=>i.tab===buildTab)){const sub=d.kind==='spot'?'+ clients en voiture':d.kind==='bus'?'Un bus amène des clients':d.kind==='corral'?'Caddies : paniers plus gros':d.kind==='sale'||d.kind==='counter'||d.kind==='reserve'?`${d.cap} articles`:d.attract?'+ attractif':d.security?'− vols':d.clean?'− saleté':'';
@@ -293,7 +321,7 @@ export function bagastore(c){
   body.append(t);
   body.append(btn(r.over?'Nouvelle partie':'Continuer',()=>{if(r.over){clearRun(KEY);S=E.starter(E.withDirt(E.newGame()));R=E.runtime();staticKey='';isNew=true;home()}pending=null;hold=false;closePanel();if(isNew){isNew=false;openPanel('welcome');hold=true}},'primary'))}
  function pWelcome(){const body=head('Bienvenue dans ton magasin !');
-  for(const t of ['Tu as déjà des rayons d’épicerie remplis, deux caisses, une réserve et un quai. Ajoute frais, surgelés et rayons à la coupe pour attirer plus de clients.','Embauche ton équipe, règle ton budget d’achat et tes marges.','Ouvre le magasin ! Fin de mois : salaires, électricité et crédit.'])body.append(el('p','st-step-txt',t));
+  for(const t of ['Tu as déjà des rayons d’épicerie remplis, deux caisses, une réserve et un quai. Ajoute frais, surgelés et rayons à la coupe pour attirer plus de clients.','Embauche ton équipe, règle ton budget d’achat et tes marges.','Routes : chaque ligne est une voie à sens unique. Construire › Extérieur › Route, puis trace dans le sens de circulation. Garde les entrées et les sorties de parking séparées pour éviter les bouchons.','Ouvre le magasin ! Fin de mois : salaires, électricité et crédit.'])body.append(el('p','st-step-txt',t));
   body.append(btn('C’est parti',()=>{hold=false;closePanel()},'primary'))}
 
  // ---- messages
@@ -348,7 +376,7 @@ export function bagastore(c){
   c.setBar('TRÉSORERIE',eur(S.cash),'MOIS '+E.monthOf(S)+' · JOUR '+E.dayOfMonth(S),E.hourLabel(S))}
 
  // ---- démarrage
- if(isNew){openPanel('welcome');hold=true}
+ if(isNew){openPanel('welcome');hold=true;if(oldSave)toast('Nouveau système de routes : ton ancien magasin ne peut pas être repris, nouvelle partie.')}
  c.hint(isNew?'':E.problems(S)[0]||'');resize();hudUpdate();
  let hintT=0;
  return {
