@@ -216,7 +216,7 @@ export function undo(S){const u=S._undo;S._undo=null;if(!u||Date.now()-u.at>UNDO
  if(u.type==='item'){const k=S.items.findIndex(o=>o.id===u.id);if(k<0)return 'Déjà retiré.';const it=S.items[k];if(it.cat&&it.stock)S.reserve[it.cat]+=it.stock;S.items.splice(k,1)}
  if(u.type==='wall')for(const i of u.cells)S.wall[i]=0;
  if(u.type==='ground')u.cells.forEach((i,k)=>S.ground[i]=u.prev[k]);
- if(u.type==='oneway')u.cells.forEach((i,k)=>S.oneway[i]=u.prev[k]);
+ if(u.type==='oneway')u.cells.forEach((i,k)=>{S.oneway[i]=u.prev[k];if(S.owid&&u.pid)S.owid[i]=u.pid[k]});
  if(u.type==='extend'){const L=layout(S);if(u.cells.some(i=>L.occ[i]||S.wall[i]))return 'Des objets sont posés sur l’extension.';for(const i of u.cells)S.built[i]=0;bounds(S)}
  S.cash+=u.cost;S.month.build-=u.cost;dirty(S);return null}
 function pay(S,v,k){S.cash-=v;S.month[k]+=v;if(S.dayStats&&k in S.dayStats)S.dayStats[k]+=v}
@@ -228,22 +228,27 @@ export function buildWall(S,a,b){const c=wallPlan(S,a,b);if(!c.length)return 'Ri
  for(const [x,y] of c)S.wall[idx(x,y)]=1;dirty(S);const bad=reachProblem(S);if(bad){for(const [x,y] of c)S.wall[idx(x,y)]=0;dirty(S);return bad}
  pay(S,cost,'build');remember(S,{type:'wall',cells:c.map(([x,y])=>idx(x,y)),cost});return null}
 export function makeDoor(S,x,y){const i=idx(x,y);if(S.wall[i]!==1)return 'Touche un mur.';if(S.cash<D.DOOR_COST)return 'Pas assez d’argent.';S.wall[i]=2;dirty(S);pay(S,D.DOOR_COST,'build');return null}
+// ensembles démolis d'un coup : un bloc de sens unique (ou, pour un ancien tracé, les cases voisines de même sens) ; une ligne de passage piéton ou de cédez-le-passage
+export function owGroup(S,i){const id=S.owid?.[i];if(id){const o=[];for(let k=0;k<N;k++)if(S.owid[k]===id&&S.oneway[k]>=0)o.push(k);return o}
+ const d=S.oneway[i];return flood(i,k=>S.oneway[k]===d&&!(S.owid?.[k]))}
+export function groundGroup(S,i){const g=S.ground[i];return flood(i,k=>S.ground[k]===g&&!inside(S,k%W,k/W|0))}
+function flood(i,ok){const seen=new Set([i]),st=[i];while(st.length){const c=st.pop(),x=c%W,y=c/W|0;for(const [dx,dy] of DIRS){const nx=x+dx,ny=y+dy;if(!inLot(nx,ny))continue;const j=idx(nx,ny);if(!seen.has(j)&&ok(j)){seen.add(j);st.push(j)}}}return [...seen]}
 export function eraseAt(S,x,y){if(!inLot(x,y))return 'Rien à démolir ici.';const i=idx(x,y),L=layout(S);
  if(L.occ[i]){removeItem(S,L.occ[i]);return null}
  {const e=entAt(S,x,y);if(e&&e.door){S.doors.splice(S.doors.indexOf(e.door),1);S.cash+=Math.round(D.ENTRANCE_COST*D.REFUND);dirty(S);return null}}
  if(S.wall[i]){S.cash+=Math.round((S.wall[i]===2?D.DOOR_COST:D.WALL_COST)*D.REFUND);S.wall[i]=0;dirty(S);return null}
  const t=treeAt(S,x,y);if(t>=0){S.trees.splice(t,1);dirty(S);return null}
- if(S.oneway&&S.oneway[i]>=0){S.oneway[i]=-1;dirty(S);return null}
- if(S.ground[i]===4||S.ground[i]===5){S.ground[i]=2;dirty(S);return null}
- if(!inside(S,x,y)&&S.ground[i]&&!isMainRoad(x,y)){S.ground[i]=0;if(S.oneway)S.oneway[i]=-1;dirty(S);return null}
+ if(S.oneway&&S.oneway[i]>=0){for(const c of owGroup(S,i)){S.oneway[c]=-1;if(S.owid)S.owid[c]=0}dirty(S);return null}
+ if(S.ground[i]===4||S.ground[i]===5){for(const c of groundGroup(S,i))S.ground[c]=2;dirty(S);return null}
+ if(!inside(S,x,y)&&S.ground[i]&&!isMainRoad(x,y)){S.ground[i]=0;if(S.oneway)S.oneway[i]=-1;if(S.owid)S.owid[i]=0;dirty(S);return null}
  return 'Rien à démolir ici.'}
 export function eraseInfo(S,x,y){if(!inLot(x,y))return null;const i=idx(x,y),L=layout(S);
  if(L.occ[i]){const it=S.items.find(o=>o.id===L.occ[i]);return {label:def(it.t).name,refund:Math.round(def(it.t).price*D.REFUND),cells:cells(it),lost:reserveLoss(S,it.id)}}
  {const e=entAt(S,x,y);if(e&&e.door)return {label:'Entrée',refund:Math.round(D.ENTRANCE_COST*D.REFUND),cells:e.cells.map(([a,b])=>idx(a,b))}}
  if(S.wall[i])return {label:S.wall[i]===2?'Porte':'Mur',refund:Math.round((S.wall[i]===2?D.DOOR_COST:D.WALL_COST)*D.REFUND),cells:[i]};
  if(treeAt(S,x,y)>=0)return {label:'Arbre',refund:0,cells:[i]};
- if(S.oneway&&S.oneway[i]>=0)return {label:'Sens unique',refund:0,cells:[i]};
- if(S.ground[i]===4||S.ground[i]===5)return {label:S.ground[i]===4?'Passage piéton':'Cédez le passage',refund:0,cells:[i]};
+ if(S.oneway&&S.oneway[i]>=0)return {label:'Sens unique',refund:0,cells:owGroup(S,i)};
+ if(S.ground[i]===4||S.ground[i]===5)return {label:S.ground[i]===4?'Passage piéton':'Cédez le passage',refund:0,cells:groundGroup(S,i)};
  if(!inside(S,x,y)&&S.ground[i]&&!isMainRoad(x,y))return {label:['','Goudron','Route','Trottoir'][S.ground[i]],refund:0,cells:[i]};
  return null}
 // goudron (rectangle), route (3 cases de large), trottoir (1 case), passage piéton (2 cases, sur une route)
@@ -264,7 +269,8 @@ export function onewayPlan(S,x,y,r){const cl=[];for(let dy=-1;dy<=1;dy++)for(let
  const any=[];for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)if(inLot(x+dx,y+dy)&&ONEWAY_ROAD(S.ground[idx(x+dx,y+dy)]))any.push(1);
  return {cells:cl,dir:r,cost:cl.length*GROUND_COST[6],why:cl.length?null:isMainRoad(x,y)?'La route principale a déjà son sens.':any.length?'Ce sens unique est déjà posé ici.':'Le sens unique se pose sur une route.'}}
 export function placeOneway(S,x,y,r){const p=onewayPlan(S,x,y,r);if(p.why)return p.why;if(S.cash<p.cost)return 'Pas assez d’argent.';
- if(!S.oneway)S.oneway=new Array(N).fill(-1);const prev=p.cells.map(i=>S.oneway[i]);for(const i of p.cells)S.oneway[i]=r;pay(S,p.cost,'build');dirty(S);remember(S,{type:'oneway',cells:p.cells,prev,cost:p.cost});return null}
+ if(!S.oneway)S.oneway=new Array(N).fill(-1);if(!S.owid)S.owid=new Array(N).fill(0);const prev=p.cells.map(i=>S.oneway[i]),pid=p.cells.map(i=>S.owid[i]),id=S.owNext=(S.owNext||0)+1;
+ for(const i of p.cells){S.oneway[i]=r;S.owid[i]=id}pay(S,p.cost,'build');dirty(S);remember(S,{type:'oneway',cells:p.cells,prev,pid,cost:p.cost});return null}
 const dirOf=(a,b)=>{const dx=Math.sign(b[0]-a[0]),dy=Math.sign(b[1]-a[1]);return dx||dy?DIRS.findIndex(([x,y])=>x===dx&&y===dy):-1};
 export function paintGround(S,a,b,type){const p=groundPlan(S,a,b,type);if(p.why)return p.why;if(S.cash<p.cost)return 'Pas assez d’argent.';
  if(type===6){if(!S.oneway)S.oneway=new Array(N).fill(-1);const prev=p.cells.map(i=>S.oneway[i]);for(const i of p.cells)S.oneway[i]=p.dir;pay(S,p.cost,'build');dirty(S);remember(S,{type:'oneway',cells:p.cells,prev,cost:p.cost});return null}
@@ -797,7 +803,7 @@ export function monthEnd(S,R){const m=S.month;
 const pack=a=>{let s='';for(const v of a)s+=v;return s};
 // R (facultatif) : la partie en cours (clients, voitures, camion, employés…) est sauvegardée telle quelle
 export function serialize(S,R){const o={};for(const k in S)if(!k.startsWith('_')&&k!=='dirt')o[k]=S[k];
- o.level=1;o.ground=pack(S.ground);o.built=pack(S.built);o.wall=pack(S.wall);if(S.oneway)o.oneway=S.oneway.map(v=>v<0?'x':v).join('');o.zone=pack(S.zone);o.items=S.items.map(({inc,...it})=>it);
+ o.level=1;o.ground=pack(S.ground);o.built=pack(S.built);o.wall=pack(S.wall);if(S.oneway)o.oneway=S.oneway.map(v=>v<0?'x':v).join('');if(S.owid){const q=[];S.owid.forEach((v,k)=>{if(v)q.push(k,v)});o.owid=q}o.zone=pack(S.zone);o.items=S.items.map(({inc,...it})=>it);
  if(R){const inc={};for(const it of S.items)if(it.inc)inc[it.id]=it.inc;const dirt=[];if(S.dirt)for(let i=0;i<N;i++)if(S.dirt[i]>.005)dirt.push(i,Math.round(S.dirt[i]*100));
   o.rt={truck:R.truck,truckDay:R.truckDay,cars:R.cars,spotTaken:[...R.spotTaken],bus:R.bus,busT:R.busT,busWaiting:R.busWaiting,agents:R.agents,
    queues:[...R.queues].map(([k,q])=>[k,q.map(a=>a.id)]),acc:R.acc,nid:R.nid,closing:R.closing,staffDay:R.staffDay,perDay:R.perDay,restockDay:R.restockDay,
@@ -814,7 +820,7 @@ export function restore(S,o){const t=o&&o.rt;if(!t||!S)return null;const R=runti
 export function load(o){if(!o||o.v!==1)return null;const S={...o,wall:[...o.wall].map(Number),zone:[...o.zone].map(Number),items:o.items.map(it=>({...it,inc:0}))};
  // terrain d'une ancienne version (60 × 48) : on recopie case par case dans le nouveau, plus grand
  const w0=o.lw||60,h0=o.lh||48,grown=w0!==W||h0!==H,fit=a=>{if(!grown)return a;const n=new Array(N).fill(0);for(let y=0;y<Math.min(h0,H);y++)for(let x=0;x<Math.min(w0,W);x++)n[idx(x,y)]=a[y*w0+x]||0;return n};
- S.wall=fit(S.wall);S.zone=fit(S.zone);if(o.oneway)S.oneway=[...o.oneway].map(c=>c==='x'?-1:+c);S.lw=W;S.lh=H;if(grown)delete o.rt;
+ S.wall=fit(S.wall);S.zone=fit(S.zone);if(o.oneway)S.oneway=[...o.oneway].map(c=>c==='x'?-1:+c);if(Array.isArray(o.owid)&&o.owid.length!==N){const a=new Array(N).fill(0);for(let k=0;k<o.owid.length;k+=2)a[o.owid[k]]=o.owid[k+1];S.owid=a}S.lw=W;S.lh=H;if(grown)delete o.rt;
  if(o.built)S.built=fit([...o.built].map(Number));else{S.built=new Array(N).fill(0);for(let y=o.b.y0;y<o.b.y1;y++)for(let x=o.b.x0;x<o.b.x1;x++)S.built[idx(x,y)]=1}
  if(S.fy==null)S.fy=o.b.y1-1;
  // 3.1 : les articles coûtent 30 % de plus (paniers plus gros) : le budget d'achat suit

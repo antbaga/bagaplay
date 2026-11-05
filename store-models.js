@@ -32,9 +32,13 @@ export function buildStatic(B,S,v){const b=S.b,L=E.layout(S);B.reset();B.setYaw(
     B.quad([a[0],.008,a[1]],[b2[0],.008,b2[1]],[c2[0],.008,c2[1]],[c2[0],.008,c2[1]],C.line)}continue}
   // sens unique : une flèche blanche toutes les 4 cases, sur la voie du milieu
   {const ow=(u,v)=>S.oneway&&u>=0&&v>=0&&u<W&&v<H?S.oneway[E.idx(u,v)]:-1,o=ow(x,y);
-   if(g===2&&o>=0){const [dx,dy]=E.DIRS[o],px=-dy,py=dx;if(ow(x+px,y+py)===o&&ow(x-px,y-py)===o&&(dx?x:y)%4===0){const cx=x+.5,cz=y+.5,P=(a,l)=>[cx+dx*a+px*l,.008,cz+dy*a+py*l];
+   if(g===2&&o>=0&&!S.owid?.[E.idx(x,y)]){const [dx,dy]=E.DIRS[o],px=-dy,py=dx;if(ow(x+px,y+py)===o&&ow(x-px,y-py)===o&&(dx?x:y)%3===0){const cx=x+.5,cz=y+.5,P=(a,l)=>[cx+dx*a+px*l,.008,cz+dy*a+py*l];
     B.quad(P(-.38,-.07),P(.08,-.07),P(.08,.07),P(-.38,.07),C.line);B.tri(P(.08,-.22),P(.45,0),P(.08,.22),C.line)}}}
   if(g===2&&!E.isMainRoad(x,y)){const e=.07,lc=mix(C.road,C.line,.75);if(!gr(x,y-1))B.tile(x,y,x+1,y+e,.004,lc);if(!gr(x,y+1))B.tile(x,y+1-e,x+1,y+1,.004,lc);if(!gr(x-1,y))B.tile(x,y,x+e,y+1,.004,lc);if(!gr(x+1,y))B.tile(x+1-e,y,x+1,y+1,.004,lc)}}
+ // blocs de sens unique : une grande flèche au milieu de chaque bloc (au centre de ses cases de route)
+ if(S.owid&&S.oneway){const bl=new Map();for(let i=0;i<S.owid.length;i++){const id=S.owid[i];if(!id||S.oneway[i]<0)continue;const b=bl.get(id)||{x:0,z:0,n:0,r:S.oneway[i]};b.x+=i%W+.5;b.z+=(i/W|0)+.5;b.n++;bl.set(id,b)}
+  for(const b of bl.values()){const cx=b.x/b.n,cz=b.z/b.n,[dx,dy]=E.DIRS[b.r],px=-dy,py=dx,P=(a,l)=>[cx+dx*a+px*l,.012,cz+dy*a+py*l];
+   B.quad(P(-.9,-.13),P(.2,-.13),P(.2,.13),P(-.9,.13),C.line);B.tri(P(.2,-.42),P(.95,0),P(.2,.42),C.line)}}
  const ins=(x,y)=>E.inside(S,x,y);
  for(const [x,y,s] of S.trees||[])tree(B,x+.5,y+.5,s);
  for(const [x,z,s] of trees)if(x<-1||x>W+1||z<-1)tree(B,x,z,s);
