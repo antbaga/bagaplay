@@ -78,7 +78,7 @@ export function bagastore(c){
 
  // ---- toucher : glisser = déplacer la vue, pincer = zoom, toucher = action
  const pts=new Map();let pinch=null,drag=null;
- const DRAW=new Set(['wall','zoneR','zoneS','extend','asphalt','road','walk','cross','yield','oneway']);const GT={asphalt:1,road:2,walk:3,cross:4,yield:5,oneway:6};
+ const DRAW=new Set(['wall','zoneR','zoneS','extend','asphalt','road','walk','cross','yield']);const GT={asphalt:1,road:2,walk:3,cross:4,yield:5};
  const cellAt=(px,py)=>{const [gx,gz]=ground(cam,px,py);return [Math.floor(gx),Math.floor(gz)]};
  c.listen(cv,'pointerdown',e=>{cv.setPointerCapture?.(e.pointerId);pts.set(e.pointerId,{x:e.offsetX,y:e.offsetY,x0:e.offsetX,y0:e.offsetY,t:performance.now()});
   if(pts.size===2){const [a,b]=[...pts.values()];pinch={d:Math.hypot(a.x-b.x,a.y-b.y),z:cam.zoom,mx:(a.x+b.x)/2,my:(a.y+b.y)/2};if(drag?.draw&&mode){mode.a=mode.b=null;updatePlace()}drag={moved:true}}
@@ -101,16 +101,18 @@ export function bagastore(c){
    if(mode.pos&&mode.pos[0]===nx&&mode.pos[1]===ny)return confirmPlace();mode.pos=[nx,ny];updatePlace();return}
   if(mode?.kind==='tool'){const t=mode.id;
    if(t==='door'){const why=E.makeDoor(S,x,y);if(why){msg(why);sfx('error')}else sfx('place');return}
+   if(t==='entrance'){const why=E.addEntrance(S,x,y);if(why){msg(why);sfx('error')}else{sfx('place');toast('Entrée ouverte');staticKey=''}return}
    if(t==='erase'){mode.a=[x,y];mode.b=[x,y];updatePlace();return}
+   if(t==='oneway'){if(mode.pos&&mode.pos[0]===x&&mode.pos[1]===y)return applyTool();mode.pos=[x,y];updatePlace();return}
    return}
   // sans outil : sélection d'un meuble (contour)
   const L=E.layout(S),id=E.inLot(x,y)?L.occ[E.idx(x,y)]:0;sel=id||null;if(sel){sfx('click');openPanel('item')}else if(panel==='item')closePanel()}
 
  // ---- placement : aperçu, petite bulle ✕ / ✓ au-dessus de l'objet
- const TOOL_NAMES={extend:'Agrandir',asphalt:'Goudron',road:'Route',walk:'Trottoir',cross:'Passage piéton',yield:'Cédez le passage',oneway:'Sens unique'},TOOL_HINT={oneway:'Glisse le doigt sur une route, dans le sens où les voitures doivent rouler.',yield:'Trace la ligne en travers de la voie : les voitures qui y arrivent laissent passer les autres.',cross:'Glisse le doigt en travers d’une route.',extend:'Glisse le doigt pour tracer l’extension.',asphalt:'Glisse le doigt pour goudronner une zone.',walk:'Glisse le doigt pour poser un trottoir.',road:'Glisse le doigt pour tracer une route.',wall:'Glisse le doigt pour tracer le mur.',zoneR:'Glisse le doigt sur la zone.',zoneS:'Glisse le doigt sur la zone.',erase:'Touche ce que tu veux démolir.'};
+ const TOOL_NAMES={extend:'Agrandir',asphalt:'Goudron',road:'Route',walk:'Trottoir',cross:'Passage piéton',yield:'Cédez le passage',oneway:'Sens unique'},TOOL_HINT={oneway:'Touche une route pour poser un bloc de 3 × 3. ↻ change le sens.',yield:'Trace la ligne en travers de la voie : les voitures qui y arrivent laissent passer les autres.',cross:'Glisse le doigt en travers d’une route.',extend:'Glisse le doigt pour tracer l’extension.',asphalt:'Glisse le doigt pour goudronner une zone.',walk:'Glisse le doigt pour poser un trottoir.',road:'Glisse le doigt pour tracer une route.',wall:'Glisse le doigt pour tracer le mur.',zoneR:'Glisse le doigt sur la zone.',zoneS:'Glisse le doigt sur la zone.',erase:'Touche ce que tu veux démolir.'};
  function startMove(id){const it=S.items.find(o=>o.id===id);if(!it)return;mode={kind:'item',t:it.t,r:it.r,pos:[it.x,it.y],move:id};staticKey='';closePanel();bar.hidden=false;updatePlace();msg('Touche la nouvelle place.')}
  function startItem(t){mode={kind:'item',t,r:0,pos:null};closePanel();bar.hidden=false;updatePlace();msg('Touche le sol pour placer.')}
- function startTool(t){mode={kind:'tool',id:t};closePanel();bar.hidden=false;updatePlace();msg(TOOL_HINT[t]||D.TOOLS.find(o=>o.id===t)?.hint||'')}
+ function startTool(t){mode={kind:'tool',id:t,r:onewayR};closePanel();bar.hidden=false;updatePlace();msg(TOOL_HINT[t]||D.TOOLS.find(o=>o.id===t)?.hint||'')}
  function stopMode(){mode=null;staticKey='';bar.hidden=true;pop.hidden=true;anchor=null;ren.upload('ghost',Bg.d,0);ren.upload('access',Bac.d,0);c.hint(E.problems(S)[0]||'')}
  function updatePlace(){bar.innerHTML='';let ok=false,why='',label='',cost=0;const g={};anchor=null;
   let access=[];if(mode.kind==='item'){const d=D.ITEM[mode.t];label=d.name;cost=mode.move?0:mode.pos?E.placeCost(S,mode.t,mode.pos[0],mode.pos[1],mode.r):d.price;
@@ -120,16 +122,17 @@ export function bagastore(c){
    if((t==='zoneR'||t==='zoneS')&&mode.a){const o=[];for(let y=Math.min(mode.a[1],b[1]);y<=Math.max(mode.a[1],b[1]);y++)for(let x=Math.min(mode.a[0],b[0]);x<=Math.max(mode.a[0],b[0]);x++)if(E.inside(S,x,y))o.push([x,y]);g.cells=o;g.h=.06;ok=o.length>0}
    if(t==='extend'&&mode.a){const p=E.extendPlan(S,mode.a,b);g.cells=p.cells;g.h=.12;cost=p.cost;ok=!p.why;why=p.why||'';if(p.m2)label=`Agrandir : ${p.m2} m²`}
    if(GT[t]&&mode.a){const p=E.groundPlan(S,mode.a,b,GT[t]);g.cells=p.cells.map(i=>[i%D.LOT_W,i/D.LOT_W|0]);g.h=.04;cost=p.cost;ok=!p.why;why=p.why||'';if(p.cells.length)label=`${TOOL_NAMES[t]} : ${p.cells.length} m²`}
+   if(t==='oneway'&&mode.pos){const p=E.onewayPlan(S,mode.pos[0],mode.pos[1],mode.r),[dx,dy]=E.DIRS[mode.r];g.cells=p.cells.map(i=>[i%D.LOT_W,i/D.LOT_W|0]);g.h=.04;g.arrows=[[mode.pos[0],mode.pos[1],mode.r]];cost=p.cost;ok=!p.why;why=p.why||'';anchor=[mode.pos[0]+.5,1,mode.pos[1]+.5];if(p.cells.length)label=`Sens unique : ${p.cells.length} m²`}
    if(t==='erase'&&mode.a){const inf=E.eraseInfo(S,...mode.a);if(inf){g.cells=inf.cells.map(k=>[k%D.LOT_W,k/D.LOT_W|0]);g.h=.3;label='Démolir : '+inf.label;cost=-inf.refund;ok=true;if(inf.lost)why=inf.lost+' articles de la réserve seront perdus.'}else why='Rien à démolir ici.'}
    if(mode.a)anchor=[b[0]+.5,(g.h||0)+1,b[1]+.5]}
   if(ok&&cost>0&&cost>S.cash){ok=false;why='Pas assez d’argent.'}
   buildGhost(Bg,S,g,view());ren.upload('ghost',Bg.d,Bg.n);buildAccess(Bac,access,view());ren.upload('access',Bac.d,Bac.n);ghostTint=ok?[.3,.85,.4,.45]:[.95,.3,.25,.5];
   const name=el('div','st-place-name');name.append(el('b',null,label),el('small',null,cost?(cost>0?eur(cost):'+'+eur(-cost)):''));bar.append(name);
-  if(mode.kind==='item'){const r=el('button','st-pbtn','↻');r.setAttribute('aria-label','Tourner');r.onclick=()=>{mode.r=(mode.r+1)%4;sfx('click');updatePlace()};bar.append(r)}
+  if(mode.kind==='item'||mode.id==='oneway'){const r=el('button','st-pbtn','↻');r.setAttribute('aria-label','Tourner');r.onclick=()=>{mode.r=(mode.r+1)%4;if(mode.id==='oneway')onewayR=mode.r;sfx('click');updatePlace()};bar.append(r)}
   if(E.canUndo(S)){const u=el('button','st-pbtn','↶');u.setAttribute('aria-label','Annuler la dernière construction');u.onclick=()=>{const why=E.undo(S);if(why){msg(why);sfx('error')}else{sfx('erase');toast('Construction annulée, remboursée')}updatePlace()};bar.append(u)}
   const x=el('button','st-pbtn done','Fini');x.onclick=()=>{sfx('click');stopMode()};bar.append(x);
-  pop.hidden=!anchor||(mode.kind==='tool'&&!mode.b)||!!drag?.draw||(mode.id==='erase'&&!ok);popOk.disabled=!ok;pop.classList.toggle('bad',!ok);popCost.textContent=cost?(cost>0?eur(cost):'+'+eur(-cost)):'';
-  popOk.onclick=()=>mode.kind==='item'?confirmPlace():applyTool();popNo.onclick=()=>{if(mode.kind==='item')mode.pos=null;else mode.a=mode.b=null;sfx('click');updatePlace()};
+  pop.hidden=!anchor||(mode.kind==='tool'&&!mode.b&&!mode.pos)||!!drag?.draw||(mode.id==='erase'&&!ok);popOk.disabled=!ok;pop.classList.toggle('bad',!ok);popCost.textContent=cost?(cost>0?eur(cost):'+'+eur(-cost)):'';
+  popOk.onclick=()=>mode.kind==='item'?confirmPlace():applyTool();popNo.onclick=()=>{if(mode.kind==='item'||mode.id==='oneway')mode.pos=null;else mode.a=mode.b=null;sfx('click');updatePlace()};
   c.hint(why||'')}
  function confirmPlace(){if(!mode?.pos)return;if(mode.move){const why=E.moveItem(S,mode.move,mode.pos[0],mode.pos[1],mode.r);if(why){msg(why);sfx('error');return}sfx('place');sel=mode.move;stopMode();return}const r=E.place(S,mode.t,mode.pos[0],mode.pos[1],mode.r);
   if(typeof r==='string'){msg(r);sfx('error');return}sfx('place');mode.pos=null;updatePlace()}
@@ -139,12 +142,13 @@ export function bagastore(c){
   if(t==='erase')why=E.eraseAt(S,...mode.a);
   if(t==='extend'){why=E.extendRect(S,mode.a,mode.b);if(!why)save()}
   if(GT[t])why=E.paintGround(S,mode.a,mode.b,GT[t]);
+  if(t==='oneway'){why=E.placeOneway(S,mode.pos[0],mode.pos[1],mode.r);if(!why)mode.pos=null}
   if(why){msg(why);sfx('error')}else sfx(t==='erase'?'erase':'place');mode.a=mode.b=null;updatePlace()}
 
  // ---- panneaux
  function closePanel(){panel=null;sheet.hidden=true;if(!mode)sel=null}
  function openPanel(name){if(mode&&name!=='item')stopMode();panel=name;sheet.hidden=false;renderPanel()}
- let buildTab='rayons',stockTab='stock',moneyTab='tresor',cashSpan=30;
+ let onewayR=3,buildTab='rayons',stockTab='stock',moneyTab='tresor',cashSpan=30,loanAmt=50000,repayAmt=10000;
  function head(title,tabs,cur,set){sheet.innerHTML='';const h=el('div','st-head');h.append(el('b',null,title));
   const x=el('button','st-x','✕');x.setAttribute('aria-label','Fermer');x.onclick=()=>{sfx('click');closePanel()};h.append(x);sheet.append(h);
   if(tabs){const t=el('div','st-tabs');for(const [id,name] of tabs)t.append(btn(name,()=>{set(id);renderPanel()},'st-tab'+(id===cur?' on':'')));sheet.append(t)}
@@ -159,7 +163,7 @@ export function bagastore(c){
   const nb=sheet.querySelector('.st-body');if(nb&&key===panelKey)nb.scrollTop=top;panelKey=key}
  function pBuild(){const body=head('Construire · '+eur(S.cash),D.TABS,buildTab,v=>buildTab=v);const grid=el('div','st-cards');body.append(grid);
   if(buildTab==='murs'){for(const t of D.TOOLS){const b=card(t.name,t.price?eur(t.price)+(t.id==='wall'?' / m':''):'');b.onclick=()=>{sfx('click');startTool(t.id)};grid.append(b)}return}
-  if(buildTab==='parking'){for(const [id,name,price,sub] of [['walk','Trottoir',E.GROUND_COST[3],'Chemin des piétons (1 de large)'],['cross','Passage piéton',E.GROUND_COST[4],'Traverser une route'],['yield','Cédez le passage',E.GROUND_COST[5],'Les voitures y laissent passer'],['oneway','Sens unique',E.GROUND_COST[6],'Circulation en boucle, évite les bouchons'],['asphalt','Goudron',E.GROUND_COST[1],'Sol des places, piétons'],['road','Route',E.GROUND_COST[2],'Voitures et camions (3 de large)']]){const b=card(name,eur(price)+' / m²',sub);b.onclick=()=>{sfx('click');startTool(id)};grid.append(b)}}
+  if(buildTab==='parking'){for(const [id,name,price,sub] of [['walk','Trottoir',E.GROUND_COST[3],'Chemin des piétons (1 de large)'],['cross','Passage piéton',E.GROUND_COST[4],'Traverser une route'],['yield','Cédez le passage',E.GROUND_COST[5],'Les voitures y laissent passer'],['oneway','Sens unique',E.GROUND_COST[6],'Bloc 3 × 3 à poser : circulation en boucle'],['asphalt','Goudron',E.GROUND_COST[1],'Sol des places, piétons'],['road','Route',E.GROUND_COST[2],'Voitures et camions (3 de large)']]){const b=card(name,id==='oneway'?eur(price*9)+' le bloc':eur(price)+' / m²',sub);b.onclick=()=>{sfx('click');startTool(id)};grid.append(b)}}
   if(buildTab==='agrandir'){const b=card('Agrandir le magasin',eur(D.EXTEND.perM2)+' / m²','Sol et murs compris');b.onclick=()=>{sfx('click');startTool('extend')};grid.append(b);
    body.append(el('p','st-note',`Surface : ${E.area(S)} m² · vente ${E.salesArea(S)} m²`));return}
   for(const d of D.ITEMS.filter(i=>i.tab===buildTab)){const sub=d.kind==='spot'?'+ clients en voiture':d.kind==='bus'?'Un bus amène des clients':d.kind==='corral'?'Caddies : paniers plus gros':d.kind==='sale'||d.kind==='counter'||d.kind==='reserve'?`${d.cap} articles`:d.attract?'+ attractif':d.security?'− vols':d.clean?'− saleté':'';
@@ -237,7 +241,14 @@ export function bagastore(c){
    const g=el('div','st-tiles');g.append(tile('Trésorerie',eur(S.cash)),tile('Crédit restant',eur(S.loan.left)),tile('Mensualité',eur(S.loan.monthly)),tile('Réputation',Math.round(S.rep)+' / 100'));body.append(g);
    body.append(el('b','st-sub','Publicité'+(S.ads.until>=S.d?` · jusqu’au jour ${S.ads.until}`:'')));
    const ads=el('div','st-row');for(const ad of D.ADS)ads.append(btn(`${ad.name} ${eur(ad.price)} · +${Math.round(ad.boost*100)} % ${ad.days} j`,()=>c.dialog(ad.name+' ?',eur(ad.price),'Lancer',()=>{E.advertise(S,ad.id);sfx('coin');toast(ad.name+' lancée !');renderPanel()},'Annuler',()=>{}),'st-small wide'));body.append(ads);
-   body.append(el('b','st-sub','Banque'),row(btn(`Emprunter ${eur(D.EXTRA_LOAN.amount)} · +${eur(D.EXTRA_LOAN.monthly)}/mois`,()=>c.dialog('Nouvel emprunt ?',`+${eur(D.EXTRA_LOAN.amount)} · +${eur(D.EXTRA_LOAN.monthly)}/mois`,'Emprunter',()=>{E.borrow(S);sfx('coin');save();renderPanel()},'Annuler',()=>{}),'st-small wide')));
+   body.append(el('b','st-sub','Banque'));
+   {const room=E.loanRoom(S),st=E.LOAN.step;loanAmt=Math.max(st,Math.min(loanAmt,room||st));
+    const b1=el('div','st-budget');b1.append(el('span',null,'Emprunter'),btn('−',()=>{loanAmt=Math.max(st,loanAmt-st);renderPanel()}),el('b',null,eur(loanAmt)),btn('+',()=>{loanAmt=Math.min(room,loanAmt+st);renderPanel()}));body.append(b1);
+    body.append(btn(room?`Emprunter ${eur(loanAmt)} · +${eur(E.loanMonthly(loanAmt))}/mois`:'Plafond d’emprunt atteint',()=>{if(!room)return;c.dialog('Nouvel emprunt ?',`+${eur(loanAmt)} · +${eur(E.loanMonthly(loanAmt))}/mois`,'Emprunter',()=>{const w=E.borrow(S,loanAmt);if(w){msg(w);sfx('error')}else{sfx('coin');save()}renderPanel()},'Annuler',()=>{})},'st-small wide'+(room?'':' off')));
+    if(S.loan.left>0){const max=Math.min(S.loan.left,Math.floor(Math.max(0,S.cash)));repayAmt=Math.max(Math.min(st,max),Math.min(repayAmt,max));
+     const after=S.loan.left-repayAmt,newM=after>0?Math.round(S.loan.monthly*after/S.loan.left):0;
+     const b2=el('div','st-budget');b2.append(el('span',null,'Rembourser'),btn('−',()=>{repayAmt=Math.max(Math.min(st,max),repayAmt-st);renderPanel()}),el('b',null,eur(repayAmt)),btn('+',()=>{repayAmt=Math.min(max,repayAmt+st);renderPanel()}));body.append(b2);
+     body.append(row(btn('Tout',()=>{repayAmt=max;renderPanel()},'st-small'),btn(max>0?`Rembourser ${eur(repayAmt)} · mensualité ${eur(newM)}`:'Pas assez d’argent',()=>{if(max<=0)return;c.dialog('Rembourser en avance ?',`−${eur(repayAmt)} · mensualité ${eur(S.loan.monthly)} → ${eur(newM)}`,'Rembourser',()=>{const w=E.repay(S,repayAmt);if(w){msg(w);sfx('error')}else{sfx('coin');save()}renderPanel()},'Annuler',()=>{})},'st-small wide'+(max>0?'':' off'))))}}
    if(S.reports?.length){body.append(el('b','st-sub','Mois précédents'),bars(S.reports.slice(-6).map(r=>['Mois '+r.month,r.result,r.result<0?'#d9534f':'#5aa36a'])))}}}
  // ---- trésorerie : jours rentables ou non, dans le temps
  function treasury(body){const st=E.cashStats(S,cashSpan),sg=v=>(v>0?'+':'')+eur(v);

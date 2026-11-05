@@ -13,7 +13,7 @@ export function mulberry(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a
 export function newGame(){
  const s=D.START,S={v:1,d:1,hour:D.HOURS.open,open:false,cash:s.cash,loan:{left:s.loan,monthly:s.loanMonthly},rep:s.rep,
   b:{x0:s.x0,y0:s.y0,x1:s.x1,y1:s.y1},fy:s.y1-1,ent:s.entrance,built:new Array(N).fill(0),wall:new Array(N).fill(0),zone:new Array(N).fill(0),items:[],nid:1,
-  reserve:{},staff:{},staffDays:{},budget:4000,alloc:{},margin:{},ads:{until:0,boost:0},extraLoans:0,
+  reserve:{},staff:{},staffDays:{},budget:5200,eco:31,alloc:{},margin:{},ads:{until:0,boost:0},extraLoans:0,
   month:blankMonth(),dayStats:blankDay(),last:null,history:[],sold:{},over:false};
  for(const c of D.CATS){S.reserve[c.id]=0;S.margin[c.id]=c.ref;S.sold[c.id]=0}
  S.alloc=defaultAlloc();
@@ -102,9 +102,33 @@ function back(it){const [w,d]=size(it),o=[];
  return o}
 export function area(S){let n=0;for(let i=0;i<N;i++)n+=S.built[i];return n}
 export function salesArea(S){let n=0;for(let i=0;i<N;i++)if(S.built[i]&&!S.zone[i]&&!S.wall[i])n++;return n}
-const entCells=S=>[[S.ent,S.fy],[S.ent+1,S.fy]];
-const isEntrance=(S,x,y)=>y===S.fy&&(x===S.ent||x===S.ent+1);
-const nearEntrance=(S,x,y)=>isEntrance(S,x,y)||(y===S.fy-1&&(x===S.ent||x===S.ent+1));
+// entrées : la porte principale (façade sud) et celles ajoutées (S.doors : {x,y,dx,dy}, 2 cases le long du mur, (dx,dy) vers l'extérieur)
+export function entrances(S){const o=[{cells:[[S.ent,S.fy],[S.ent+1,S.fy]],d:[0,1],main:true}];
+ for(const e of S.doors||[]){const ax=e.dy?1:0,ay=e.dy?0:1,c=[[e.x,e.y],[e.x+ax,e.y+ay]];
+  if(c.every(([x,y])=>inside(S,x,y)&&!inside(S,x+e.dx,y+e.dy)))o.push({cells:c,d:[e.dx,e.dy],door:e})}
+ return o}
+const entCells=S=>entrances(S).flatMap(e=>e.cells);
+const entAt=(S,x,y)=>entrances(S).find(e=>e.cells.some(([a,b])=>a===x&&b===y));
+const isEntrance=(S,x,y)=>!!entAt(S,x,y);
+const nearEntrance=(S,x,y)=>entrances(S).some(e=>e.cells.some(([a,b])=>(a===x&&b===y)||(a-e.d[0]===x&&b-e.d[1]===y)));
+// devant une entrée, dehors (2 cases de profondeur, une de plus sur les côtés) : on laisse le passage
+const entApron=(S,x,y)=>entrances(S).some(e=>e.cells.some(([a,b])=>{for(let k=1;k<=2;k++)for(let l=-1;l<=1;l++){const px=a+e.d[0]*k+e.d[1]*l,py=b+e.d[1]*k+e.d[0]*l;if(px===x&&py===y)return true}return false}));
+export function entrancePlan(S,x,y){if(!inside(S,x,y))return {why:'Touche le bord du magasin, côté intérieur.'};
+ const L=layout(S),opts=[];for(const [dx,dy] of DIRS){if(inside(S,x+dx,y+dy))continue;const ax=dy?1:0,ay=dy?0:1;for(const s of [0,-1])opts.push({x:x+ax*s,y:y+ay*s,dx,dy})}
+ if(!opts.length)return {why:'Touche le bord du magasin, côté intérieur.'};let why='Pas de place pour une entrée ici.';
+ for(const e of opts){const ax=e.dy?1:0,ay=e.dy?0:1,c=[[e.x,e.y],[e.x+ax,e.y+ay]];
+  if(!c.every(([cx,cy])=>inside(S,cx,cy)&&!inside(S,cx+e.dx,cy+e.dy)))continue;
+  if(c.some(([cx,cy])=>isEntrance(S,cx,cy))){why='Il y a déjà une entrée ici.';continue}
+  if(c.some(([cx,cy])=>S.zone[idx(cx,cy)])){why='Une entrée donne sur le magasin, pas sur la réserve.';continue}
+  if(c.some(([cx,cy])=>L.occ[idx(cx,cy)]||S.wall[idx(cx,cy)]||L.occ[idx(cx-e.dx,cy-e.dy)]||S.wall[idx(cx-e.dx,cy-e.dy)])){why='Libère la place derrière la porte (meuble ou mur).';continue}
+  const out=c.map(([cx,cy])=>[cx+e.dx,cy+e.dy]);if(out.some(([ox,oy])=>!inLot(ox,oy)||isMainRoad(ox,oy))){why='Il faut de la place dehors.';continue}
+  if(out.some(([ox,oy])=>L.occ[idx(ox,oy)])){why='Libère la place devant la porte, dehors.';continue}
+  const pave=out.filter(([ox,oy])=>!S.ground[idx(ox,oy)]).length;return {door:e,cells:c,out,why:null,cost:D.ENTRANCE_COST+pave*GROUND_COST[3]}}
+ return {why}}
+export function addEntrance(S,x,y){const p=entrancePlan(S,x,y);if(p.why)return p.why;if(S.cash<p.cost)return 'Pas assez d’argent.';
+ // dehors, devant la porte : un bout de trottoir si c'est de l'herbe
+ for(const [ox,oy] of p.out){const i=idx(ox,oy);if(!S.ground[i])S.ground[i]=3}
+ (S.doors||(S.doors=[])).push(p.door);pay(S,p.cost,'build');dirty(S);return null}
 
 // ---------------------------------------------------------------- grille de passage et champs de distance
 // mode 'c' : clients (pas la réserve), 's' : employés.
@@ -124,8 +148,8 @@ export function layout(S){if(S._L)return S._L;
 export const dirty=S=>{S._L=null};
 function canStep(S,P,x,y,nx,ny){if(!inLot(nx,ny)||!P[idx(nx,ny)])return false;
  const a=inside(S,x,y),b=inside(S,nx,ny);if(a===b)return true;
- // on n'entre et ne sort que par la porte d'entrée (façade sud)
- return nx===x&&(x===S.ent||x===S.ent+1)&&Math.max(y,ny)===S.fy+1&&Math.min(y,ny)===S.fy}
+ // on n'entre et ne sort que par une entrée
+ const [ix,iy,ox,oy]=a?[x,y,nx,ny]:[nx,ny,x,y],e=entAt(S,ix,iy);return !!e&&ix+e.d[0]===ox&&iy+e.d[1]===oy}
 export function field(S,key,mode){const L=layout(S),k=mode+key;let f=L.fields.get(k);if(f)return f;
  // distances pondérées (Dijkstra par seaux) : trottoir et intérieur 1, chaussée et parking 3
  const P=mode==='c'?L.pc:L.ps;f=new Int16Array(N).fill(-1);const cost=i=>L.wc[i],B=[[]];let nb=0;
@@ -147,7 +171,7 @@ export function canPlace(S,t,x,y,r){const d=def(t),it={t,x,y,r},L=layout(S);
    if(!inLot(cx,cy)||inside(S,cx,cy))return 'Dehors, sur le parking.';
    if(isMainRoad(cx,cy)||isRoad(S.ground[c]))return 'Pas sur la route.';
    if(L.occ[c])return 'Place déjà prise.';
-   if(cx>=S.ent-1&&cx<=S.ent+2&&cy<=S.fy+2)return 'Laisse l’accès à l’entrée.';
+   if((cx>=S.ent-1&&cx<=S.ent+2&&cy<=S.fy+2)||entApron(S,cx,cy))return 'Laisse l’accès à l’entrée.';
    if(d.kind==='bus'&&cy!==RY-1&&cy!==RE)return 'L’arrêt de bus se place au bord de la route.'}
   if(d.kind==='spot'&&!front(it).every(([fx,fy])=>inLot(fx,fy)&&isRoad(S.ground[idx(fx,fy)])&&!inside(S,fx,fy)))return 'L’entrée de la place doit donner sur une route.';
   return null}
@@ -206,6 +230,7 @@ export function buildWall(S,a,b){const c=wallPlan(S,a,b);if(!c.length)return 'Ri
 export function makeDoor(S,x,y){const i=idx(x,y);if(S.wall[i]!==1)return 'Touche un mur.';if(S.cash<D.DOOR_COST)return 'Pas assez d’argent.';S.wall[i]=2;dirty(S);pay(S,D.DOOR_COST,'build');return null}
 export function eraseAt(S,x,y){if(!inLot(x,y))return 'Rien à démolir ici.';const i=idx(x,y),L=layout(S);
  if(L.occ[i]){removeItem(S,L.occ[i]);return null}
+ {const e=entAt(S,x,y);if(e&&e.door){S.doors.splice(S.doors.indexOf(e.door),1);S.cash+=Math.round(D.ENTRANCE_COST*D.REFUND);dirty(S);return null}}
  if(S.wall[i]){S.cash+=Math.round((S.wall[i]===2?D.DOOR_COST:D.WALL_COST)*D.REFUND);S.wall[i]=0;dirty(S);return null}
  const t=treeAt(S,x,y);if(t>=0){S.trees.splice(t,1);dirty(S);return null}
  if(S.oneway&&S.oneway[i]>=0){S.oneway[i]=-1;dirty(S);return null}
@@ -214,6 +239,7 @@ export function eraseAt(S,x,y){if(!inLot(x,y))return 'Rien à démolir ici.';con
  return 'Rien à démolir ici.'}
 export function eraseInfo(S,x,y){if(!inLot(x,y))return null;const i=idx(x,y),L=layout(S);
  if(L.occ[i]){const it=S.items.find(o=>o.id===L.occ[i]);return {label:def(it.t).name,refund:Math.round(def(it.t).price*D.REFUND),cells:cells(it),lost:reserveLoss(S,it.id)}}
+ {const e=entAt(S,x,y);if(e&&e.door)return {label:'Entrée',refund:Math.round(D.ENTRANCE_COST*D.REFUND),cells:e.cells.map(([a,b])=>idx(a,b))}}
  if(S.wall[i])return {label:S.wall[i]===2?'Porte':'Mur',refund:Math.round((S.wall[i]===2?D.DOOR_COST:D.WALL_COST)*D.REFUND),cells:[i]};
  if(treeAt(S,x,y)>=0)return {label:'Arbre',refund:0,cells:[i]};
  if(S.oneway&&S.oneway[i]>=0)return {label:'Sens unique',refund:0,cells:[i]};
@@ -227,12 +253,18 @@ export function straight(a,b){return Math.abs(b[0]-a[0])>=Math.abs(b[1]-a[1])?[b
 const ONEWAY_ROAD=g=>g===2||g===4||g===5;
 export function groundPlan(S,a,b,type){const L=layout(S),set=new Set();if(type!==1)b=straight(a,b);
  if(type===1){for(let y=Math.min(a[1],b[1]);y<=Math.max(a[1],b[1]);y++)for(let x=Math.min(a[0],b[0]);x<=Math.max(a[0],b[0]);x++)set.add(idx(x,y))}
- else{const ks=type===2||type===6?[-1,0,1]:type===4?[0,1]:[0];for(const [x,y] of lineCells(a,b)){const hor=Math.abs(a[0]-b[0])>=Math.abs(a[1]-b[1]);for(const k of ks){const cx=hor?x:x+k,cy=hor?y+k:y;if(inLot(cx,cy))set.add(idx(cx,cy))}}}
+ else{const ks=type===2||type===6?[-1,0,1]:[0];for(const [x,y] of lineCells(a,b)){const hor=Math.abs(a[0]-b[0])>=Math.abs(a[1]-b[1]);for(const k of ks){const cx=hor?x:x+k,cy=hor?y+k:y;if(inLot(cx,cy))set.add(idx(cx,cy))}}}
  if(type===6){const dir=dirOf(a,b),cl=[...set].filter(i=>!isMainRoad(i%W,i/W|0)&&ONEWAY_ROAD(S.ground[i])&&S.oneway?.[i]!==dir);
   return {cells:cl,dir,cost:cl.length*GROUND_COST[6],why:dir<0?'Trace le sens unique dans le sens de circulation.':cl.length?null:'Le sens unique se trace sur une route.'}}
  const cl=[];for(const i of set){const x=i%W,y=i/W|0;if(!inLot(x,y)||inside(S,x,y)||S.ground[i]===type)continue;
   if(type===4||type===5?S.ground[i]!==2:isMainRoad(x,y))continue;const o=L.occ[i]&&S.items.find(it=>it.id===L.occ[i]);if(o&&o.t!=='spot')continue;cl.push(i)}
  return {cells:cl,cost:cl.length*GROUND_COST[type],why:cl.length?null:type===4?'Le passage piéton se trace sur une route.':type===5?'Le cédez-le-passage se trace sur une route.':'Rien à construire ici.'}}
+// sens unique : un bloc de 3 × 3 posé d'un toucher, centré sur la case touchée ; r = sens (index de DIRS)
+export function onewayPlan(S,x,y,r){const cl=[];for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const cx=x+dx,cy=y+dy;if(!inLot(cx,cy)||isMainRoad(cx,cy))continue;const i=idx(cx,cy);if(ONEWAY_ROAD(S.ground[i])&&S.oneway?.[i]!==r)cl.push(i)}
+ const any=[];for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)if(inLot(x+dx,y+dy)&&ONEWAY_ROAD(S.ground[idx(x+dx,y+dy)]))any.push(1);
+ return {cells:cl,dir:r,cost:cl.length*GROUND_COST[6],why:cl.length?null:isMainRoad(x,y)?'La route principale a déjà son sens.':any.length?'Ce sens unique est déjà posé ici.':'Le sens unique se pose sur une route.'}}
+export function placeOneway(S,x,y,r){const p=onewayPlan(S,x,y,r);if(p.why)return p.why;if(S.cash<p.cost)return 'Pas assez d’argent.';
+ if(!S.oneway)S.oneway=new Array(N).fill(-1);const prev=p.cells.map(i=>S.oneway[i]);for(const i of p.cells)S.oneway[i]=r;pay(S,p.cost,'build');dirty(S);remember(S,{type:'oneway',cells:p.cells,prev,cost:p.cost});return null}
 const dirOf=(a,b)=>{const dx=Math.sign(b[0]-a[0]),dy=Math.sign(b[1]-a[1]);return dx||dy?DIRS.findIndex(([x,y])=>x===dx&&y===dy):-1};
 export function paintGround(S,a,b,type){const p=groundPlan(S,a,b,type);if(p.why)return p.why;if(S.cash<p.cost)return 'Pas assez d’argent.';
  if(type===6){if(!S.oneway)S.oneway=new Array(N).fill(-1);const prev=p.cells.map(i=>S.oneway[i]);for(const i of p.cells)S.oneway[i]=p.dir;pay(S,p.cost,'build');dirty(S);remember(S,{type:'oneway',cells:p.cells,prev,cost:p.cost});return null}
@@ -247,7 +279,7 @@ export function paintZone(S,a,b,z){const L=layout(S);let n=0;
 export function extendPlan(S,a,b){const m=D.EXTEND.margin,cells=[];let why=null,touch=false;
  for(let y=Math.min(a[1],b[1]);y<=Math.max(a[1],b[1]);y++)for(let x=Math.min(a[0],b[0]);x<=Math.max(a[0],b[0]);x++){
   if(inside(S,x,y))continue;
-  if(x<m||y<m||x>=W-m||y>=H-m||isMainRoad(x,y))why='Le terrain s’arrête ici.';else if(x>=S.ent-1&&x<=S.ent+2&&y>S.fy&&y<=S.fy+3)why='Laisse l’accès à l’entrée.';
+  if(x<m||y<m||x>=W-m||y>=H-m||isMainRoad(x,y))why='Le terrain s’arrête ici.';else if((x>=S.ent-1&&x<=S.ent+2&&y>S.fy&&y<=S.fy+3)||entApron(S,x,y))why='Laisse l’accès à l’entrée.';
   else{const o=layout(S).occ[idx(x,y)];if(o)why='Il y a un objet sur la zone.'}
   cells.push([x,y]);for(const [dx,dy] of DIRS)if(inside(S,x+dx,y+dy))touch=true}
  if(!cells.length)why=why||'Trace la zone hors du magasin.';else if(!touch&&!why)why='La zone doit toucher le magasin.';
@@ -264,7 +296,14 @@ export function extendRect(S,a,b){const p=extendPlan(S,a,b);if(p.why)return p.wh
 export function hire(S,role,delta){const r=D.ROLE[role];if(!r)return 'Poste inconnu.';
  if(delta>0&&r.needs&&S.staff[role]>=S.items.filter(o=>o.t===r.needs).length)return `Il faut d’abord un ${def(r.needs).name.toLowerCase()} pour chaque ${r.name.toLowerCase()}.`;
  S.staff[role]=Math.max(0,S.staff[role]+delta);dirty(S);return null}
-export function borrow(S){S.cash+=D.EXTRA_LOAN.amount;S.loan.left+=D.EXTRA_LOAN.amount;S.loan.monthly+=D.EXTRA_LOAN.monthly;S.extraLoans++}
+// emprunt : montant au choix (par 10 000 €), mensualité sur 10 ans ; remboursement anticipé : la durée restante ne change pas, la mensualité baisse d'autant
+export const LOAN={step:10000,maxLeft:1000000,rate:D.EXTRA_LOAN.monthly/D.EXTRA_LOAN.amount};
+export const loanRoom=S=>Math.max(0,Math.floor((LOAN.maxLeft-S.loan.left)/LOAN.step)*LOAN.step);
+export const loanMonthly=a=>Math.round(a*LOAN.rate);
+export function borrow(S,amount=D.EXTRA_LOAN.amount){amount=Math.min(Math.round(amount/LOAN.step)*LOAN.step,loanRoom(S));if(amount<=0)return 'Plafond d’emprunt atteint.';
+ if(S.loan.left<=0)S.loan.monthly=0;S.cash+=amount;S.loan.left+=amount;S.loan.monthly+=loanMonthly(amount);S.extraLoans=(S.extraLoans||0)+1;return null}
+export function repay(S,amount){amount=Math.min(Math.round(amount),S.loan.left,Math.floor(Math.max(0,S.cash)));if(amount<=0)return S.loan.left?'Pas assez d’argent.':'Aucun crédit à rembourser.';
+ const old=S.loan.left;S.cash-=amount;S.loan.left=old-amount;S.loan.monthly=S.loan.left>0?Math.max(1,Math.round(S.loan.monthly*S.loan.left/old)):0;return null}
 export function advertise(S,id){const a=D.ADS.find(x=>x.id===id);if(!a)return;pay(S,a.price,'ads');S.ads={until:S.d+a.days,boost:Math.max(a.boost,S.ads.until>S.d?S.ads.boost:0)}}
 
 // postes tenus : caisses avec caissier, comptoirs avec leur artisan
@@ -319,7 +358,8 @@ export const monthOf=S=>Math.floor((S.d-1)/D.DAYS_PER_MONTH)+1,dayOfMonth=S=>(S.
 // dt : secondes réelles × vitesse
 export function step(S,R,dt){if(S.over)return;layout(S);
  if(R.staffDay!==S.d)spawnStaff(S,R);
- const h0=Math.floor(S.hour);S.hour+=dt/D.HOURS.realSecPerHour;if(Math.floor(S.hour)!==h0)startDay(S,R);if(h0<D.HOURS.open&&S.hour>=D.HOURS.open&&R.restockDay!==S.d){R.restockDay=S.d;morningRestock(S)}
+ const h0=Math.floor(S.hour);S.hour+=dt/D.HOURS.realSecPerHour;if(Math.floor(S.hour)!==h0)startDay(S,R);// mise en rayon de la nuit à l'ouverture, une fois la livraison du matin rangée (au plus tard à 10 h)
+ if(S.hour>=D.HOURS.open&&R.restockDay!==S.d&&(!(R.dawn||R.truck&&R.truck.dawn&&R.truck.st!=='out')||S.hour>=D.HOURS.open+2)){R.restockDay=S.d;morningRestock(S)}
  const isOpen=S.open&&S.hour>=D.HOURS.open&&S.hour<D.HOURS.close;
  if(isOpen){const h=clamp(Math.floor(S.hour-D.HOURS.open),0,11),avg=D.HOUR_CURVE.reduce((a,b)=>a+b)/12;
   R.acc+=R.perDay/12*D.HOUR_CURVE[h]/avg/D.HOURS.realSecPerHour*dt;
@@ -394,6 +434,8 @@ function mustWait(S,R,v,dx,dz){const ang=Math.atan2(dx,dz),pr=vbox(v,v.x,v.z,ang
  for(const o of vehicles(R)){if(o===v)continue;const zs=o.man?o.man.zone:(o.wait||0)>6?o.want:null;if(!zs||zs.some(z=>boxHit(me,z)))continue;// déjà dedans : on avance pour la libérer
   for(const z of zs)if(boxHit(pr,z))return o}
  for(const o of vehicles(R)){if(o===v||o.st==='parked'||o.man)continue;const ob=vbox(o);if(!boxHit(pr,ob))continue;
+  // en face, sur l'autre voie : on se croise, on ne le suit pas (la boîte de collision empêche quand même tout contact)
+  {const ux=Math.sin(ang),uz=Math.cos(ang);if(Math.sin(o.ang)*ux+Math.cos(o.ang)*uz<-.6&&Math.abs((o.x-v.x)*uz-(o.z-v.z)*ux)>.9)continue}
   if(!boxHit(vbox(o,o.x,o.z,o.ang,0,1.5),me))return o;// il ne nous voit pas devant lui : on attend derrière lui
   const pv=prio(S,v),po=prio(S,o);if(pv!==po){if(pv<po)return o;continue}
   // à égalité : priorité à droite
@@ -411,7 +453,7 @@ function mustWait(S,R,v,dx,dz){const ang=Math.atan2(dx,dz),pr=vbox(v,v.x,v.z,ang
 // attente en boucle (A attend B qui attend… A) : on ignore les règles de politesse pour en sortir (jamais les collisions)
 // (un seul membre de la boucle passe : celui qui roule sur la voie prioritaire, sinon le plus ancien)
 function inCycle(R,v){const all=vehicles(R),m=[v];let o=v;for(let k=0;k<12;k++){const n=o.wf!=null&&all.find(q=>q.id===o.wf);if(!n)return false;if(n===v)break;m.push(n);o=n;if(k===11)return false}
- const S2=RS,rank=q=>(String(q.why||'').startsWith('bloqué')?-1e9:0)+(S2?prio(S2,q):0)*1e6-(q.id||0);return m.reduce((a,q)=>rank(q)>rank(a)?q:a)===v}
+ const S2=RS,rank=q=>(String(q.why||'').startsWith('bloqué')||q.st==='parked'?-1e9:0)+(S2?prio(S2,q):0)*1e6-(q.id||0);return m.reduce((a,q)=>rank(q)>rank(a)?q:a)===v}
 // bloqué pour de bon (attente en boucle depuis 20 s, ou plus d'une minute) : la voiture renonce et disparaît
 let RT=null,RS=null;function hold(v,dt){v.wait=(v.wait||0)+dt;const gone=!v.big&&v.kind!=='bus'&&(v.wait>60||(v.wait>20&&RT&&inCycle(RT,v)));if(gone&&RS)th(RS,'jam');if(v.wait>15&&RT)RT.jamT=RS?.hour;return gone?null:false}
 // prochaine case sur le champ de distance : on serre la droite, puis on va tout droit
@@ -421,9 +463,15 @@ function nextCell(S,f,c,pd,own){const x=c%W,y=c/W|0,cand=[];for(const [dx,dy] of
 // point visé dans une case : le long du bord droit, décalé d'un quart de case vers le milieu (deux voitures se croisent sur 3 cases)
 // on roule à 0,75 m du bord droit de la chaussée (au milieu de sa moitié sur la route principale)
 function lanePt(S,from,to,own){const x=from%W,y=from/W|0,mx=to%W-x,my=(to/W|0)-y,tx=to%W,ty=to/W|0,pd=DIRS.findIndex(([a,b])=>a===mx&&b===my);
- if(isMainRoad(tx,ty))return [tx+.5,ty+.5,pd];
+ // route principale : milieu de la case, décalé de 30 cm vers l'intérieur sur la voie du bord (on ne mord pas le trottoir)
+ if(isMainRoad(tx,ty)){const rx=tx-my,ry=ty+mx,a=pd>=0&&!isMainRoad(rx,ry)&&!(inLot(rx,ry)&&drivable(S,idx(rx,ry),own))?-.3:0;return [tx+.5-my*a,ty+.5+mx*a,pd]}
  let k=0;while(k<3){const cx=tx-my*(k+1),cy=ty+mx*(k+1);if(!inLot(cx,cy)||isMainRoad(cx,cy)||!drivable(S,idx(cx,cy),own))break;k++}
  const a=k===0?-.25:k===1?.75:1.5;return [tx+.5-my*a,ty+.5+mx*a,pd]}
+// case de virage : on vise le croisement des deux voies (voie d'arrivée × voie de sortie), pas le centre de la case :
+// on reste sur sa voie au lieu de couper vers l'intérieur ou de déborder à l'extérieur
+function corner(v,q,nx,nz,d2){const i=v.path.indexOf(q),pv=i>0?v.path[i-1]:{x:v.x,z:v.z},[ax,ay]=DIRS[q.pd]||[0,0],[bx,by]=DIRS[d2];
+ if(ax*bx+ay*by!==0||(!ax&&!ay)){q.x=q.c%W+.5;q.z=(q.c/W|0)+.5;return}
+ const cx=ax?nx:pv.x,cz=ax?pv.z:nz,x0=q.c%W,y0=q.c/W|0;q.x=clamp(cx,x0+.2,x0+.8);q.z=clamp(cz,y0+.2,y0+.8)}
 // conduite : on suit les cases à venir en visant un point un peu plus loin sur le chemin (virages arrondis, pas de pivot sur place)
 function moveV(S,v,key,speed,dt,R){const f=vfield(S,key),own=key.startsWith('vspot:')?v.spot:-1;if(f[v.c]<0)return null;
  // coincé contre une voiture garée : petite marche arrière, puis on reprend le virage plus serré (manœuvre en deux temps)
@@ -431,7 +479,7 @@ function moveV(S,v,key,speed,dt,R){const f=vfield(S,key),own=key.startsWith('vsp
  if(v.tight>0)v.tight-=dt;
  if(!v.path||v.pkey!==key||v.path.some(p=>f[p.c]<0)){v.path=[];v.pkey=key}
  let last=v.path.length?v.path[v.path.length-1].c:v.c,pd=v.path.length?v.path[v.path.length-1].pd:v.pd||0;
- while(v.path.length<5&&f[last]>0){const n=nextCell(S,f,last,pd,own);if(n<0)break;const [px,pz,d2]=lanePt(S,last,n,own);const q=v.path[v.path.length-1];if(q&&q.pd!==d2&&!isMainRoad(q.c%W,q.c/W|0)){q.x=q.c%W+.5;q.z=(q.c/W|0)+.5}v.path.push({c:n,x:px,z:pz,pd:d2});pd=d2;last=n}
+ while(v.path.length<5&&f[last]>0){const n=nextCell(S,f,last,pd,own);if(n<0)break;const [px,pz,d2]=lanePt(S,last,n,own);const q=v.path[v.path.length-1];if(q&&q.pd!==d2&&!isMainRoad(q.c%W,q.c/W|0))corner(v,q,px,pz,d2);v.path.push({c:n,x:px,z:pz,pd:d2});pd=d2;last=n}
  // point dépassé : trop près, ou déjà plus près du suivant que lui (virage coupé)
  const passed=()=>{const p=v.path[0],q=v.path[1];if(Math.hypot(p.x-v.x,p.z-v.z)<.4)return true;return q&&Math.hypot(q.x-v.x,q.z-v.z)<Math.hypot(q.x-p.x,q.z-p.z)};
  while(v.path.length&&passed()){const p=v.path.shift();v.c=p.c;v.pd=p.pd;if(!v.path.length){let l=v.c,d0=v.pd;while(v.path.length<5&&f[l]>0){const n=nextCell(S,f,l,d0,own);if(n<0)break;const [px,pz,d2]=lanePt(S,l,n,own);v.path.push({c:n,x:px,z:pz,pd:d2});d0=d2;l=n}}}
@@ -467,7 +515,7 @@ export function dockGeo(S,it){layout(S);const bk=back(it).filter(([x,y])=>inLot(
 export function dockReady(S,it){const g=dockGeo(S,it);return !!(g&&g.ok&&reachable(S,'vstage:'+it.id))}
 function refundRest(S,t){if(!t.order||!t.paid)return;let v=0;for(const c in t.order.u){v+=t.order.u[c]*D.CAT[c].cost*(t.order.factor||1);t.order.u[c]=0}v=Math.round(v);if(v){S.cash+=v;S.month.buy-=v;S.dayStats.buy-=v}}
 // l'équipe vide le camion : une palette (jusqu'à 120 articles) d'un rayon qui a de la place en réserve
-export const PALLET=200;
+export const PALLET=500;
 export function truckPallet(S,R){const t=R.truck;if(!t||t.st!=='unload')return null;const {cap,used}=capacity(S);
  // une palette regroupe plusieurs rayons du même type de réserve (ambiant, frais ou surgelé)
  for(const st of ['ambiant','frais','surgele']){let free=cap[st]-used[st]-(R.carrying?.[st]||0),room=Math.min(PALLET,free);if(room<=0)continue;const items=[];
@@ -517,8 +565,9 @@ function traffic(S,R,dt){const T=D.TRAFFIC;RT=R;RS=S;
   if(done&&car.st==='out')gone(car)}
  // camion de livraison : route → aire de manœuvre → marche arrière jusqu'au quai → déchargé par l'équipe → repart
  const dock=S.items.find(o=>o.t==='dock');
+ // livraison du matin : le camion part à 6 h et arrive au quai vers 7 h, une heure avant l'ouverture
  if(!R.truck&&(R.dawn||S.pending&&R.truckDay!==S.d)&&S.hour>=D.HOURS.start&&S.hour<D.HOURS.close){const o=R.dawn?R.dawnOrder:S.pending;R.truckDay=S.d;
-  if(dock&&dockReady(S,dock)){R.truck=vehicle(R,IN_L(),{pd:3,st:'in',key:'vstage:'+dock.id,dock:dock.id,big:true,order:o,total:Object.values(o.u).reduce((a,b)=>a+b,0),done:0,paid:false});if(R.dawn){R.dawn=false;R.dawnOrder=null}else S.pending=null}
+  if(dock&&dockReady(S,dock)){R.truck=vehicle(R,IN_L(),{pd:3,st:'in',key:'vstage:'+dock.id,dock:dock.id,big:true,dawn:!!R.dawn,order:o,total:Object.values(o.u).reduce((a,b)=>a+b,0),done:0,paid:false});if(R.dawn){R.dawn=false;R.dawnOrder=null}else S.pending=null}
   else{ev(R,{t:'noroad'});if(R.dawn){R.dawn=false;R.dawnOrder=null}else S.pending=null}}
  if(R.truck){const t=R.truck,it=S.items.find(o=>o.id===t.dock),g=it&&dockGeo(S,it);
   if(!g||!g.ok){if(t.st!=='out'){t.st='out';t.nx=-1}}
@@ -767,7 +816,10 @@ export function load(o){if(!o||o.v!==1)return null;const S={...o,wall:[...o.wall
  const w0=o.lw||60,h0=o.lh||48,grown=w0!==W||h0!==H,fit=a=>{if(!grown)return a;const n=new Array(N).fill(0);for(let y=0;y<Math.min(h0,H);y++)for(let x=0;x<Math.min(w0,W);x++)n[idx(x,y)]=a[y*w0+x]||0;return n};
  S.wall=fit(S.wall);S.zone=fit(S.zone);if(o.oneway)S.oneway=[...o.oneway].map(c=>c==='x'?-1:+c);S.lw=W;S.lh=H;if(grown)delete o.rt;
  if(o.built)S.built=fit([...o.built].map(Number));else{S.built=new Array(N).fill(0);for(let y=o.b.y0;y<o.b.y1;y++)for(let x=o.b.x0;x<o.b.x1;x++)S.built[idx(x,y)]=1}
- if(S.fy==null)S.fy=o.b.y1-1;S.monthCat=S.monthCat||{};S.catHist=S.catHist||[];bounds(S);S.ground=o.ground?fit([...o.ground].map(Number)):defaultGround(S);if(!S.ground.includes(3))addSidewalks(S,S.ground);if(!S.trees)S.trees=genTrees(S);
+ if(S.fy==null)S.fy=o.b.y1-1;
+ // 3.1 : les articles coûtent 30 % de plus (paniers plus gros) : le budget d'achat suit
+ if(!S.eco){S.budget=Math.round((S.budget||0)*1.3/50)*50;S.eco=31}
+ S.monthCat=S.monthCat||{};S.catHist=S.catHist||[];bounds(S);S.ground=o.ground?fit([...o.ground].map(Number)):defaultGround(S);if(!S.ground.includes(3))addSidewalks(S,S.ground);if(!S.trees)S.trees=genTrees(S);
  if(grown){const g=S.ground;for(let y=0;y<H;y++)for(let x=0;x<W;x++){const i=idx(x,y);if(isMainRoad(x,y))g[i]=g[i]===4?4:2;else if(x>=w0||y>=h0){if((y===RY-1||y===RE)&&!g[i])g[i]=3}}
   for(let x=0;x<W;x++)if(!g[idx(x,RE)])g[idx(x,RE)]=3;const old=new Set(S.trees.map(t=>idx(t[0],t[1])));
   S.trees=S.trees.concat(genTrees(S).filter(t=>(t[0]>=w0||t[1]>=h0)&&!old.has(idx(t[0],t[1]))))}if(!S.gv)migrateGround(S);if(!S.plog)S.plog=(S.history||[]).map(h=>[h.d,h.profit,h.cash]);if(!S.items.some(it=>def(it.t).zone===2))defaultParking(S);

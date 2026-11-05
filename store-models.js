@@ -53,10 +53,11 @@ export function buildStatic(B,S,v){const b=S.b,L=E.layout(S);B.reset();B.setYaw(
  // murs extérieurs, sur chaque bord du bâtiment ; bas du côté de la caméra pour voir dedans
  const ch=v.near,hi=2.9,lo=.55,t=.22,gaps=new Set(),door=rgb('#9aa3ad');
  for(const it of S.items)if(it.t==='dock')for(const g of dockGap(S,it))gaps.add(g);
+ const SIDE=d=>d[1]>0?'S':d[1]<0?'N':d[0]<0?'W':'E',ents=new Set();for(const e of E.entrances(S))for(const [x,y] of e.cells)ents.add(SIDE(e.d)+E.idx(x,y));
  for(let y=b.y0;y<b.y1;y++)for(let x=b.x0;x<b.x1;x++){if(!ins(x,y))continue;const i=E.idx(x,y);
   for(const [side,dx,dy] of [['N',0,-1],['S',0,1],['W',-1,0],['E',1,0]]){if(ins(x+dx,y+dy))continue;const h=ch[side]?lo:hi;
    const box=(y0,y1,col,top,inset=0)=>{if(side==='N')B.box(x,y0,y-t,x+1,y1,y-inset,col,top);if(side==='S')B.box(x,y0,y+1+inset,x+1,y1,y+1+t,col,top);if(side==='W')B.box(x-t,y0,y,x-inset,y1,y+1,col,top);if(side==='E')B.box(x+1+inset,y0,y,x+1+t,y1,y+1,col,top)};
-   if(side==='S'&&y===S.fy&&(x===S.ent||x===S.ent+1)){if(h>1)box(2.3,h,C.wall,C.wallTop);continue}
+   if(ents.has(side+i)){if(h>1)box(2.3,h,C.wall,C.wallTop);continue}
    if(gaps.has(side+i)){box(0,Math.min(h,2.6),door,C.wallTop,.08);if(h>1)box(2.6,h,C.wall,C.wallTop);continue}
    box(0,h,C.wall,C.wallTop);if(h>1){const e=.02;if(side==='N')B.box(x,0,y-t-e,x+1,.5,y-t,C.brick);if(side==='S')B.box(x,0,y+1+t,x+1,.5,y+1+t+e,C.brick);if(side==='W')B.box(x-t-e,0,y,x-t,.5,y+1,C.brick);if(side==='E')B.box(x+1+t,0,y,x+1+t+e,.5,y+1,C.brick)}}
   // poteaux d'angle (coins extérieurs)
@@ -64,7 +65,8 @@ export function buildStatic(B,S,v){const b=S.b,L=E.layout(S);B.reset();B.setYaw(
  // enseigne au-dessus de l'entrée
  if(!ch.S){B.box(S.ent-1.5,2.95,S.fy+1.05,S.ent+3.5,3.75,S.fy+1.35,rgb('#3f7a4f'));B.box(S.ent-1.2,3.1,S.fy+1.35,S.ent+3.2,3.6,S.fy+1.4,C.yellow)}
  // tapis d'entrée
- B.tile(S.ent,S.fy,S.ent+2,S.fy+2.2,.02,rgb('#55606b'));
+ for(const e of E.entrances(S)){const xs=e.cells.map(c=>c[0]),ys=e.cells.map(c=>c[1]),x0=Math.min(...xs),x1=Math.max(...xs)+1,y0=Math.min(...ys),y1=Math.max(...ys)+1,[dx,dy]=e.d;
+  B.tile(x0+Math.min(0,dx*1.2),y0+Math.min(0,dy*1.2),x1+Math.max(0,dx*1.2),y1+Math.max(0,dy*1.2),.02,rgb('#55606b'))}
  // meubles
  for(const it of S.items)if(it.id!==v.hide)item(B,S,it,v)}
 function dockGap(S,it){const [w,d]=E.size(it),o=[];
@@ -234,9 +236,13 @@ export function buildAgents(B,S,R,v,time){B.reset();B.setYaw(v.yaw);
  if(R.truck)truck(B,R.truck.x,R.truck.z,R.truck.ang,R.truck.st==='unload');
  for(const c of R.cars||[])car(B,c.x,c.z,c.ang,c.col);if(R.bus)bus(B,R.bus.x,R.bus.z,R.bus.ang);
  // portes coulissantes de l'entrée : s'ouvrent quand quelqu'un approche
- const ex=S.ent+1,ez=S.fy+1;let near=0;for(const a of R.agents)if(Math.abs(a.x-ex)<1.8&&Math.abs(a.y-ez)<2.2)near=1;
- R.door=(R.door||0)+((near?1:0)-(R.door||0))*Math.min(1,(v.dt||.016)*6);const o=R.door*.9;
- if(!v.near.S||true){const h=v.near.S?.55:2.3;B.box(S.ent-o,0,ez+.06,S.ent+1-o,h,ez+.12,C.glass,mix(C.glass,C.metal,.4));B.box(S.ent+1+o,0,ez+.06,S.ent+2+o,h,ez+.12,C.glass,mix(C.glass,C.metal,.4))}
+ R.doors=R.doors||{};E.entrances(S).forEach((e,k)=>{const [dx,dy]=e.d,xs=e.cells.map(c=>c[0]),ys=e.cells.map(c=>c[1]),x0=Math.min(...xs),y0=Math.min(...ys);
+  // ligne de la porte : sur le bord extérieur de la case d'entrée
+  const ex=dy?x0+1:(dx>0?x0+1:x0),ez=dy?(dy>0?y0+1:y0):y0+1;let near=0;for(const a of R.agents)if(Math.abs(a.x-ex)<1.8&&Math.abs(a.y-ez)<1.8)near=1;
+  const key=e.main?'m':e.cells[0].join(','),side=dy>0?'S':dy<0?'N':dx<0?'W':'E';R.doors[key]=(R.doors[key]||0)+((near?1:0)-(R.doors[key]||0))*Math.min(1,(v.dt||.016)*6);const o=R.doors[key]*.9,h=v.near[side]?.55:2.3,g=mix(C.glass,C.metal,.4);
+  if(dy){const z=ez+(dy>0?.06:-.12);B.box(x0-o,0,z,x0+1-o,h,z+.06,C.glass,g);B.box(x0+1+o,0,z,x0+2+o,h,z+.06,C.glass,g)}
+  else{const x=ex+(dx>0?.06:-.12);B.box(x,0,y0-o,x+.06,h,y0+1-o,C.glass,g);B.box(x,0,y0+1+o,x+.06,h,y0+2+o,C.glass,g)}});
+ R.door=Math.max(0,...Object.values(R.doors));
  // personnel à son poste (caisse, comptoir) : animé
  const paying=new Set(R.agents.filter(a=>a.st==='pay').map(a=>a.item));
  for(const it of S.items){const k=D.ITEM[it.t].kind;if((k!=='checkout'&&k!=='counter')||!E.manned(S,it))continue;const F=frame(it);
@@ -260,4 +266,7 @@ export function buildAgents(B,S,R,v,time){B.reset();B.setYaw(v.yaw);
 export function buildAccess(B,cells,v){B.reset();B.setYaw(v.yaw);for(const [x,y] of cells||[]){B.tile(x+.06,y+.06,x+.94,y+.94,.025,rgb('#f7c948'));B.tile(x+.2,y+.2,x+.8,y+.8,.03,rgb('#fff4cf'))}}
 export function buildGhost(B,S,g,v){B.reset();B.setYaw(v.yaw);if(!g)return;
  if(g.item){item(B,S,{...g.item,stock:0,id:-1,cat:null},{...v,sel:null});return}
- for(const [x,y] of g.cells||[])B.box(x+.04,0,y+.04,x+.96,g.h||.08,y+.96,g.col||C.white)}
+ for(const [x,y] of g.cells||[])B.box(x+.04,0,y+.04,x+.96,g.h||.08,y+.96,g.col||C.white);
+ // flèche du sens unique, au-dessus du bloc
+ for(const [x,y,r] of g.arrows||[]){const [dx,dy]=E.DIRS[r],px=-dy,py=dx,cx=x+.5,cz=y+.5,h=.12,P=(a,l)=>[cx+dx*a+px*l,h,cz+dy*a+py*l],c=[.15,.45,.95];
+  B.quad(P(-1.1,-.2),P(.3,-.2),P(.3,.2),P(-1.1,.2),c);B.tri(P(.3,-.6),P(1.3,0),P(.3,.6),c)}}

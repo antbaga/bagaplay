@@ -370,3 +370,4 @@ body:has(.install-banner) footer{padding-bottom:120px}
 .st-advice b{display:block;font-size:13px;margin-bottom:6px}
 .st-advice p{display:flex;gap:8px;margin:6px 0;font-size:12px;line-height:1.35}
 .st-advice i{font-style:normal;flex:0 0 auto}
+.st-small.off{opacity:.45}

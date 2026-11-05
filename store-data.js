@@ -16,21 +16,21 @@ export const SPEEDS=[1,2,4,8];
 // cost : prix d'achat moyen d'un article. ref : marge « normale » (au-delà, les clients achètent moins).
 // demand : poids dans les listes de courses. loss : part du stock perdue par nuit (périmé, invendus).
 export const CATS=[
- {id:'fruits',   name:'Fruits & légumes',  store:'frais',   cost:1.6, ref:35, demand:14, loss:.05,  color:[[.86,.25,.2],[.45,.72,.26],[.98,.6,.15]]},
- {id:'pain',     name:'Pain & viennoiseries',store:'ambiant',cost:0.6,ref:60, demand:9,  loss:.35,  color:[[.86,.62,.33],[.76,.5,.25]]},
- {id:'cremerie', name:'Crèmerie',          store:'frais',   cost:1.3, ref:25, demand:14, loss:.015, color:[[.96,.96,.92],[.35,.55,.85]]},
- {id:'traiteur', name:'Traiteur',          store:'frais',   cost:3.2, ref:30, demand:7,  loss:.04,  color:[[.95,.75,.35],[.7,.85,.55]]},
- {id:'viande',   name:'Viande',            store:'frais',   cost:6.5, ref:28, demand:10, loss:.03,  color:[[.78,.2,.22],[.92,.45,.45]]},
- {id:'poisson',  name:'Poisson',           store:'frais',   cost:7.5, ref:30, demand:5,  loss:.06,  color:[[.7,.8,.88],[.95,.6,.45]]},
- {id:'fromage',  name:'Fromages',          store:'frais',   cost:3.8, ref:30, demand:7,  loss:.01,  color:[[.98,.85,.35],[.95,.92,.7]]},
- {id:'surgeles', name:'Surgelés & glaces', store:'surgele', cost:2.6, ref:30, demand:8,  loss:.001, color:[[.6,.82,.95],[.95,.95,1],[.85,.4,.6]]},
- {id:'epicerie', name:'Épicerie salée',    store:'ambiant', cost:1.1, ref:28, demand:15, loss:.0005,color:[[.95,.55,.2],[.85,.25,.2],[.95,.85,.4]]},
- {id:'sucre',    name:'Biscuits & gâteaux',store:'ambiant', cost:1.5, ref:32, demand:10, loss:.001, color:[[.95,.6,.7],[.55,.35,.25],[.98,.8,.4]]},
- {id:'petitdej', name:'Petit-déjeuner',    store:'ambiant', cost:2.4, ref:28, demand:7,  loss:.001, color:[[.45,.3,.2],[.95,.8,.3]]},
- {id:'boissons', name:'Boissons',          store:'ambiant', cost:0.9, ref:30, demand:13, loss:.0005,color:[[.3,.65,.95],[.9,.25,.25],[.98,.75,.2]]},
- {id:'alcool',   name:'Vins & alcools',    store:'ambiant', cost:5.5, ref:30, demand:6,  loss:0,    color:[[.45,.12,.2],[.2,.4,.25]],theft:2.5},
- {id:'hygiene',  name:'Hygiène & beauté',  store:'ambiant', cost:2.8, ref:35, demand:6,  loss:0,    color:[[.85,.7,.95],[.6,.85,.85]],theft:2},
- {id:'entretien',name:'Entretien & maison',store:'ambiant', cost:2.5, ref:30, demand:5,  loss:0,    color:[[.3,.6,.9],[.4,.8,.5]]}
+ {id:'fruits',   name:'Fruits & légumes',  store:'frais',   cost:2.08, ref:35, demand:14, loss:.05,  color:[[.86,.25,.2],[.45,.72,.26],[.98,.6,.15]]},
+ {id:'pain',     name:'Pain & viennoiseries',store:'ambiant',cost:0.78,ref:60, demand:9,  loss:.35,  color:[[.86,.62,.33],[.76,.5,.25]]},
+ {id:'cremerie', name:'Crèmerie',          store:'frais',   cost:1.69, ref:25, demand:14, loss:.015, color:[[.96,.96,.92],[.35,.55,.85]]},
+ {id:'traiteur', name:'Traiteur',          store:'frais',   cost:4.16, ref:30, demand:7,  loss:.04,  color:[[.95,.75,.35],[.7,.85,.55]]},
+ {id:'viande',   name:'Viande',            store:'frais',   cost:8.45, ref:28, demand:10, loss:.03,  color:[[.78,.2,.22],[.92,.45,.45]]},
+ {id:'poisson',  name:'Poisson',           store:'frais',   cost:9.75, ref:30, demand:5,  loss:.06,  color:[[.7,.8,.88],[.95,.6,.45]]},
+ {id:'fromage',  name:'Fromages',          store:'frais',   cost:4.94, ref:30, demand:7,  loss:.01,  color:[[.98,.85,.35],[.95,.92,.7]]},
+ {id:'surgeles', name:'Surgelés & glaces', store:'surgele', cost:3.38, ref:30, demand:8,  loss:.001, color:[[.6,.82,.95],[.95,.95,1],[.85,.4,.6]]},
+ {id:'epicerie', name:'Épicerie salée',    store:'ambiant', cost:1.43, ref:28, demand:15, loss:.0005,color:[[.95,.55,.2],[.85,.25,.2],[.95,.85,.4]]},
+ {id:'sucre',    name:'Biscuits & gâteaux',store:'ambiant', cost:1.95, ref:32, demand:10, loss:.001, color:[[.95,.6,.7],[.55,.35,.25],[.98,.8,.4]]},
+ {id:'petitdej', name:'Petit-déjeuner',    store:'ambiant', cost:3.12, ref:28, demand:7,  loss:.001, color:[[.45,.3,.2],[.95,.8,.3]]},
+ {id:'boissons', name:'Boissons',          store:'ambiant', cost:1.17, ref:30, demand:13, loss:.0005,color:[[.3,.65,.95],[.9,.25,.25],[.98,.75,.2]]},
+ {id:'alcool',   name:'Vins & alcools',    store:'ambiant', cost:7.15, ref:30, demand:6,  loss:0,    color:[[.45,.12,.2],[.2,.4,.25]],theft:2.5},
+ {id:'hygiene',  name:'Hygiène & beauté',  store:'ambiant', cost:3.64, ref:35, demand:6,  loss:0,    color:[[.85,.7,.95],[.6,.85,.85]],theft:2},
+ {id:'entretien',name:'Entretien & maison',store:'ambiant', cost:3.25, ref:30, demand:5,  loss:0,    color:[[.3,.6,.9],[.4,.8,.5]]}
 ];
 export const CAT=Object.fromEntries(CATS.map(c=>[c.id,c]));
 export const STORES={ambiant:'Ambiant',frais:'Frais',surgele:'Surgelé'};
@@ -67,9 +67,11 @@ export const ITEMS=[
 ];
 export const ITEM=Object.fromEntries(ITEMS.map(i=>[i.id,i]));
 export const TABS=[['rayons','Rayons'],['frais','Frais'],['coupe','À la coupe'],['caisses','Caisses'],['reserve','Réserve'],['parking','Extérieur'],['murs','Murs'],['deco','Déco'],['agrandir','Agrandir']];
+export const ENTRANCE_COST=2500;
 export const TOOLS=[
  {id:'wall',name:'Mur',price:WALL_COST,hint:'Touche le début puis la fin du mur.'},
  {id:'door',name:'Porte',price:DOOR_COST,hint:'Touche un mur pour y mettre une porte (employés seulement vers la réserve).'},
+ {id:'entrance',name:'Entrée',price:ENTRANCE_COST,hint:'Touche le bord du magasin, côté intérieur : une entrée de 2 cases s’ouvre vers l’extérieur.'},
  {id:'zoneR',name:'Zone réserve',price:0,hint:'Touche deux coins : les clients n’y entrent pas.'},
  {id:'zoneS',name:'Zone magasin',price:0,hint:'Touche deux coins pour rendre la zone aux clients.'},
  {id:'erase',name:'Démolir',price:0,hint:'Touche un meuble ou un mur : il est revendu à moitié prix.'}
@@ -77,13 +79,13 @@ export const TOOLS=[
 
 // Employés : coût employeur mensuel (charges comprises).
 export const ROLES=[
- {id:'caissier',   name:'Caissier·ère',     salary:2400,desc:'Tient une caisse.'},
- {id:'rayon',      name:'Employé·e de rayon',salary:2300,desc:'Met en rayon depuis la réserve.'},
- {id:'menage',     name:'Agent d’entretien', salary:2100,desc:'Nettoie le magasin.'},
- {id:'boucher',    name:'Boucher·ère',      salary:3200,desc:'Tient la boucherie.',needs:'butcher'},
- {id:'poissonnier',name:'Poissonnier·ère',  salary:3100,desc:'Tient la poissonnerie.',needs:'fish'},
- {id:'fromager',   name:'Fromager·ère',     salary:2900,desc:'Tient la fromagerie.',needs:'cheese'},
- {id:'boulanger',  name:'Boulanger·ère',    salary:3000,desc:'Tient le fournil.',needs:'bakery'}
+ {id:'caissier',   name:'Caissier·ère',     salary:1920,desc:'Tient une caisse.'},
+ {id:'rayon',      name:'Employé·e de rayon',salary:1840,desc:'Met en rayon depuis la réserve.'},
+ {id:'menage',     name:'Agent d’entretien', salary:1680,desc:'Nettoie le magasin.'},
+ {id:'boucher',    name:'Boucher·ère',      salary:2560,desc:'Tient la boucherie.',needs:'butcher'},
+ {id:'poissonnier',name:'Poissonnier·ère',  salary:2480,desc:'Tient la poissonnerie.',needs:'fish'},
+ {id:'fromager',   name:'Fromager·ère',     salary:2320,desc:'Tient la fromagerie.',needs:'cheese'},
+ {id:'boulanger',  name:'Boulanger·ère',    salary:2400,desc:'Tient le fournil.',needs:'bakery'}
 ];
 export const ROLE=Object.fromEntries(ROLES.map(r=>[r.id,r]));
 
