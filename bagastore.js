@@ -235,7 +235,7 @@ export function bagastore(c){
    const tg=p.tag==='empty'?'empty':pl&&pl.st!=='ok'?pl.st:p.tag;if(tg){nb.append(el('em','st-tag '+TAG[tg][1],TAG[tg][0]))}
    name.append(nb,el('small',null,E.price(S,k.id).toFixed(2).replace('.',',')+' €'+(pl?` · vend ${Math.round(pl.perDay)} / j · objectif ${Math.round(pl.target)}`:'')));
    const al=el('span','st-step');al.append(btn('−',()=>{S.alloc[k.id]=Math.max(0,(S.alloc[k.id]||0)-1);renderPanel()}),el('b',null,Math.round((S.alloc[k.id]||0)/tot*100)+' %'),btn('+',()=>{S.alloc[k.id]=(S.alloc[k.id]||0)+1;renderPanel()}));
-   const mg=el('span','st-step'+(S.margin[k.id]>k.ref+5?' high':S.margin[k.id]<k.ref-5?' low':''));mg.append(btn('−',()=>{S.margin[k.id]=Math.max(0,S.margin[k.id]-2);renderPanel()}),el('b',null,S.margin[k.id]+' %'),btn('+',()=>{S.margin[k.id]=Math.min(120,S.margin[k.id]+2);renderPanel()}));
+   const mg=el('span','st-step'+(S.margin[k.id]>k.ref+35?' high':S.margin[k.id]<k.ref-35?' low':''));mg.append(btn('−',()=>{S.margin[k.id]=Math.max(0,S.margin[k.id]-10);renderPanel()}),el('b',null,S.margin[k.id]+' %'),btn('+',()=>{S.margin[k.id]=Math.min(800,S.margin[k.id]+10);renderPanel()}));
    const sk=el('span','st-stk'+(pl?' '+pl.st:p.tag==='empty'?' missing':''));sk.append(el('span',null,`${p.shelf} / ${p.reserve}`));if(pl)sk.append(el('small',null,dj(pl.days)));
    const rw=row(name,al,mg,sk);if(!pl)rw.classList.add('st-off');tbl.append(rw)}
   body.append(tbl)}

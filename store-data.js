@@ -32,6 +32,9 @@ export const CATS=[
  {id:'hygiene',  name:'Hygiène & beauté',  store:'ambiant', cost:3.64, ref:35, demand:6,  loss:0,    color:[[.85,.7,.95],[.6,.85,.85]],theft:2},
  {id:'entretien',name:'Entretien & maison',store:'ambiant', cost:3.25, ref:30, demand:5,  loss:0,    color:[[.3,.6,.9],[.4,.8,.5]]}
 ];
+// 4.1 : marges ×7 (bénéfice par article ×7). MARGIN_SCALE remet à l'échelle la sensibilité des clients aux marges.
+export const MARGIN_SCALE=7;
+for(const c of CATS)c.ref*=MARGIN_SCALE;
 export const CAT=Object.fromEntries(CATS.map(c=>[c.id,c]));
 export const STORES={ambiant:'Ambiant',frais:'Frais',surgele:'Surgelé'};
 const AMB=['epicerie','sucre','petitdej','boissons','alcool','hygiene','entretien'];
