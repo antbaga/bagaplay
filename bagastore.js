@@ -208,14 +208,26 @@ export function bagastore(c){
   if(buildTab==='parking'){for(const [id,name,price,sub] of [['lane','Route',RD.LANE_COST+' € / m','Une voie à sens unique, 2 de large'],['ring','Rond-point',eur(RD.laneCost({ring:{r:4}})),'Les voies qui arrivent cèdent'],['yield','Cédez le passage','Gratuit','À poser avant un croisement'],['cross','Passage piéton',eur(E.GROUND_COST[4])+' / m²','Sur une voie, 1 de large'],['light','Feu piéton',eur(RD.LIGHT.cost),'En travers des voies, sur un passage piéton'],['walk','Trottoir',eur(E.GROUND_COST[3])+' / m²','Chemin des piétons (1 de large)'],['asphalt','Goudron',eur(E.GROUND_COST[1])+' / m²','Sol des places, piétons']]){const b=card(name,price,sub);b.onclick=()=>{sfx('click');startTool(id)};grid.append(b)}}
   if(buildTab==='agrandir'){const b=card('Agrandir le magasin',eur(D.EXTEND.perM2)+' / m²','Sol et murs compris');b.onclick=()=>{sfx('click');startTool('extend')};grid.append(b);
    body.append(el('p','st-note',`Surface : ${E.area(S)} m² · vente ${E.salesArea(S)} m²`));return}
-  for(const d of D.ITEMS.filter(i=>i.tab===buildTab)){const sub=d.kind==='spot'?'+ clients en voiture':d.kind==='bus'?'Un bus amène des clients':d.kind==='corral'?'Caddies : paniers plus gros':d.kind==='sale'||d.kind==='counter'||d.kind==='reserve'?`${d.cap} articles`:d.attract?'+ attractif':d.security?'− vols':d.clean?'− saleté':'';
-   const b=card(d.name,eur(d.price),sub,d.w+'×'+d.d);b.onclick=()=>{sfx('click');startItem(d.id)};grid.append(b)}}
+  if(buildTab==='licences'){grid.remove();body.append(el('p','st-note','Une licence débloque des rayons, une boutique ou les équipements de la galerie. On l’achète une fois, puis on construit.'));
+   for(const [g,title] of [['galerie','Galerie'],['rayon','Rayons spécialisés'],['boutique','Boutiques']]){body.append(el('b','st-sub',title));const gl=el('div','st-cards');body.append(gl);
+    for(const L of D.LICENSES.filter(l=>l.group===g)){const own=E.hasLic(S,L.id),b=card((own?'✓ ':'🔒 ')+L.name,own?'Achetée':eur(L.price),L.desc);if(own)b.classList.add('st-own');b.onclick=()=>{sfx('click');licenseDialog(L.id)};gl.append(b)}}
+   return}
+  const NI=D.NEEDS.icon,servesTxt=d=>d.serves?Object.keys(d.serves).map(k=>NI[k]).join(' '):'';
+  for(const d of D.ITEMS.filter(i=>i.tab===buildTab)){const locked=d.lic&&!E.hasLic(S,d.lic);
+   const sub=locked?'Licence '+D.LICENSE[d.lic].name+' · '+eur(D.LICENSE[d.lic].price):d.kind==='shop'?`Ticket ${eur(d.ticket)} · ${E.roleFor(d.id).name}${d.serves?' · '+servesTxt(d):''}`:d.kind==='amenity'?servesTxt(d)+(d.sale?' · petite vente':'')+(d.attract?' · + attractif':''):d.boost?'Les clients achètent plus de vêtements':d.kind==='spot'?'+ clients en voiture':d.kind==='bus'?'Un bus amène des clients':d.kind==='corral'?'Caddies : paniers plus gros':d.kind==='sale'||d.kind==='counter'||d.kind==='reserve'?`${d.cap} articles`:d.attract?'+ attractif':d.security?'− vols':d.clean?'− saleté':'';
+   const b=card((locked?'🔒 ':'')+d.name,eur(d.price),sub,d.w+'×'+d.d);if(locked)b.classList.add('st-locked');b.onclick=()=>{sfx('click');if(locked)licenseDialog(d.lic);else startItem(d.id)};grid.append(b)}}
+ function licenseDialog(id){const L=D.LICENSE[id];if(E.hasLic(S,id)){const names=E.licItems(id).map(d=>d.name).join(', ');c.dialog(L.name,'Licence achetée. '+(names?'Débloque : '+names+'.':''),'OK',()=>{},null,null);return}
+  const names=E.licItems(id).map(d=>d.name).join(', ');
+  c.dialog('Licence '+L.name+' ?',`${eur(L.price)} · ${L.desc}${names?' Débloque : '+names+'.':''}`,'Acheter',()=>{const w=E.buyLicense(S,id);if(w){msg(w);sfx('error')}else{sfx('coin');toast('Licence '+L.name+' achetée !');save()}renderPanel()},'Annuler',()=>{})}
  function card(t,p,sub,size){const b=el('button','st-card');b.append(el('b',null,t));if(size)b.append(el('i',null,size));b.append(el('span',null,p));if(sub)b.append(el('small',null,sub));return b}
  function pStock(){const body=head('Stock',[['stock','Stock'],['stats','Statistiques'],['avis','Avis']],stockTab,v=>stockTab=v);({stock:stockList,stats:stockStats,avis:opinions})[stockTab](body)}
  const cn=k=>D.CAT[k]?D.CAT[k].name.toLowerCase():k;
  const PHRASES={rupture:k=>['Il n’y a plus de '+cn(k)+' !',-2],notsold:k=>['Dommage, pas de '+cn(k)+' ici.',-1],cher:k=>['Le rayon '+cn(k)+' est trop cher.',-2],cheap:k=>['Les prix '+cn(k)+' sont intéressants.',1],
   counter:k=>['J’adore le comptoir '+cn(k)+' !',2],queue:()=>['La queue aux caisses est interminable.',-2],dirt:()=>['C’est sale par terre…',-2],happy:()=>['Super magasin, je reviendrai !',2],decor:()=>['C’est joli et agréable ici.',1],
-  noparking:()=>['Impossible de se garer !',-2],nocart:()=>['Il n’y a même pas de caddies.',-1],nocheckout:()=>['Aucune caisse ouverte !',-2]};
+  noparking:()=>['Impossible de se garer !',-2],nocart:()=>['Il n’y a même pas de caddies.',-1],nocheckout:()=>['Aucune caisse ouverte !',-2],
+  need:k=>[{faim:'J’ai faim et il n’y a rien à manger.',soif:'J’ai soif, rien à boire ici.',wc:'Il n’y a même pas de toilettes !',fatigue:'Pas un banc pour s’asseoir…'}[k],-2],
+  ok:k=>[{faim:'Bien mangé, merci !',soif:'Ça fait du bien de boire un coup.',wc:'Heureusement qu’il y a des toilettes.',fatigue:'Une petite pause sur un banc, parfait.'}[k],1],
+  shop:t=>['J’adore '+(D.ITEM[t]?D.ITEM[t].name.toLowerCase():'cette boutique')+' !',2],shopcher:t=>['Trop cher, '+(D.ITEM[t]?D.ITEM[t].name.toLowerCase():'cette boutique')+'.',-2],svqueue:t=>['Trop d’attente : '+(D.ITEM[t]?D.ITEM[t].name.toLowerCase():'')+'.',-2]};
  function opinions(body){const list=E.thoughts(S);if(!list.length){body.append(el('p','st-note','Ouvre le magasin pour entendre tes clients.'));return}
   const box=el('div','st-opinions'),max=list[0][1];
   for(const [key,n] of list.slice(0,14)){const [k,cat]=key.split(':'),f=PHRASES[k];if(!f)continue;const [txt,mood]=f(cat);
@@ -242,10 +254,10 @@ export function bagastore(c){
   body.append(box);
   body.append(row(btn('Livraison express +15 %',()=>{const r=E.express(S,S.budget,R);if(typeof r==='string'){msg(r);sfx('error')}else{toast('Camion en route : '+eur(r.cost));sfx('truck');save()}renderPanel()},'st-small wide'),
    btn('% par défaut',()=>{S.alloc=E.allocFor(S);renderPanel()},'st-small wide')));
-  const tot=D.CATS.reduce((t,k)=>t+(S.alloc[k.id]||0),0)||1,pop=E.popularity(S),TAG={hot:['Populaire','hot'],cold:['Impopulaire','cold'],empty:['Vide','empty'],missing:['Manque','empty'],short:['Part faible','warn'],over:['Trop','cold']};
+  const AC=E.activeCats(S),tot=AC.reduce((t,k)=>t+(S.alloc[k.id]||0),0)||1,pop=E.popularity(S),TAG={hot:['Populaire','hot'],cold:['Impopulaire','cold'],empty:['Vide','empty'],missing:['Manque','empty'],short:['Part faible','warn'],over:['Trop','cold']};
   const tbl=el('div','st-cats');tbl.append(row(el('span','st-h','Rayon'),el('span','st-h','Part'),el('span','st-h','Marge'),el('span','st-h','Stock')));
   // rayons présents d'abord ; ceux qu'on ne vend pas, en grisé à la fin
-  for(const k of D.CATS.filter(c=>plan.rows[c.id]).concat(D.CATS.filter(c=>!plan.rows[c.id]))){const p=pop[k.id],pl=plan.rows[k.id],name=el('span','st-cn');const nb=el('b',null,k.name);
+  for(const k of AC.filter(c=>plan.rows[c.id]).concat(AC.filter(c=>!plan.rows[c.id]))){const p=pop[k.id],pl=plan.rows[k.id],name=el('span','st-cn');const nb=el('b',null,k.name);
    const tg=p.tag==='empty'?'empty':pl&&pl.st!=='ok'?pl.st:p.tag;if(tg){nb.append(el('em','st-tag '+TAG[tg][1],TAG[tg][0]))}
    name.append(nb,el('small',null,E.price(S,k.id).toFixed(2).replace('.',',')+' €'+(pl?` · vend ${Math.round(pl.perDay)} / j · objectif ${Math.round(pl.target)}`:'')));
    const al=el('span','st-step');al.append(btn('−',()=>{S.alloc[k.id]=Math.max(0,(S.alloc[k.id]||0)-1);renderPanel()}),el('b',null,Math.round((S.alloc[k.id]||0)/tot*100)+' %'),btn('+',()=>{S.alloc[k.id]=(S.alloc[k.id]||0)+1;renderPanel()}));
@@ -263,7 +275,8 @@ export function bagastore(c){
   if(st.days){body.append(el('b','st-sub','Mécontentement (pour 100 clients)'));body.append(bars([['Rayon vide',st.rupture,'#d9534f'],['Trop cher',st.expensive,'#e0a23a'],['Pas vendu ici',st.notSold,'#9aa38f'],['Caisse',st.angry,'#7b61c9']],v=>Math.round(v)+''))}
   body.append(chart(h.map(d=>d.sat),{line:true,color:'#3f7fcf',label:'Satisfaction (30 jours)'}),chart(h.map(d=>d.customers),{color:'#7cb069',label:'Clients par jour'}))}
  function pTeam(){const body=head('Équipe · '+eur(E.salaries(S))+' / mois');
-  for(const r of D.ROLES){const n=S.staff[r.id]||0,name=el('span','st-cn');name.append(el('b',null,r.name),el('small',null,eur(r.salary)+' / mois'));
+  const shown=r=>{if(S.staff[r.id])return true;if(r.lic)return E.hasLic(S,r.lic);const ts=E.needsOf(r);return !ts||ts.some(t=>!D.ITEM[t].lic||E.hasLic(S,D.ITEM[t].lic))};
+  for(const r of D.ROLES.filter(shown)){const n=S.staff[r.id]||0,name=el('span','st-cn');name.append(el('b',null,r.name),el('small',null,eur(r.salary)+' / mois'));
    const st=el('span','st-step');st.append(btn('−',()=>{E.hire(S,r.id,-1);E.syncStaff(S,R);renderPanel()}),el('b',null,String(n)),btn('+',()=>{const why=E.hire(S,r.id,1);if(why){msg(why);sfx('error')}else E.syncStaff(S,R);renderPanel()}));
    body.append(row(name,st))}
   const ck=S.items.filter(o=>o.t==='checkout').length,man=S.items.filter(o=>o.t==='checkout'&&E.manned(S,o)).length;
@@ -273,10 +286,11 @@ export function bagastore(c){
   if(moneyTab==='in'){body.append(chart(h.map(d=>d.profit),{label:'Bénéfice par jour',fmt:eur}));
    const g=el('div','st-tiles');const y=h[h.length-1];g.append(tile('CA hier',y?eur(y.rev):'—'),tile('CA du mois',eur(m.rev)),tile('Bénéfice 30 j',eur(h.reduce((t,d)=>t+d.profit,0))),tile('Clients attendus',E.attraction(S).perDay+' / j'));body.append(g);
    const mc=S.monthCat||{},list=D.CATS.map(k=>[k.name,mc[k.id]||0]).filter(i=>i[1]>0).sort((a,b)=>b[1]-a[1]).slice(0,8);
-   if(list.length){body.append(el('b','st-sub','Ventes du mois par rayon'),bars(list.map(i=>[i[0],i[1],'#5aa36a'])))}}
+   if(list.length){body.append(el('b','st-sub','Ventes du mois par rayon'),bars(list.map(i=>[i[0],i[1],'#5aa36a'])))}
+   const ms=Object.entries(S.monthShop||{}).filter(i=>i[1]>0).sort((a,b)=>b[1]-a[1]).map(([t,v])=>[D.ITEM[t]?.name||t,v,'#c23b6b']);if(ms.length)body.append(el('b','st-sub','Boutiques du mois'),bars(ms))}
   if(moneyTab==='out'){body.append(chart(h.map(d=>d.buy+d.fixed+d.ads),{color:'#e0a23a',label:'Dépenses par jour',fmt:eur}));
    const dm=E.dayOfMonth(S)-1,pr=v=>v*dm/D.DAYS_PER_MONTH;
-   body.append(el('b','st-sub','Ce mois-ci'),bars([['Marchandises',m.buy,'#e0a23a'],['Salaires',pr(E.salaries(S)),'#3f7fcf'],['Électricité',pr(E.electricity(S)),'#f5c542'],['Crédit',pr(S.loan.left>0?S.loan.monthly:0),'#7b61c9'],['Publicité',m.ads,'#e5603f'],['Travaux',m.build,'#9aa38f']]));
+   body.append(el('b','st-sub','Ce mois-ci'),bars([['Marchandises',m.buy,'#e0a23a'],['Salaires',pr(E.salaries(S)),'#3f7fcf'],['Électricité',pr(E.electricity(S)),'#f5c542'],['Crédit',pr(S.loan.left>0?S.loan.monthly:0),'#7b61c9'],['Publicité',m.ads,'#e5603f'],['Travaux',m.build,'#9aa38f'],['Licences',m.lic||0,'#8a5fc2']]));
    body.append(el('b','st-sub','Perdu'),bars([['Périmés',m.loss,'#d9534f'],['Vols',m.theft,'#d9534f']]));
    body.append(el('p','st-note',`Charges fixes : ${eur(E.salaries(S)+E.electricity(S)+(S.loan.left>0?S.loan.monthly:0))} / mois`))}
   if(moneyTab==='cash'){
@@ -328,10 +342,16 @@ export function bagastore(c){
    body.append(row(btn(it.urgent?'🚨 Urgence en cours…':'🚨 Remplir en urgence',()=>{E.urgent(S,it.id,!it.urgent);renderPanel()},'st-small wide'+(it.urgent?' on':'')),
     btn('📦 Commander '+D.CAT[it.cat].name.toLowerCase(),()=>{const r=E.expressCat(S,it.cat,R);if(typeof r==='string'){msg(r);sfx('error')}else{toast('Camion en route : '+eur(r.cost));sfx('truck')}renderPanel()},'st-small wide')))}
   if(d.cats&&d.cats.length>1){const chips=el('div','st-chips');for(const k of d.cats){chips.append(btn(D.CAT[k].name,()=>{E.setCat(S,it.id,k);renderPanel()},'st-chip'+(it.cat===k?' on':'')))}body.append(chips)}
-  if((d.kind==='checkout'||d.kind==='counter')&&!E.manned(S,it))body.append(el('p','st-note warn',d.kind==='checkout'?'Pas de caissier·ère':'Comptoir fermé : embauche un·e '+D.ROLES.find(r=>r.needs===it.t).name.toLowerCase()));
+  if((d.kind==='checkout'||d.kind==='counter')&&!E.manned(S,it))body.append(el('p','st-note warn',d.kind==='checkout'?'Pas de caissier·ère':'Comptoir fermé : embauche un·e '+E.roleFor(it.t).name.toLowerCase()));
+  if(d.kind==='shop'){const open=E.manned(S,it),px=E.shopPx(S,it.t),g=el('div','st-tiles');
+   g.append(tile('Ticket moyen',eur(d.ticket*px/100)),tile('Aujourd’hui',eur(S.dayStats.shops?.[it.t]||0)),tile('Ce mois',eur(S.monthShop?.[it.t]||0)),tile('Service',Math.round(d.svc)+' s · '+(d.slots||1)+' à la fois'));body.append(g);
+   if(!open)body.append(el('p','st-note warn','Boutique fermée : embauche un·e '+E.roleFor(it.t).name.toLowerCase()+' (Équipe).'));
+   const pr=el('div','st-budget');pr.append(el('span',null,'Prix'),btn('−',()=>{S.shopPx[it.t]=Math.max(60,px-5);renderPanel()}),el('b',null,px+' %'),btn('+',()=>{S.shopPx[it.t]=Math.min(200,px+5);renderPanel()}));body.append(pr);
+   body.append(el('p','st-note',(d.serves?'Répond à : '+Object.keys(d.serves).map(k=>D.NEEDS.icon[k]+' '+D.NEEDS.name[k]).join(', ')+'. ':'')+'Au-dessus de 100 %, des clients renoncent ; en dessous, ils sont plus contents.'))}
+  if(d.kind==='amenity'){const n=(R.queues.get(it.id)||[]).length;body.append(el('p','st-note',`${d.serves?'Répond à : '+Object.keys(d.serves).map(k=>D.NEEDS.icon[k]+' '+D.NEEDS.name[k]).join(', ')+'. ':''}${n} client${n>1?'s':''} · ${d.slots||1} place${(d.slots||1)>1?'s':''}`))}
   body.append(row(btn('✥ Déplacer',()=>startMove(it.id),'st-small wide'),btn('↻ Tourner',()=>{const why=E.rotateItem(S,it.id);if(why){msg(why);sfx('error')}renderPanel()},'st-small wide'),btn('Vendre '+eur(d.price*D.REFUND),()=>{const lost=E.reserveLoss(S,it.id),go=()=>{E.removeItem(S,it.id);sfx('erase');sel=null;closePanel()};if(lost)c.dialog('Vendre ?',lost+' articles de la réserve seront perdus.','Vendre',go,'Annuler',()=>{});else go()},'st-small wide danger')))}
  function pReport(){const r=pending;if(!r){closePanel();return}const m=r.report;const body=head(r.over?'Faillite':'Bilan du mois '+m.month);
-  const t=el('div','st-lines');for(const [k,v] of [['Clients',String(m.customers)],['Satisfaction',m.avgSat==null?'—':Math.round(m.avgSat)+' / 100'],['Chiffre d’affaires',eur(m.rev)],['Achats',eur(-m.buy)],['Salaires',eur(-m.salaries)],['Électricité',eur(-m.elec)],['Crédit',eur(-m.loan)],['Agios',eur(-m.interest)],['Publicité',eur(-m.ads)],['Résultat',eur(m.result)],['Travaux',eur(-m.build)],['Trésorerie',eur(m.cash)]]){if(v===eur(-0)||v==='−0 €')continue;const d=el('div',k==='Résultat'?'st-total '+(m.result<0?'neg':'pos'):'');d.append(el('span',null,k),el('b',null,v));t.append(d)}
+  const t=el('div','st-lines');for(const [k,v] of [['Clients',String(m.customers)],['Satisfaction',m.avgSat==null?'—':Math.round(m.avgSat)+' / 100'],['Chiffre d’affaires',eur(m.rev)],['dont boutiques',eur(m.shop||0)],['Achats',eur(-m.buy)],['Salaires',eur(-m.salaries)],['Électricité',eur(-m.elec)],['Crédit',eur(-m.loan)],['Agios',eur(-m.interest)],['Publicité',eur(-m.ads)],['Résultat',eur(m.result)],['Travaux',eur(-m.build)],['Licences',eur(-(m.lic||0))],['Trésorerie',eur(m.cash)]]){if(v===eur(-0)||v==='−0 €')continue;const d=el('div',k==='Résultat'?'st-total '+(m.result<0?'neg':'pos'):'');d.append(el('span',null,k),el('b',null,v));t.append(d)}
   body.append(t);
   body.append(btn(r.over?'Nouvelle partie':'Continuer',()=>{if(r.over){clearRun(KEY);S=E.starter(E.withDirt(E.newGame()));R=E.runtime();staticKey='';isNew=true;home()}pending=null;hold=false;closePanel();if(isNew){isNew=false;openPanel('welcome');hold=true}},'primary'))}
  function pWelcome(){const body=head('Bienvenue dans ton magasin !');

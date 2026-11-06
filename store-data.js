@@ -30,7 +30,18 @@ export const CATS=[
  {id:'boissons', name:'Boissons',          store:'ambiant', cost:1.17, ref:30, demand:13, loss:.0005,color:[[.3,.65,.95],[.9,.25,.25],[.98,.75,.2]]},
  {id:'alcool',   name:'Vins & alcools',    store:'ambiant', cost:7.15, ref:30, demand:6,  loss:0,    color:[[.45,.12,.2],[.2,.4,.25]],theft:2.5},
  {id:'hygiene',  name:'Hygiène & beauté',  store:'ambiant', cost:3.64, ref:35, demand:6,  loss:0,    color:[[.85,.7,.95],[.6,.85,.85]],theft:2},
- {id:'entretien',name:'Entretien & maison',store:'ambiant', cost:3.25, ref:30, demand:5,  loss:0,    color:[[.3,.6,.9],[.4,.8,.5]]}
+ {id:'entretien',name:'Entretien & maison',store:'ambiant', cost:3.25, ref:30, demand:5,  loss:0,    color:[[.3,.6,.9],[.4,.8,.5]]},
+ // rayons spécialisés (licence) : articles plus chers, achetés moins souvent ; pick : temps passé à choisir (s)
+ {id:'livres',   name:'Livres & papeterie', store:'ambiant',cost:7.2,  ref:35, demand:4,  loss:0, lic:'livres',   pick:1.6, theft:1.5,color:[[.85,.3,.25],[.25,.45,.75],[.95,.85,.55],[.3,.6,.4]]},
+ {id:'animaux',  name:'Animalerie',         store:'ambiant',cost:4.6,  ref:35, demand:3,  loss:0, lic:'animaux',  pick:1.2,           color:[[.95,.65,.25],[.45,.7,.3],[.4,.55,.85]]},
+ {id:'jouets',   name:'Jouets',             store:'ambiant',cost:12.5, ref:40, demand:3,  loss:0, lic:'jouets',   pick:1.8, theft:1.5,color:[[.95,.3,.3],[.98,.8,.2],[.3,.6,.95],[.5,.8,.35]]},
+ {id:'jardin',   name:'Jardinerie',         store:'ambiant',cost:8.2,  ref:40, demand:3,  loss:.01,lic:'jardin',  pick:1.6,           color:[[.35,.65,.3],[.9,.4,.55],[.95,.8,.3],[.55,.4,.3]]},
+ {id:'sport',    name:'Sport',              store:'ambiant',cost:18,   ref:40, demand:3,  loss:0, lic:'sport',    pick:1.8, theft:1.5,color:[[.2,.45,.85],[.95,.95,.95],[.95,.5,.15],[.2,.2,.25]]},
+ {id:'vetements',name:'Vêtements',          store:'ambiant',cost:11,   ref:55, demand:4,  loss:0, lic:'vetements',pick:2.4, theft:2,  color:[[.25,.3,.5],[.85,.85,.82],[.75,.25,.3],[.45,.6,.75],[.3,.45,.3]]},
+ {id:'audiovisuel',name:'Audiovisuel',      store:'ambiant',cost:85,   ref:25, demand:2,  loss:0, lic:'audiovisuel',pick:2.6,theft:3,color:[[.15,.16,.18],[.6,.62,.66],[.2,.5,.9]]},
+ {id:'electromenager',name:'Électroménager',store:'ambiant',cost:140,  ref:25, demand:1.5,loss:0, lic:'electromenager',pick:3,theft:.4,color:[[.95,.95,.95],[.75,.77,.8],[.25,.27,.3]]},
+ {id:'bricolage',name:'Bricolage',          store:'ambiant',cost:9.5,  ref:40, demand:3,  loss:0, lic:'bricolage',pick:1.8, theft:1.5,color:[[.95,.6,.1],[.3,.3,.35],[.8,.2,.2],[.3,.55,.85]]},
+ {id:'materiaux',name:'Matériaux',          store:'ambiant',cost:22,   ref:30, demand:2,  loss:0, lic:'materiaux',pick:2,             color:[[.75,.72,.68],[.8,.6,.38],[.55,.55,.58]]}
 ];
 // Marges à l'échelle : 4.1 ×7, 4.2 ×5,6 (bénéfices −20 %). MARGIN_SCALE remet à l'échelle la sensibilité des clients aux marges.
 export const MARGIN_SCALE=5.6;
@@ -68,8 +79,89 @@ export const ITEMS=[
  {id:'camera', tab:'caisses', name:'Caméra',               w:1,d:1,h:2.6,price:1400, kind:'decor',zone:0,security:.07,power:8},
  {id:'gate',   tab:'caisses', name:'Portique antivol',     w:1,d:1,h:1.6,price:3200, kind:'decor',zone:0,security:.2,power:10}
 ];
+// ---- extension « centre commercial » : licences (achetées une par une), rayons spécialisés, boutiques, équipements de la galerie
+export const LICENSES=[
+ {id:'galerie',    group:'galerie',  name:'Galerie marchande',       price:100000, desc:'Bancs, toilettes, fontaines, distributeurs, aire de jeux, plan, agents de sécurité.'},
+ {id:'livres',     group:'rayon',    name:'Librairie & papeterie',   price:100000, desc:'Livres, presse, papeterie.'},
+ {id:'animaux',    group:'rayon',    name:'Animalerie',              price:120000, desc:'Croquettes, accessoires, aquariums.'},
+ {id:'jouets',     group:'rayon',    name:'Jouets',                  price:150000, desc:'Jeux et jouets pour enfants.'},
+ {id:'jardin',     group:'rayon',    name:'Jardinerie',              price:200000, desc:'Plantes, graines, outils de jardin.'},
+ {id:'sport',      group:'rayon',    name:'Sport',                   price:250000, desc:'Équipement sportif, ballons, vélos.'},
+ {id:'vetements',  group:'rayon',    name:'Textile',                 price:300000, desc:'Vêtements en libre-service, cabines d’essayage.'},
+ {id:'audiovisuel',group:'rayon',    name:'Audiovisuel & multimédia',price:400000, desc:'Télévisions, hi-fi, consoles. Très convoités par les voleurs.'},
+ {id:'electromenager',group:'rayon', name:'Électroménager',          price:450000, desc:'Gros et petit électroménager.'},
+ {id:'bricolage',  group:'rayon',    name:'Bricolage',               price:500000, desc:'Outillage, quincaillerie, peinture.'},
+ {id:'materiaux',  group:'rayon',    name:'Matériaux',               price:650000, desc:'Matériaux de construction sur racks à palettes.'},
+ {id:'cafe',       group:'boutique', name:'Café',                    price:100000, desc:'Boissons chaudes : soif et petite pause.'},
+ {id:'fleuriste',  group:'boutique', name:'Fleuriste',               price:100000, desc:'Bouquets et plantes.'},
+ {id:'glacier',    group:'boutique', name:'Glacier',                 price:120000, desc:'Glaces et sorbets.'},
+ {id:'boulangerie',group:'boutique', name:'Boulangerie-pâtisserie',  price:150000, desc:'Viennoiseries, sandwichs, gâteaux : contre la faim.'},
+ {id:'snack',      group:'boutique', name:'Snack',                   price:180000, desc:'Restauration rapide : faim et soif.'},
+ {id:'coiffeur',   group:'boutique', name:'Coiffeur',                price:200000, desc:'Coupes et brushings. Long, mais rentable.'},
+ {id:'pretaporter',group:'boutique', name:'Prêt-à-porter',           price:300000, desc:'Boutique de mode.'},
+ {id:'parfumerie', group:'boutique', name:'Parfumerie',              price:350000, desc:'Parfums et cosmétiques.'},
+ {id:'pharmacie',  group:'boutique', name:'Pharmacie',               price:400000, desc:'Médicaments et parapharmacie.'},
+ {id:'opticien',   group:'boutique', name:'Opticien',                price:450000, desc:'Lunettes et lentilles : peu de clients, gros paniers.'},
+ {id:'electronique',group:'boutique',name:'Électronique',            price:500000, desc:'Téléphones, ordinateurs, accessoires.'},
+ {id:'restaurant', group:'boutique', name:'Restaurant',              price:600000, desc:'Repas à table : faim, soif et repos.'},
+ {id:'bijouterie', group:'boutique', name:'Bijouterie',              price:800000, desc:'Montres et bijoux : très gros paniers.'},
+ {id:'cinema',     group:'boutique', name:'Cinéma',                  price:1000000,desc:'Salles de cinéma : attire beaucoup de monde dans le centre.'}
+];
+export const LICENSE=Object.fromEntries(LICENSES.map(l=>[l.id,l]));
+const SL=(id,name,w,d,h,price,lic,cats,cap,ex={})=>({id,tab:'special',name,w,d,h,price,kind:'sale',cats,cap,zone:0,lic,...ex});
+ITEMS.push(
+ SL('bookcase','Bibliothèque',2,1,2.0,1800,'livres',['livres'],140),SL('press','Présentoir presse',1,1,1.5,700,'livres',['livres'],60),
+ SL('petshelf','Rayon animalerie',2,1,1.6,1600,'animaux',['animaux'],110),SL('aquarium','Aquariums',2,1,1.8,3500,'animaux',['animaux'],40,{attract:2,power:60}),
+ SL('toyshelf','Étagère à jouets',2,1,1.8,1700,'jouets',['jouets'],90),
+ SL('plants','Étal de jardinerie',2,2,1.2,2000,'jardin',['jardin'],80,{attract:1}),
+ SL('sportrack','Rayon sport',2,1,1.9,2200,'sport',['sport'],70),SL('bikes','Présentoir vélos',3,1,1.3,2600,'sport',['sport'],24,{attract:1}),
+ SL('rail','Portant à vêtements',2,1,1.6,1400,'vetements',['vetements'],80),SL('island','Îlot textile',2,2,1.4,2200,'vetements',['vetements'],110),
+ {id:'fitting',tab:'special',name:'Cabines d’essayage',w:2,d:1,h:2.2,price:4200,kind:'decor',zone:0,lic:'vetements',boost:{vetements:.3}},
+ SL('tvwall','Mur d’écrans',3,1,2.2,6500,'audiovisuel',['audiovisuel'],30,{attract:2,power:300}),SL('hifi','Table multimédia',2,1,1.1,3000,'audiovisuel',['audiovisuel'],40,{power:60}),
+ SL('appliance','Îlot électroménager',3,2,1.5,5000,'electromenager',['electromenager'],24,{power:40}),
+ SL('toolwall','Mur d’outillage',2,1,2.1,2400,'bricolage',['bricolage'],120),SL('paint','Rayon peinture',2,1,1.8,1900,'bricolage',['bricolage'],90),
+ SL('pallet','Rack à palettes',3,1,2.6,3600,'materiaux',['materiaux'],80));
+// boutiques : ticket moyen (€), cr : part du ticket en marchandises, svc : durée du service (s), slots : clients servis en même temps,
+// inside : le client entre dans la boutique, visit : chance qu'un client y passe, draw : clients en plus pour le centre, serves : besoins comblés
+const SH=(id,name,w,d,price,lic,staff,ex)=>({id,tab:'boutiques',name,w,d,h:2.8,price,kind:'shop',zone:0,lic,staff,slots:1,...ex});
+ITEMS.push(
+ SH('sh_cafe','Café',4,3,18000,'cafe','serveur',{ticket:16,cr:.25,svc:4,slots:2,visit:0.34,draw:.05,serves:{soif:80,fatigue:35},power:120,sign:'#7a4a2e'}),
+ SH('sh_florist','Fleuriste',3,3,12000,'fleuriste','vendeur',{ticket:61,cr:.4,svc:6,visit:0.1,draw:.03,sign:'#4f9a5a'}),
+ SH('sh_glacier','Glacier',3,3,15000,'glacier','serveur',{ticket:14.4,cr:.3,svc:3,visit:0.22,draw:.04,serves:{faim:25,soif:35},power:150,sign:'#e86fa0'}),
+ SH('sh_bakery','Boulangerie-pâtisserie',4,3,22000,'boulangerie','vendeur',{ticket:19,cr:.3,svc:3.5,slots:2,visit:0.32,draw:.05,serves:{faim:60},power:200,sign:'#b9773c'}),
+ SH('sh_snack','Snack',4,3,25000,'snack','serveur',{ticket:29,cr:.32,svc:5,slots:2,visit:0.22,draw:.06,serves:{faim:85,soif:50},power:220,sign:'#e2462f'}),
+ SH('sh_hair','Coiffeur',4,4,30000,'coiffeur','coiffeur',{ticket:86,cr:.08,svc:28,slots:2,inside:true,visit:0.08,draw:.04,power:80,sign:'#2f2f3a'}),
+ SH('sh_fashion','Prêt-à-porter',5,4,40000,'pretaporter','vendeur',{ticket:128,cr:.45,svc:10,slots:3,inside:true,visit:0.16,draw:.08,power:90,sign:'#c23b6b'}),
+ SH('sh_perfume','Parfumerie',4,3,35000,'parfumerie','vendeur',{ticket:144,cr:.45,svc:7,slots:2,visit:0.11,draw:.05,sign:'#8a5fc2'}),
+ SH('sh_pharma','Pharmacie',4,3,45000,'pharmacie','vendeur',{ticket:58,cr:.55,svc:6,slots:2,visit:0.18,draw:.05,power:60,sign:'#2e9a54'}),
+ SH('sh_optic','Opticien',4,3,45000,'opticien','vendeur',{ticket:416,cr:.4,svc:16,inside:true,visit:0.034,draw:.04,sign:'#2c5fa8'}),
+ SH('sh_tech','Électronique',5,4,60000,'electronique','vendeur',{ticket:352,cr:.65,svc:10,slots:2,inside:true,visit:0.08,draw:.08,power:200,sign:'#1d2f4f'}),
+ SH('sh_resto','Restaurant',6,5,80000,'restaurant','cuisinier',{ticket:72,cr:.3,svc:24,slots:8,inside:true,visit:0.12,draw:.1,serves:{faim:100,soif:70,fatigue:70},power:350,sign:'#8c2d2d'}),
+ SH('sh_jewel','Bijouterie',4,3,70000,'bijouterie','vendeur',{ticket:640,cr:.5,svc:12,visit:0.026,draw:.05,security:.04,sign:'#b8962e'}),
+ SH('sh_cinema','Cinéma',8,6,150000,'cinema','vendeur',{ticket:48,cr:.15,svc:45,slots:30,inside:true,visit:0.22,draw:.35,serves:{fatigue:90},power:600,sign:'#1c1c2a'}));
+// équipements de la galerie : amenity = utilisés par les clients (serves : besoins comblés, use : durée, hide : on n'y voit plus le client, sale : petite vente)
+const GA=(id,name,w,d,h,price,ex)=>({id,tab:'galerie',name,w,d,h,price,zone:0,lic:'galerie',kind:'amenity',slots:1,use:4,...ex});
+ITEMS.push(
+ GA('bench','Banc',2,1,.8,400,{serves:{fatigue:70},slots:2,use:7,sit:true}),
+ GA('table','Table de terrasse',2,2,2.2,900,{serves:{fatigue:80},slots:4,use:9,sit:true,attract:1}),
+ GA('wc','Toilettes',3,2,2.4,12000,{serves:{wc:100},slots:2,use:7,hide:true,power:40}),
+ GA('water','Fontaine à eau',1,1,1.1,900,{serves:{soif:50},use:2}),
+ GA('vdrink','Distributeur de boissons',1,1,1.9,3200,{serves:{soif:70},use:3,sale:2.8,cr:.3,power:80}),
+ GA('vsnack','Distributeur de snacks',1,1,1.9,3200,{serves:{faim:40},use:3,sale:3,cr:.35,power:70}),
+ GA('playground','Aire de jeux',3,3,1.6,15000,{serves:{fatigue:45},slots:4,use:12,sit:true,attract:10}),
+ {id:'atm',tab:'galerie',name:'Distributeur de billets',w:1,d:1,h:1.9,price:8000,kind:'decor',zone:0,lic:'galerie',attract:4,power:30},
+ {id:'planter',tab:'galerie',name:'Grand bac à arbre',w:2,d:2,h:3,price:1200,kind:'decor',zone:0,lic:'galerie',attract:4},
+ {id:'mapboard',tab:'galerie',name:'Plan du centre',w:1,d:1,h:2,price:1500,kind:'decor',zone:0,lic:'galerie',attract:3,power:15},
+ {id:'infodesk',tab:'galerie',name:'Accueil',w:3,d:1,h:1.1,price:6000,kind:'decor',zone:0,lic:'galerie',attract:4},
+ {id:'pool',tab:'galerie',name:'Fontaine décorative',w:3,d:3,h:1.2,price:9000,kind:'decor',zone:0,lic:'galerie',attract:8,power:40},
+ {id:'charger',tab:'galerie',name:'Borne de recharge',w:1,d:1,h:1.3,price:2500,kind:'decor',zone:0,lic:'galerie',attract:2,power:20},
+ {id:'recycle',tab:'galerie',name:'Poubelles de tri',w:2,d:1,h:1,price:300,kind:'decor',zone:0,lic:'galerie',clean:2});
 export const ITEM=Object.fromEntries(ITEMS.map(i=>[i.id,i]));
-export const TABS=[['rayons','Rayons'],['frais','Frais'],['coupe','À la coupe'],['caisses','Caisses'],['reserve','Réserve'],['parking','Extérieur'],['murs','Murs'],['deco','Déco'],['agrandir','Agrandir']];
+// besoins des clients (actifs dès la licence Galerie ou une boutique) : départ aléatoire jusqu'à start, hausse par seconde passée dans le centre,
+// au-delà de th le client cherche de quoi y répondre ; pen : satisfaction perdue s'il ne trouve rien
+export const NEEDS={keys:['faim','soif','wc','fatigue'],start:{faim:78,soif:78,wc:65,fatigue:40},rate:{faim:1.1,soif:1.5,wc:1.2,fatigue:.75},th:70,pen:{faim:5,soif:4,wc:9,fatigue:3},icon:{faim:'🍴',soif:'💧',wc:'🚻',fatigue:'💺'},name:{faim:'faim',soif:'soif',wc:'toilettes',fatigue:'fatigue'}};
+export const MAX_CUSTOMERS=1000;   // plafond de clients par jour (au-delà, le centre ne grossit plus en monde mais en paniers)
+export const TABS=[['rayons','Rayons'],['frais','Frais'],['coupe','À la coupe'],['caisses','Caisses'],['reserve','Réserve'],['parking','Extérieur'],['murs','Murs'],['deco','Déco'],['agrandir','Agrandir'],['special','Spécialisés'],['boutiques','Boutiques'],['galerie','Galerie'],['licences','Licences']];
 export const ENTRANCE_COST=2500;
 export const TOOLS=[
  {id:'wall',name:'Mur',price:WALL_COST,hint:'Touche le début puis la fin du mur.'},
@@ -88,7 +180,12 @@ export const ROLES=[
  {id:'boucher',    name:'Boucher·ère',      salary:2560,desc:'Tient la boucherie.',needs:'butcher'},
  {id:'poissonnier',name:'Poissonnier·ère',  salary:2480,desc:'Tient la poissonnerie.',needs:'fish'},
  {id:'fromager',   name:'Fromager·ère',     salary:2320,desc:'Tient la fromagerie.',needs:'cheese'},
- {id:'boulanger',  name:'Boulanger·ère',    salary:2400,desc:'Tient le fournil.',needs:'bakery'}
+ {id:'boulanger',  name:'Boulanger·ère',    salary:2400,desc:'Tient le fournil.',needs:'bakery'},
+ {id:'vendeur',    name:'Vendeur·se',       salary:1900,desc:'Tient une boutique.',needs:['sh_bakery','sh_florist','sh_fashion','sh_perfume','sh_pharma','sh_optic','sh_tech','sh_jewel','sh_cinema']},
+ {id:'serveur',    name:'Serveur·se',       salary:1850,desc:'Tient un café, un glacier ou un snack.',needs:['sh_cafe','sh_glacier','sh_snack']},
+ {id:'cuisinier',  name:'Cuisinier·ère',    salary:2600,desc:'Tient le restaurant.',needs:['sh_resto']},
+ {id:'coiffeur',   name:'Coiffeur·se',      salary:2100,desc:'Tient le salon de coiffure.',needs:['sh_hair']},
+ {id:'vigile',     name:'Agent de sécurité',salary:2200,desc:'Moins de vols dans le centre.',lic:'galerie',security:.12}
 ];
 export const ROLE=Object.fromEntries(ROLES.map(r=>[r.id,r]));
 

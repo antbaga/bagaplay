@@ -2,6 +2,7 @@
 import * as D from './store-data.js';
 import * as E from './store-engine.js';
 import * as RD from './store-roads.js';
+import {mallItem,seat,shopStaffPos} from './store-mall-models.js';
 const W=D.LOT_W,H=D.LOT_H,RY=D.ROAD.y,RE=D.ROAD.y+D.ROAD.h;
 const rgb=h=>[parseInt(h.slice(1,3),16)/255,parseInt(h.slice(3,5),16)/255,parseInt(h.slice(5,7),16)/255];
 const mix=(a,b,t)=>[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t];
@@ -136,7 +137,8 @@ export function item(B,S,it,v){const F=frame(it),d=F.d,w=d.w,dd=d.d,fill=d.cap?M
  case 'lamp':L(.45,0,.45,.55,2,.55,C.dark);L(.3,2,.3,.7,2.2,.7,C.warm);L(.35,0,.35,.65,.08,.65,C.dark);break;
  case 'bin':L(.32,0,.32,.68,.75,.68,rgb('#5aa36a'));L(.3,.75,.3,.7,.82,.7,rgb('#3e7f4f'));break;
  case 'camera':L(.45,0,.45,.55,2.5,.55,C.metal);L(.35,2.35,.4,.65,2.55,.75,C.dark);L(.45,2.4,.75,.55,2.5,.8,C.red);break;
- case 'gate':L(.05,0,.4,.17,1.6,.6,C.metal);L(.83,0,.4,.95,1.6,.6,C.metal);L(.05,1.55,.45,.95,1.6,.55,rgb('#9aa3ad'));break}
+ case 'gate':L(.05,0,.4,.17,1.6,.6,C.metal);L(.83,0,.4,.95,1.6,.6,C.metal);L(.05,1.55,.45,.95,1.6,.55,rgb('#9aa3ad'));break;
+ default:mallItem(B,S,it,F,L,{fill,catCol})}
 }
 
 // ---------------------------------------------------------------- personnages
@@ -251,11 +253,17 @@ export function buildAgents(B,S,R,v,time){B.reset();B.setYaw(v.yaw);
  R.door=Math.max(0,...Object.values(R.doors));
  // personnel à son poste (caisse, comptoir) : animé
  const paying=new Set(R.agents.filter(a=>a.st==='pay').map(a=>a.item));
+ // boutiques : vendeur·se derrière le comptoir, tablier aux couleurs de l'enseigne ; clients assis à l'intérieur (restaurant, coiffeur, cinéma)
+ const users=new Map();for(const a of R.agents)if(a.k==='c'&&a.st==='svuse'){const l=users.get(a.item)||[];l.push(a);users.set(a.item,l)}
+ for(const it of S.items){const d=D.ITEM[it.t];if(d.kind!=='shop'||!E.manned(S,it))continue;const F=frame(it),[x,z]=shopStaffPos(it,F),sw=Math.sin(time*1.1+it.id)*.25;shadow(B,x,z);
+  person(B,x+sw*Math.cos(F.ang),z-sw*Math.sin(F.ang),F.ang+Math.sin(time*.8+it.id)*.4,{shirt:C.white,pants:C.dark,skin:[rgb('#f0c8a0'),rgb('#c99a6e'),rgb('#8a5a3c')][it.id%3],hair:C.skinH,style:it.id%5,apron:rgb(d.sign)},time*3,null,1,false,0,{amp:.3,t:time,id:it.id,reach:Math.max(0,Math.sin(time*1.7+it.id))*.5})}
  for(const it of S.items){const k=D.ITEM[it.t].kind;if((k!=='checkout'&&k!=='counter')||!E.manned(S,it))continue;const F=frame(it);
   if(k==='checkout'){const [x,z]=F.m(1.75,.3);shadow(B,x,z,.22);person(B,x,z,F.ang+(paying.has(it.id)?Math.sin(time*7)*.5:0),{shirt:rgb('#3f7fcf'),pants:C.dark,skin:rgb('#f0c8a0'),hair:C.skinH,style:it.id%5},paying.has(it.id)?time*10:0,null,.9,paying.has(it.id),0,{amp:0,t:time,id:it.id,look:paying.has(it.id)?0:Math.sin(time*.5+it.id)*.5})}
   else{const base={butcher:rgb('#c2433f'),fish:rgb('#3f78b8'),cheese:rgb('#e8b93c'),bakery:rgb('#a46a3f')}[it.t],sway=Math.sin(time*1.3+it.id)*.6;const [x,z]=F.m(1.5+sway,.85);shadow(B,x,z);
    person(B,x,z,F.ang+Math.sin(time*.9+it.id)*.3,{shirt:C.white,pants:C.dark,skin:rgb('#f0c8a0'),hair:C.skinH,style:4,apron:base},time*4,null,1,false,0,{amp:Math.min(1,Math.abs(Math.cos(time*1.3+it.id))*1.5),t:time,id:it.id,reach:Math.max(0,Math.sin(time*2.1+it.id))*.6})}}
- for(const a of R.agents){let x=a.x,z=a.y,ang=a.dir||0;
+ for(const a of R.agents){let x=a.x,z=a.y,ang=a.dir||0,sitting=false;
+  if(a.k==='c'&&a.st==='svuse'){const it=S.items.find(o=>o.id===a.item);if(it){const F=frame(it),k=(users.get(it.id)||[]).indexOf(a),st=seat(it,F,k);if(st){x=st[0];z=st[1];ang=st[2];sitting=true}else if(a.hidden)continue}}
+  else if(a.hidden)continue;
   if(a.k==='c'&&(a.st==='queue'||a.st==='pay')){const it=S.items.find(o=>o.id===a.item),k=E.queueIndex(R,a);if(it&&k>=0&&a.nx<0){const sl=queueSlots(S,it,k+1)[k];if(sl){x=sl[0];z=sl[1];ang=sl[2]}}}
   else if(a.k==='c'){const o=a.id*2654435761>>>0;x+=((o%7)-3)*.05;z+=(((o>>3)%7)-3)*.05}
   const g=walk(a,x,z,v.dt||.016),ph=g.ph,amp=g.amp,bob=Math.abs(Math.sin(ph))*.035*amp;
@@ -264,7 +272,7 @@ export function buildAgents(B,S,R,v,time){B.reset();B.setYaw(v.yaw);
   if(a.st==='pick'||a.st==='put'||a.st==='take'){const it=S.items.find(o=>o.id===(a.st==='pick'?a.item:a.task?.f));if(it){const F=frame(it),[cx2,cz2]=F.m(F.d.w/2,F.d.d/2);ang=Math.atan2(cx2-x,cz2-z)}reach=.55+Math.sin(time*5+a.id)*.4;look=0}
   shadow(B,x,z);
   if(a.k==='c'){if(a.hasCart){const c=Math.cos(ang),sn=Math.sin(ang);cart(B,x+sn*.3,z+c*.3,ang,a.basket.units,a.id)}const h=a.id*2654435761>>>0;
-   person(B,x,z,ang,{shirt:a.shirt,pants:a.pants,skin:a.skin,hair:a.hair||C.skinH,style:a.style,scale:a.scale,outfit:h%5===4?0:h%5,long:h%3===0},ph,a.hasCart?'push':a.basket.units?'basket':null,1,false,bob,{amp,look,reach,t:time,id:a.id})}
+   person(B,x,z,ang,{shirt:a.shirt,pants:a.pants,skin:a.skin,hair:a.hair||C.skinH,style:a.style,scale:a.scale,outfit:h%5===4?0:h%5,long:h%3===0},sitting?0:ph,sitting?null:a.hasCart?'push':a.basket.units?'basket':null,sitting?.62:1,false,sitting?0:bob,{amp:sitting?0:amp,look,reach,t:time,id:a.id})}
   else{const work=a.st==='clean';person(B,x,z,ang+(work?Math.sin(time*6)*.35:0),STAFF_COL[a.role],work?time*8:ph,a.role==='menage'?'mop':a.carry?.pallet?'pallet':a.carry?'carton':null,1,false,bob,{amp:work?.4:amp,look,reach:a.carry?.pallet?0:reach,t:time,id:a.id})}}
  if(gait.size>400){const ids=new Set(R.agents.map(a=>a.id));for(const k of gait.keys())if(!ids.has(k))gait.delete(k)}}
 

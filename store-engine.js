@@ -13,7 +13,7 @@ export function mulberry(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a
 export function newGame(){
  const s=D.START,S={v:2,d:1,hour:D.HOURS.open,open:false,cash:s.cash,loan:{left:s.loan,monthly:s.loanMonthly},rep:s.rep,
   b:{x0:s.x0,y0:s.y0,x1:s.x1,y1:s.y1},fy:s.y1-1,ent:s.entrance,built:new Array(N).fill(0),wall:new Array(N).fill(0),zone:new Array(N).fill(0),items:[],nid:1,
-  reserve:{},staff:{},staffDays:{},budget:5200,eco:31,alloc:{},margin:{},ads:{until:0,boost:0},extraLoans:0,
+  reserve:{},staff:{},staffDays:{},budget:5200,eco:31,alloc:{},margin:{},ads:{until:0,boost:0},extraLoans:0,lic:{},shopPx:{},
   month:blankMonth(),dayStats:blankDay(),last:null,history:[],sold:{},over:false};
  for(const c of D.CATS){S.reserve[c.id]=0;S.margin[c.id]=c.ref;S.sold[c.id]=0}S.mscale=D.MARGIN_SCALE;
  S.alloc=defaultAlloc();
@@ -73,8 +73,8 @@ export function defaultAlloc(weights){const w={};let t=0;for(const c of D.CATS){
  const top=D.CATS.reduce((p,c)=>w[c.id]>w[p.id]?c:p);o[top.id]+=100-sum;return o}
 // répartition selon les ventes (en valeur d'achat) depuis le début du mois
 export function allocFromSales(S){const w={};for(const c of D.CATS)w[c.id]=(S.sold[c.id]||0)*c.cost;return defaultAlloc(Object.values(w).some(v=>v>0)?w:null)}
-function blankMonth(){return {rev:0,cogs:0,buy:0,build:0,ads:0,loss:0,theft:0,customers:0,sat:0,salaries:0,elec:0,loan:0,interest:0}}
-function blankDay(){return {th:{},cats:{},ads:0,build:0,waitPen:0,dirtPen:0,rev:0,cogs:0,customers:0,sat:0,rupture:0,notSold:0,expensive:0,angry:0,theft:0,loss:0,buy:0,units:0}}
+function blankMonth(){return {rev:0,cogs:0,buy:0,build:0,ads:0,loss:0,theft:0,customers:0,sat:0,salaries:0,elec:0,loan:0,interest:0,lic:0,shop:0}}
+function blankDay(){return {th:{},cats:{},ads:0,build:0,waitPen:0,dirtPen:0,rev:0,cogs:0,customers:0,sat:0,rupture:0,notSold:0,expensive:0,angry:0,theft:0,loss:0,buy:0,units:0,lic:0,shop:0,shops:{},needs:0}}
 
 // ---------------------------------------------------------------- géométrie
 export const inside=(S,x,y)=>x>=0&&y>=0&&x<W&&y<H&&S.built[y*W+x]===1;
@@ -165,6 +165,7 @@ function targets(S,key){
 
 // ---------------------------------------------------------------- placement
 export function canPlace(S,t,x,y,r){const d=def(t),it={t,x,y,r},L=layout(S);
+ if(d.lic&&!hasLic(S,d.lic))return 'Licence requise : '+D.LICENSE[d.lic].name+'.';
  if(d.zone===2){for(const c of cells(it)){const cx=c%W,cy=c/W|0;
    if(!inLot(cx,cy)||inside(S,cx,cy))return 'Dehors, sur le parking.';
    if(roadAt(S,cx,cy))return 'Pas sur la route.';
@@ -195,6 +196,7 @@ export function placeCost(S,t,x,y,r){const d=def(t);if(d.kind!=='spot')return d.
 export function place(S,t,x,y,r,cat){const why=canPlace(S,t,x,y,r);if(why)return why;const d=def(t),price=placeCost(S,t,x,y,r);
  if(S.cash<price)return 'Pas assez d’argent.';if(d.kind==='spot')for(const c of cells({t,x,y,r}))S.ground[c]=1;
  const it={id:S.nid++,t,x,y,r,cat:d.cats?(cat&&d.cats.includes(cat)?cat:bestCat(S,d)):null,stock:0};clearTrees(S,cells(it));
+ if(it.cat&&!S.alloc[it.cat])S.alloc[it.cat]=Math.max(1,Math.round(D.CAT[it.cat].demand));
  S.items.push(it);pay(S,price,'build');dirty(S);remember(S,{type:'item',id:it.id,cost:price});return it}
 // rayon le moins couvert (pondéré par la demande)
 export function bestCat(S,d){let best=d.cats[0],bv=-1;for(const c of d.cats){const n=S.items.filter(o=>o.cat===c).length;const v=D.CAT[c].demand/(1+n*2);if(v>bv){bv=v;best=c}}return best}
@@ -313,7 +315,8 @@ export function extendRect(S,a,b){const p=extendPlan(S,a,b);if(p.why)return p.wh
 
 // ---------------------------------------------------------------- personnel, prêts, publicité
 export function hire(S,role,delta){const r=D.ROLE[role];if(!r)return 'Poste inconnu.';
- if(delta>0&&r.needs&&S.staff[role]>=S.items.filter(o=>o.t===r.needs).length)return `Il faut d’abord un ${def(r.needs).name.toLowerCase()} pour chaque ${r.name.toLowerCase()}.`;
+ if(delta>0&&r.lic&&!hasLic(S,r.lic))return 'Licence requise : '+D.LICENSE[r.lic].name+'.';
+ if(delta>0&&r.needs){const ts=needsOf(r);if((S.staff[role]||0)+delta>S.items.filter(o=>ts.includes(o.t)).length)return ts.length>1?`Pas de poste libre : il faut une boutique de plus pour chaque ${r.name.toLowerCase()}.`:`Il faut d’abord un ${def(ts[0]).name.toLowerCase()} pour chaque ${r.name.toLowerCase()}.`}
  S.staff[role]=Math.max(0,S.staff[role]+delta);dirty(S);return null}
 // emprunt : montant au choix (par 10 000 €), mensualité sur 10 ans ; remboursement anticipé : la durée restante ne change pas, la mensualité baisse d'autant
 export const LOAN={step:10000,maxLeft:1000000,rate:D.EXTRA_LOAN.monthly/D.EXTRA_LOAN.amount};
@@ -326,9 +329,11 @@ export function repay(S,amount){amount=Math.min(Math.round(amount),S.loan.left,M
 export function advertise(S,id){const a=D.ADS.find(x=>x.id===id);if(!a)return;pay(S,a.price,'ads');S.ads={until:S.d+a.days,boost:Math.max(a.boost,S.ads.until>S.d?S.ads.boost:0)}}
 
 // postes tenus : caisses avec caissier, comptoirs avec leur artisan
+export const needsOf=r=>r.needs?[].concat(r.needs):null;
+export const roleFor=t=>D.ROLES.find(r=>r.needs&&needsOf(r).includes(t));
 function assign(S){const L=S._L;L.manned=new Set();
  let n=S.staff.caissier||0;for(const it of S.items)if(it.t==='checkout'&&n>0){L.manned.add(it.id);n--}
- for(const r of D.ROLES)if(r.needs){let k=S.staff[r.id]||0;for(const it of S.items)if(it.t===r.needs&&k>0){L.manned.add(it.id);k--}}}
+ for(const r of D.ROLES)if(r.needs){const ts=needsOf(r);let k=S.staff[r.id]||0;for(const it of S.items)if(ts.includes(it.t)&&k>0){L.manned.add(it.id);k--}}}
 export const manned=(S,it)=>layout(S).manned.has(it.id);
 // meuble utilisable par les clients pour un rayon
 const sells=(S,it,cat)=>it.cat===cat&&(def(it.t).kind==='sale'||(def(it.t).kind==='counter'&&manned(S,it)));
@@ -339,16 +344,32 @@ export function capacity(S){const c={ambiant:0,frais:0,surgele:0},u={ambiant:0,f
 export const price=(S,cat)=>D.CAT[cat].cost*(1+S.margin[cat]/100);
 
 // ---------------------------------------------------------------- affluence
-export function attraction(S){const sa=salesArea(S),off=offered(S),variety=off.size/D.CATS.length;
+export function attraction(S){const sa=salesArea(S),off=offered(S),baseCats=D.CATS.filter(c=>!c.lic),variety=baseCats.filter(c=>off.has(c.id)).length/baseCats.length,depts=D.CATS.filter(c=>c.lic&&off.has(c.id)).length;
  let ex=0,n=0;for(const c of off){ex+=(S.margin[c]-D.CAT[c].ref)/100/D.MARGIN_SCALE;n++}
  const priceF=clamp(1-1.6*(n?ex/n:0),.55,1.2);
  let decor=0,counters=0;for(const it of S.items){const d=def(it.t);decor+=d.attract||0;if(d.kind==='counter'&&manned(S,it))counters++}
  const decorF=Math.min(.12,decor/Math.max(1,sa)*2.2),ad=S.ads.until>=S.d?S.ads.boost:0;
  const base=82+.48*sa,repF=.45+S.rep/90;
  const spots=S.items.filter(o=>o.t==='spot').length,bus=S.items.some(o=>o.t==='busstop'),transportF=.8+Math.min(.35,spots*.025)+(bus?.12:0);
- const n0=base*repF*(.55+.45*variety)*priceF*(1+.05*Math.min(4,counters)+decorF)*(1+ad)*transportF;
- return {perDay:Math.round(n0),spots,bus,transportF,sa,variety:off.size,priceF,decorF,counters,ad}}
-export function security(S){let s=0;for(const it of S.items)s+=def(it.t).security||0;
+ // centre commercial : chaque rayon spécialisé et chaque type de boutique ouverte attirent du monde en plus
+ const shops=new Set();for(const it of S.items)if(def(it.t).kind==='shop'&&manned(S,it))shops.add(it.t);let draw=0;for(const t of shops)draw+=def(t).draw||0;
+ const mallF=(1+.05*depts)*(1+Math.min(1.5,draw));
+ const n0=base*repF*(.55+.45*variety)*priceF*(1+.05*Math.min(4,counters)+decorF)*(1+ad)*transportF*mallF;
+ return {perDay:Math.min(D.MAX_CUSTOMERS,Math.round(n0)),spots,bus,transportF,sa,variety:off.size,priceF,decorF,counters,ad,mallF,depts,shops:shops.size}}
+// ---------------------------------------------------------------- licences, boutiques, besoins
+export const hasLic=(S,id)=>!id||!!(S.lic&&S.lic[id]);
+// besoins des clients : dès qu'on a une boutique ou la galerie (les rayons spécialisés seuls restent un hypermarché)
+export const mallOn=S=>!!S.lic&&Object.keys(S.lic).some(id=>D.LICENSE[id]&&D.LICENSE[id].group!=='rayon');
+export const activeCats=S=>D.CATS.filter(c=>hasLic(S,c.lic));
+export function buyLicense(S,id){const L=D.LICENSE[id];if(!L)return 'Licence inconnue.';if(hasLic(S,id))return 'Licence déjà achetée.';if(S.cash<L.price)return 'Pas assez d’argent.';
+ (S.lic||(S.lic={}))[id]=S.d;pay(S,L.price,'lic');for(const c of D.CATS)if(c.lic===id){if(S.reserve[c.id]==null)S.reserve[c.id]=0;if(S.margin[c.id]==null)S.margin[c.id]=c.ref;if(S.alloc[c.id]==null)S.alloc[c.id]=0}dirty(S);return null}
+// ce que débloque une licence
+export const licItems=id=>D.ITEMS.filter(d=>d.lic===id);
+export const shopPx=(S,t)=>S.shopPx?.[t]??100;
+// qui répond à un besoin : équipements de la galerie et boutiques ouvertes
+function providers(S,k){return S.items.filter(it=>{const d=def(it.t);return d.serves&&d.serves[k]&&(d.kind==='amenity'||(d.kind==='shop'&&manned(S,it)))})}
+export function boostFor(S,cat){let b=0;for(const it of S.items){const x=def(it.t).boost;if(x&&x[cat])b+=x[cat]}return Math.min(.6,b)}
+export function security(S){let s=0;for(const it of S.items)s+=def(it.t).security||0;for(const r of D.ROLES)if(r.security)s+=r.security*(S.staff[r.id]||0);
  const staffOnFloor=(S.staff.rayon||0)+(S.staff.menage||0);return Math.min(.8,s+.015*staffOnFloor)}
 export function electricity(S){let p=250+1.6*area(S);for(const it of S.items)p+=def(it.t).power||0;return Math.round(p)}
 export function salaries(S){let s=0;for(const r of D.ROLES)s+=r.salary*(S.staff[r.id]||0);return s}
@@ -367,6 +388,9 @@ export function problems(S){const p=[],has=k=>S.items.some(o=>def(o.t).kind===k)
  {const al=Object.values(stockAlerts(S)).filter(v=>v==='low').length;if(al)p.push(`Stock bas sur ${al} rayon${al>1?'s':''} (voir Stock).`)}
  if(!S.budget)p.push('Budget d’achat à 0 : aucune livraison.');
  const cap=capacity(S).cap;for(const c of offered(S)){const st=D.CAT[c].store;if(!cap[st]&&st!=='ambiant'){p.push(`Rayon ${D.CAT[c].name.toLowerCase()} : il faut une ${st==='frais'?'chambre froide':'chambre froide négative'} en réserve.`);break}}
+ {const shut=S.items.filter(o=>def(o.t).kind==='shop'&&!manned(S,o));if(shut.length){const r=roleFor(shut[0].t);p.push(`${def(shut[0].t).name} fermé${shut.length>1?'s':''} : embauche un·e ${r.name.toLowerCase()}.`)}}
+ if(mallOn(S)&&S.d>1){const has=t=>S.items.some(o=>o.t===t);if(!has('wc'))p.push(hasLic(S,'galerie')?'Tes clients cherchent des toilettes (Construire › Galerie).':'Tes clients cherchent des toilettes : licence Galerie marchande (Construire › Licences).');
+  else if(!S.items.some(o=>def(o.t).serves?.fatigue))p.push('Tes clients fatigués cherchent où s’asseoir : ajoute des bancs.')}
  if(!S.open&&!p.length)p.push('Tout est prêt : ouvre le magasin !');
  return p}
 
@@ -398,13 +422,16 @@ function spawnCustomer(S,R){const r=R.rnd,T=D.TRAFFIC,stop=S.items.find(o=>o.t==
  if(stop&&u<T.busShare){R.busWaiting++;return}
  if(u<T.busShare+T.carShare){if(free.length){if(spawnCar(S,R,free[Math.floor(r()*free.length)])!==false)return}else{th(S,'noparking');if(r()<.25)return}}
  const L=layout(S),side=r()<.5?0:W-1;let y=r()<.5?RY-1:RE;if(!L.pc[idx(side,y)])y=y===RE?RY-1:RE;makeCustomer(S,R,side,y,0)}
-export function makeCustomer(S,R,x,y,extra){const r=R.rnd;
- const want=[],n=3+extra+Math.floor(Math.pow(r(),1.3)*14),tot=D.CATS.reduce((a,c)=>a+c.demand,0);
- for(let k=0;k<n;k++){let v=r()*tot;for(const c of D.CATS){v-=c.demand;if(v<=0){if(!want.some(w=>w.cat===c.id))want.push({cat:c.id,q:1+(r()<.35)+(r()<.1)});break}}}
+export function makeCustomer(S,R,x,y,extra){const r=R.rnd,cats=activeCats(S);
+ const want=[],n=3+extra+Math.floor(Math.pow(r(),1.3)*14),tot=cats.reduce((a,c)=>a+c.demand,0);
+ for(let k=0;k<n;k++){let v=r()*tot;for(const c of cats){v-=c.demand;if(v<=0){if(!want.some(w=>w.cat===c.id))want.push({cat:c.id,q:1+(r()<.35)+(r()<.1)});break}}}
+ // boutiques du centre : chacune a sa chance d'être visitée (glissée au hasard dans la liste)
+ const seen=new Set();for(const it of S.items){const d=def(it.t);if(d.kind!=='shop'||seen.has(it.t)||!manned(S,it))continue;seen.add(it.t);if(r()<d.visit)want.splice(Math.floor(r()*(want.length+1)),0,{shop:it.t})}
+ let need=null;if(mallOn(S)){need={};for(const k of D.NEEDS.keys)need[k]=r()*D.NEEDS.start[k]}
  const pal=[[.85,.35,.35],[.35,.55,.85],[.95,.75,.3],[.45,.7,.45],[.7,.45,.75],[.95,.55,.3],[.3,.3,.35],[.9,.9,.85],[.25,.45,.6],[.6,.3,.25]];
- const big=want.length>=7,hasCorral=S.items.some(o=>o.t==='corral');
+ const big=want.filter(w=>w.cat).length>=7,hasCorral=S.items.some(o=>o.t==='corral');
  if(big&&!hasCorral){want.length=Math.min(want.length,8);th(S,'nocart')}
- const a={id:R.nid++,k:'c',x:x+.5,y:y+.5,c:idx(x,y),nx:-1,st:big&&hasCorral?'cart':'in',goal:'ent',want,cart:big&&hasCorral,hasCart:false,basket:{units:0,value:0,cost:0,cats:{}},sat:72,t:0,wait:0,
+ const a={id:R.nid++,k:'c',x:x+.5,y:y+.5,c:idx(x,y),nx:-1,st:big&&hasCorral?'cart':'in',goal:'ent',want,need,nq:{},cart:big&&hasCorral,hasCart:false,basket:{units:0,value:0,cost:0,cats:{}},sat:72,t:0,wait:0,
   shirt:pal[Math.floor(r()*pal.length)],pants:pal[Math.floor(r()*pal.length)],skin:[[.98,.84,.7],[.85,.65,.5],[.6,.42,.3],[.45,.3,.22]][Math.floor(r()*4)],
   hair:[[.23,.16,.11],[.12,.1,.09],[.85,.69,.36],[.55,.3,.15],[.7,.7,.72]][Math.floor(r()*5)],style:Math.floor(r()*5),scale:.92+r()*.16,retry:0,dirt:0,steps:0};
  R.agents.push(a);return a}
@@ -540,8 +567,10 @@ function customer(S,R,a,dt){const sp=D.CUSTOMER.speed;
  if(a.st==='retcart'){const co=S.items.find(o=>o.t==='corral');const r=co?move(S,a,'item:'+co.id,'c',sp,dt):true;if(r||r===null){if(a.hasCart){a.hasCart=false;R.cartsOut=Math.max(0,(R.cartsOut||0)-1)}a.st='leave'}return}
  if(a.st==='in'){const r=move(S,a,'ent','c',sp,dt);if(r===null)return leaveNow(S,R,a);if(r){a.st='shop'}return}
  if(a.st==='waitBus')return;
+ if(a.need&&inside(S,a.c%W,a.c/W|0)&&a.st!=='svuse')for(const k of D.NEEDS.keys)a.need[k]+=D.NEEDS.rate[k]*dt;
  if(a.st==='shop')return nextWant(S,R,a);
- if(a.st==='goto'){const r=move(S,a,'item:'+a.item,'c',sp,dt);if(r===null){a.st='shop';return}if(r){const it=S.items.find(o=>o.id===a.item);a.st='pick';a.t=it&&def(it.t).kind==='counter'?2.2:D.CUSTOMER.pick}return}
+ if(a.st==='svgo'||a.st==='svq'||a.st==='svuse')return service(S,R,a,dt);
+ if(a.st==='goto'){const r=move(S,a,'item:'+a.item,'c',sp,dt);if(r===null){a.st='shop';return}if(r){const it=S.items.find(o=>o.id===a.item),w=a.want[0];a.st='pick';a.t=it&&def(it.t).kind==='counter'?2.2:(w&&D.CAT[w.cat]?.pick)||D.CUSTOMER.pick}return}
  if(a.st==='pick'){a.t-=dt;if(a.t<=0)pick(S,R,a);return}
  if(a.st==='checkout')return chooseCheckout(S,R,a);
  if(a.st==='queue'){const it=S.items.find(o=>o.id===a.item);if(!it||!usable(S,it)){unqueue(R,a);a.st='checkout';return}
@@ -552,7 +581,14 @@ function customer(S,R,a,dt){const sp=D.CUSTOMER.speed;
   const goal=car?'cell:'+car.exit:stop?'item:'+stop.id:'street',r=move(S,a,goal,'c',sp,dt);
   if(r||r===null){if(stop&&r){finishCustomer(S,R,a,false,true);a.st='waitBus';a.dir=Math.PI}else finishCustomer(S,R,a,false)}}}
 function nextWant(S,R,a){
+ // un besoin devenu pressant passe en premier
+ if(a.need)for(const k of D.NEEDS.keys)if(a.need[k]>=D.NEEDS.th&&!a.nq[k]){a.nq[k]=1;a.want.unshift({need:k})}
  while(a.want.length){const w=a.want[0],x=a.c%W,y=a.c/W|0;
+  if(w.need||w.shop){a.want.shift();const list=w.need?providers(S,w.need):S.items.filter(it=>it.t===w.shop&&manned(S,it));
+   if(!list.length){if(w.need){const k=w.need;a.sat-=D.NEEDS.pen[k];a.need[k]=0;th(S,'need:'+k);S.dayStats.needs++;bubble(R,a,D.NEEDS.icon[k]);
+     if(k==='wc'&&R.rnd()<.4)a.want=a.want.filter(q=>!q.cat)}continue}
+   let best=null,bv=1e9;for(const it of list){const q=(R.queues.get(it.id)||[]).length,sl=def(it.t).slots||1,v=Math.abs(it.x-x)+Math.abs(it.y-y)+Math.max(0,q-sl+1)*6;if(v<bv){bv=v;best=it}}
+   a.item=best.id;a.svc=w.need||'shop';a.st='svgo';return}
   const all=S.items.filter(it=>sells(S,it,w.cat)),ok=all.filter(it=>it.stock>0);
   if(!all.length){th(S,'notsold:'+w.cat);a.want.shift();a.sat-=1.5;S.dayStats.notSold++;continue}
   if(!ok.length){th(S,'rupture:'+w.cat);a.want.shift();a.sat-=12;S.dayStats.rupture++;bubble(R,a,'!');continue}
@@ -563,10 +599,27 @@ function pick(S,R,a){const w=a.want[0],it=S.items.find(o=>o.id===a.item);
  if(!it||it.stock<=0||!sells(S,it,w.cat)){if(a.retry++<1){a.st='shop';return}th(S,'rupture:'+w.cat);a.want.shift();a.sat-=12;S.dayStats.rupture++;bubble(R,a,'!');a.st='shop';return}
  const c=D.CAT[w.cat],m=S.margin[w.cat],ref=c.ref+(def(it.t).kind==='counter'?12*D.MARGIN_SCALE:0),K=D.MARGIN_SCALE;
  const p=m<=ref?1:Math.max(.05,1-(m-ref)/K*.022);
- if(R.rnd()<p){const u=Math.min(w.q,it.stock),pr=price(S,w.cat);it.stock-=u;a.basket.units+=u;a.basket.value+=u*pr;a.basket.cost+=u*c.cost;a.basket.cats[w.cat]=(a.basket.cats[w.cat]||0)+u;
+ if(R.rnd()<p){const u=Math.min(w.q+(R.rnd()<boostFor(S,w.cat)?1:0),it.stock),pr=price(S,w.cat);it.stock-=u;a.basket.units+=u;a.basket.value+=u*pr;a.basket.cost+=u*c.cost;a.basket.cats[w.cat]=(a.basket.cats[w.cat]||0)+u;
   if(m<ref)a.sat+=Math.min(2,(ref-m)/K*.15);if(m<ref-5*K&&R.rnd()<.3)th(S,'cheap:'+w.cat);if(def(it.t).kind==='counter'&&R.rnd()<.3)th(S,'counter:'+w.cat)}
  else{a.sat-=7;S.dayStats.expensive++;th(S,'cher:'+w.cat);bubble(R,a,'€')}
  a.want.shift();a.retry=0;a.st='shop'}
+// boutiques et équipements : on y va, on fait la queue, on est servi (ou on s'assoit, on va aux toilettes…)
+function service(S,R,a,dt){const it=S.items.find(o=>o.id===a.item),d=it&&def(it.t),sp=D.CUSTOMER.speed;
+ if(!it||(d.kind==='shop'&&!manned(S,it))){unqueue(R,a);a.hidden=false;a.st='shop';return}
+ if(a.st==='svgo'){const r=move(S,a,'item:'+it.id,'c',sp,dt);if(r===null){a.st='shop';return}if(!r)return;
+  if(d.kind==='shop'){const px=shopPx(S,it.t),p=px<=100?1:Math.max(.05,1-(px-100)*.012);if(R.rnd()>=p){a.sat-=5;S.dayStats.expensive++;th(S,'shopcher:'+it.t);bubble(R,a,'€');a.st='shop';return}}
+  const q=R.queues.get(it.id)||[];q.push(a);R.queues.set(it.id,q);a.st='svq';a.wait=0;return}
+ if(a.st==='svq'){const q=R.queues.get(it.id)||[],k=q.indexOf(a);if(k<0){a.st='shop';return}
+  a.wait+=dt;if(a.wait>D.CUSTOMER.patience){unqueue(R,a);a.sat-=8;th(S,'svqueue:'+it.t);bubble(R,a,'⌛');if(a.svc!=='shop')a.need[a.svc]*=.5;a.st='shop';return}
+  if(k<(d.slots||1)){a.st='svuse';a.t=(d.kind==='shop'?d.svc:d.use)*(.8+.4*R.rnd());a.hidden=!!(d.hide||d.inside);if(a.hidden){const F=[it.x+size(it)[0]/2,it.y+size(it)[1]/2];a.hx=F[0];a.hy=F[1]}}
+  else move(S,a,'item:'+it.id,'c',sp,dt);return}
+ // en service
+ a.t-=dt;if(a.t>0)return;unqueue(R,a);a.hidden=false;
+ const f=.7+.6*R.rnd(),sell=(v,cost,key)=>{S.cash+=v-cost;S.dayStats.rev+=v;S.month.rev+=v;S.dayStats.shop+=v;S.month.shop+=v;S.dayStats.buy+=cost;S.month.buy+=cost;S.dayStats.shops[key]=(S.dayStats.shops[key]||0)+v;S.monthShop=S.monthShop||{};S.monthShop[key]=(S.monthShop[key]||0)+v;ev(R,{t:'pay',x:a.x,y:a.y,v})};
+ if(d.kind==='shop'){const px=shopPx(S,it.t),v=d.ticket*f*px/100;sell(v,d.ticket*f*d.cr,it.t);a.sat+=2+(px<100?(100-px)*.05:0);if(R.rnd()<.25)th(S,'shop:'+it.t)}
+ else if(d.sale)sell(d.sale*f,d.sale*f*d.cr,it.t);
+ if(d.serves&&a.need)for(const k in d.serves){if(a.need[k]>=D.NEEDS.th*.8){a.sat+=1.5;if(R.rnd()<.2)th(S,'ok:'+k)}a.need[k]=Math.max(0,a.need[k]-d.serves[k]);if(a.need[k]<D.NEEDS.th)a.nq[k]=0}
+ a.st='shop'}
 function usable(S,it){const k=def(it.t).kind;return k==='self'||(k==='checkout'&&manned(S,it))}
 function chooseCheckout(S,R,a){if(!a.basket.units){a.st='leave';return}
  const list=S.items.filter(it=>usable(S,it));
@@ -707,7 +760,7 @@ export function monthEnd(S,R){const m=S.month;
  const op=m.rev-m.buy-m.salaries-m.elec-m.loan-m.interest-m.ads;
  const rep={month:monthOf(S)-1,...m,result:Math.round(op),cash:Math.round(S.cash),avgSat:m.customers?m.sat/m.customers:null};
  S.reports=(S.reports||[]).concat([rep]).slice(-12);
- for(const r in S.staffDays)S.staffDays[r]=0;S.month=blankMonth();S.monthCat={};
+ for(const r in S.staffDays)S.staffDays[r]=0;S.month=blankMonth();S.monthCat={};S.monthShop={};
  if(S.cash<D.BANKRUPTCY)S.over=true;
  ev(R,{t:'month',report:rep,over:S.over})}
 
@@ -731,7 +784,10 @@ export function restore(S,o){const t=o&&o.rt;if(!t||!S)return null;const R=runti
  return R}
 // sauvegarde : version 2 (routes en lignes). Les parties d'avant (routes en cases) ne se reprennent pas : nouvelle partie.
 export function load(o){if(!o||o.v!==2||(o.lw&&o.lw!==W)||(o.lh&&o.lh!==H))return null;const S={...o,wall:[...o.wall].map(Number),zone:[...o.zone].map(Number),built:[...o.built].map(Number),ground:[...o.ground].map(Number),items:o.items.map(it=>({...it,inc:0}))};
- S.lanes=S.lanes||[];S.yields=S.yields||[];S.lights=S.lights||[];S.monthCat=S.monthCat||{};S.catHist=S.catHist||[];bounds(S);if(!S.trees)S.trees=genTrees(S);if(!S.plog)S.plog=(S.history||[]).map(h=>[h.d,h.profit,h.cash]);
+ S.lanes=S.lanes||[];S.yields=S.yields||[];S.lights=S.lights||[];S.lic=S.lic||{};S.shopPx=S.shopPx||{};
+ for(const c of D.CATS){if(S.reserve[c.id]==null)S.reserve[c.id]=0;if(S.margin[c.id]==null)S.margin[c.id]=c.ref*(S.mscale||D.MARGIN_SCALE)/D.MARGIN_SCALE;if(S.alloc[c.id]==null)S.alloc[c.id]=0;if(S.sold[c.id]==null)S.sold[c.id]=0}
+ for(const r of D.ROLES){if(S.staff[r.id]==null)S.staff[r.id]=0;if(S.staffDays[r.id]==null)S.staffDays[r.id]=0}
+ {const m=blankMonth(),d=blankDay();for(const k in m)if(S.month[k]==null)S.month[k]=m[k];if(S.dayStats)for(const k in d)if(S.dayStats[k]==null)S.dayStats[k]=d[k]}S.monthCat=S.monthCat||{};S.catHist=S.catHist||[];bounds(S);if(!S.trees)S.trees=genTrees(S);if(!S.plog)S.plog=(S.history||[]).map(h=>[h.d,h.profit,h.cash]);
  if(S.mscale!==D.MARGIN_SCALE){const f=D.MARGIN_SCALE/(S.mscale||1);for(const c of D.CATS)if(S.margin[c.id]!=null)S.margin[c.id]=Math.round(S.margin[c.id]*f);S.mscale=D.MARGIN_SCALE}
  if(!o.rt){if(S.hour>D.HOURS.open)S.hour=D.HOURS.start;S.dayStats=blankDay()}delete S.rt;S.dirt=new Float32Array(N);return S}
 export function withDirt(S){S.dirt=S.dirt||new Float32Array(N);return S}
