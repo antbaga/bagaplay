@@ -2,9 +2,10 @@
 // 1 case = 1 m. Prix en euros. Les prix d'achat des produits sont des prix moyens « par article ».
 
 // Terrain et bâtiment de départ (grosse supérette de 400 m², façade au sud, réserve au nord).
-// terrain : 80 × 76 m. La route principale (2 × 3 voies) traverse le terrain, on construit des deux côtés.
-export const LOT_W=80,LOT_H=76,ROAD={y:46,h:4};
-export const START={x0:20,y0:18,x1:40,y1:38,entrance:29,reserveRows:5,cash:140000,starterCash:100000,loan:420000,loanMonthly:2900,rep:50};
+// terrain : 160 × 152 m (5.1 : 4 fois plus grand qu'avant). La route principale traverse le terrain, on construit des deux côtés.
+// OFF : décalage de l'ancien terrain de 80 × 76 m dans le nouveau (sauvegardes d'avant la 5.1).
+export const LOT_W=160,LOT_H=152,ROAD={y:84,h:4},OFF={x:40,y:38},OLD_LOT={w:80,h:76};
+export const START={x0:60,y0:56,x1:80,y1:76,entrance:69,reserveRows:5,cash:140000,starterCash:100000,loan:420000,loanMonthly:2900,rep:50};
 export const EXTEND={perM2:900,margin:2};
 export const HOURS={start:6,open:8,close:20,realSecPerHour:20};   // 6 h–8 h : livraison et mise en place avant l'ouverture       // 12 h d'ouverture = 4 min en ×1
 export const DAYS_PER_MONTH=30;
@@ -142,13 +143,13 @@ ITEMS.push(
 // équipements de la galerie : amenity = utilisés par les clients (serves : besoins comblés, use : durée, hide : on n'y voit plus le client, sale : petite vente)
 const GA=(id,name,w,d,h,price,ex)=>({id,tab:'galerie',name,w,d,h,price,zone:0,lic:'galerie',kind:'amenity',slots:1,use:4,...ex});
 ITEMS.push(
- GA('bench','Banc',2,1,.8,400,{serves:{fatigue:70},slots:2,use:7,sit:true}),
- GA('table','Table de terrasse',2,2,2.2,900,{serves:{fatigue:80},slots:4,use:9,sit:true,attract:1}),
- GA('wc','Toilettes',3,2,2.4,12000,{serves:{wc:100},slots:2,use:7,hide:true,power:40}),
- GA('water','Fontaine à eau',1,1,1.1,900,{serves:{soif:50},use:2}),
- GA('vdrink','Distributeur de boissons',1,1,1.9,3200,{serves:{soif:70},use:3,sale:2.8,cr:.3,power:80}),
- GA('vsnack','Distributeur de snacks',1,1,1.9,3200,{serves:{faim:40},use:3,sale:3,cr:.35,power:70}),
- GA('playground','Aire de jeux',3,3,1.6,15000,{serves:{fatigue:45},slots:4,use:12,sit:true,attract:10}),
+ GA('bench','Banc',2,1,.8,400,{wait:8,serves:{fatigue:70},slots:2,use:7,sit:true}),
+ GA('table','Table de terrasse',2,2,2.2,900,{wait:10,serves:{fatigue:80},slots:4,use:9,sit:true,attract:1}),
+ GA('wc','Toilettes',3,2,2.4,12000,{wait:40,serves:{wc:100},slots:2,use:7,hide:true,power:40}),
+ GA('water','Fontaine à eau',1,1,1.1,900,{wait:15,serves:{soif:50},use:2}),
+ GA('vdrink','Distributeur de boissons',1,1,1.9,3200,{wait:20,serves:{soif:70},use:3,sale:2.8,cr:.3,power:80}),
+ GA('vsnack','Distributeur de snacks',1,1,1.9,3200,{wait:20,serves:{faim:40},use:3,sale:3,cr:.35,power:70}),
+ GA('playground','Aire de jeux',3,3,1.6,15000,{wait:10,serves:{fatigue:45},slots:4,use:12,sit:true,attract:10}),
  {id:'atm',tab:'galerie',name:'Distributeur de billets',w:1,d:1,h:1.9,price:8000,kind:'decor',zone:0,lic:'galerie',attract:4,power:30},
  {id:'planter',tab:'galerie',name:'Grand bac à arbre',w:2,d:2,h:3,price:1200,kind:'decor',zone:0,lic:'galerie',attract:4},
  {id:'mapboard',tab:'galerie',name:'Plan du centre',w:1,d:1,h:2,price:1500,kind:'decor',zone:0,lic:'galerie',attract:3,power:15},
@@ -198,5 +199,5 @@ export const EXTRA_LOAN={amount:100000,monthly:1110};
 // Clients : affluence par heure d'ouverture (8 h → 19 h).
 export const HOUR_CURVE=[.5,.7,.9,1.1,1.4,1.2,.9,.8,.9,1.2,1.5,1.0];
 export const CUSTOMER={speed:2.6,pick:.7,serviceBase:.8,servicePerUnit:.1,selfFactor:1.5,theft:.02,patience:45};
-export const TRAFFIC={carShare:.5,busShare:.25,busEvery:.5,busMax:12,carSpeed:5,busSpeed:7,carExtra:3};
+export const TRAFFIC={carShare:.85,busShare:.1,noParkLeave:.35,busEvery:.5,busMax:12,carSpeed:5,busSpeed:7,carExtra:3};
 export const STAFF={speed:2.4,carton:40,nightPerStocker:700,handle:1.2};

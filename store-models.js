@@ -20,9 +20,9 @@ const trees=(()=>{const o=[];let s=7;const r=()=>(s=(s*16807)%2147483647)/214748
 export function buildStatic(B,S,v){const b=S.b,L=E.layout(S);B.reset();B.setYaw(v.yaw);
  // herbe, parking, route
  // hors du terrain : herbe plus sombre (on ne construit pas) ; le terrain constructible est l'herbe claire
- B.tile(-40,-40,W+40,H+40,-.03,mix(C.grass2,[.35,.45,.3],.35));B.tile(0,0,W,H,-.02,C.grass);
+ B.tile(-160,-160,W+160,H+160,-.03,mix(C.grass2,[.35,.45,.3],.35));B.tile(0,0,W,H,-.02,C.grass);
  // trottoirs de la route de départ, prolongés hors du terrain
- for(const [a,b] of [[-40,0],[W,W+40]]){B.tile(a,RY-1,b,RY,0,C.walk);B.tile(a,RE,b,RE+1,0,C.walk)}
+ for(const [a,b] of [[-160,0],[W,W+160]]){B.tile(a,RY-1,b,RY,0,C.walk);B.tile(a,RE,b,RE+1,0,C.walk)}
  const G=S.ground||[],gr=(x,y)=>x>=0&&y>=0&&x<W&&y<H?G[E.idx(x,y)]:0;
  for(let y=0;y<H;y++)for(let x=0;x<W;x++){const g=gr(x,y);if(!g||E.inside(S,x,y))continue;
   // passage piéton (sur une voie) : bandes blanches dans le sens de la voie
@@ -271,8 +271,8 @@ export function buildAgents(B,S,R,v,time){B.reset();B.setYaw(v.yaw);
   let reach=0,look=amp<.3?Math.sin(time*.55+a.id*1.7)*.55*(1-amp):0;
   if(a.st==='pick'||a.st==='put'||a.st==='take'){const it=S.items.find(o=>o.id===(a.st==='pick'?a.item:a.task?.f));if(it){const F=frame(it),[cx2,cz2]=F.m(F.d.w/2,F.d.d/2);ang=Math.atan2(cx2-x,cz2-z)}reach=.55+Math.sin(time*5+a.id)*.4;look=0}
   shadow(B,x,z);
-  if(a.k==='c'){if(a.hasCart){const c=Math.cos(ang),sn=Math.sin(ang);cart(B,x+sn*.3,z+c*.3,ang,a.basket.units,a.id)}const h=a.id*2654435761>>>0;
-   person(B,x,z,ang,{shirt:a.shirt,pants:a.pants,skin:a.skin,hair:a.hair||C.skinH,style:a.style,scale:a.scale,outfit:h%5===4?0:h%5,long:h%3===0},sitting?0:ph,sitting?null:a.hasCart?'push':a.basket.units?'basket':null,sitting?.62:1,false,sitting?0:bob,{amp:sitting?0:amp,look,reach,t:time,id:a.id})}
+  if(a.k==='c'){if(a.hasCart){const c=Math.cos(ang),sn=Math.sin(ang);cart(B,x+sn*.3,z+c*.3,ang,a.loaded?0:a.basket.units,a.id)}const h=a.id*2654435761>>>0;
+   person(B,x,z,ang,{shirt:a.shirt,pants:a.pants,skin:a.skin,hair:a.hair||C.skinH,style:a.style,scale:a.scale,outfit:h%5===4?0:h%5,long:h%3===0},sitting?0:ph,sitting?null:a.hasCart?'push':a.basket.units&&!a.loaded&&!a.basket.paid?'basket':a.st==='load'?'carton':null,sitting?.62:1,false,sitting?0:bob,{amp:sitting?0:amp,look,reach,t:time,id:a.id})}
   else{const work=a.st==='clean';person(B,x,z,ang+(work?Math.sin(time*6)*.35:0),STAFF_COL[a.role],work?time*8:ph,a.role==='menage'?'mop':a.carry?.pallet?'pallet':a.carry?'carton':null,1,false,bob,{amp:work?.4:amp,look,reach:a.carry?.pallet?0:reach,t:time,id:a.id})}}
  if(gait.size>400){const ids=new Set(R.agents.map(a=>a.id));for(const k of gait.keys())if(!ids.has(k))gait.delete(k)}}
 
@@ -299,6 +299,9 @@ function lanes(B,S){const NT=RD.net(S),gs=[...NT.geo.values()],bk=new Map(),key=
   for(const ys of NT.yields.get(g.id)||[]){const P=RD.pos(g,ys),ux=Math.sin(P.ang),uz=Math.cos(P.ang),px=-uz,pz=ux;for(let k=-3;k<=3;k+=2){const l=k*.25,Q=(f,m)=>[P.x+ux*f+px*(l+m),.009,P.z+uz*f+pz*(l+m)];B.tri(Q(.25,-.2),Q(.25,.2),Q(-.2,0),lc)}}
   // feu piéton : ligne d'arrêt avant la traversée
   for(const L of NT.lights)for(const x of L.xs){if(x.lane!==g.id)continue;const P=RD.pos(g,x.s-1.7),ux=Math.sin(P.ang),uz=Math.cos(P.ang),px=-uz,pz=ux,Q=(f,l)=>[P.x+ux*f+px*l,.009,P.z+uz*f+pz*l];B.quad(Q(-.14,-.95),Q(.14,-.95),Q(.14,.95),Q(-.14,.95),lc)}
+  // au-delà du prolongement hors du terrain : la chaussée continue jusqu'à l'horizon
+  if(!g.closed&&g.n>1)for(const [i,j] of [[0,1],[g.n-1,g.n-2]]){const x=g.xs[i],z=g.zs[i];if(x>0&&z>0&&x<W&&z<H)continue;let dx=x-g.xs[j],dz=z-g.zs[j];const l=Math.hypot(dx,dz)||1;dx/=l;dz/=l;const px=-dz,pz=dx,Q=(f,o)=>[x+dx*f+px*o,0.004,z+dz*f+pz*o];
+   B.quad(Q(0,-1),Q(150,-1),Q(150,1),Q(0,1),C.road)}
   // îlot central du rond-point
   if(g.ring){const l=S.lanes.find(o=>o.id===g.id);if(l&&l.ring){const {cx,cy,r}=l.ring,ri=r-1,m=32;for(let k=0;k<m;k++){const t0=2*Math.PI*k/m,t1=2*Math.PI*(k+1)/m;
      B.tri([cx,.05,cy],[cx+Math.cos(t0)*ri,.05,cy+Math.sin(t0)*ri],[cx+Math.cos(t1)*ri,.05,cy+Math.sin(t1)*ri],C.grass2);

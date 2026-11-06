@@ -65,7 +65,7 @@ export function bagastore(c){
  // ---- boutons de caméra
  for(const [t,a,fn] of [['⟲','Tourner la vue à gauche',()=>{cam.yawTo-=Math.PI/2}],['⟳','Tourner la vue à droite',()=>{cam.yawTo+=Math.PI/2}],['+','Zoomer',()=>zoom(.8)],['−','Dézoomer',()=>zoom(1.25)],['⌂','Recentrer',home],['🗑','Démolir',()=>{if(mode?.id==='erase')stopMode();else startTool('erase')}]]){
   const b=el('button','st-cbtn',t);b.setAttribute('aria-label',a);c.listen(b,'click',()=>{sfx('click');fn()});camBox.append(b)}
- const zoom=k=>{cam.zoom=Math.max(4,Math.min(40,cam.zoom*k))};
+ const zoom=k=>{cam.zoom=Math.max(4,Math.min(60,cam.zoom*k))};
 
  // ---- barre d'outils
  c.controls.innerHTML='';
@@ -88,7 +88,7 @@ export function bagastore(c){
   else if(mode?.kind==='tool'&&DRAW.has(mode.id)){const c0=cellAt(e.offsetX,e.offsetY);mode.a=c0;mode.b=c0;drag={draw:true,moved:false};updatePlace()}
   else{drag={moved:false}}});
  c.listen(cv,'pointermove',e=>{const p=pts.get(e.pointerId);if(!p)return;const px=p.x,py=p.y;p.x=e.offsetX;p.y=e.offsetY;
-  if(pts.size>=2&&pinch){const [a,b]=[...pts.values()];cam.zoom=Math.max(4,Math.min(40,pinch.z*pinch.d/Math.max(20,Math.hypot(a.x-b.x,a.y-b.y))));
+  if(pts.size>=2&&pinch){const [a,b]=[...pts.values()];cam.zoom=Math.max(4,Math.min(60,pinch.z*pinch.d/Math.max(20,Math.hypot(a.x-b.x,a.y-b.y))));
    const mx=(a.x+b.x)/2,my=(a.y+b.y)/2,g0=ground(cam,pinch.mx,pinch.my),g1=ground(cam,mx,my);cam.tx+=g0[0]-g1[0];cam.tz+=g0[1]-g1[1];pinch.mx=mx;pinch.my=my;clampCam();return}
   if(drag?.draw&&mode&&mode.id==='lane'){if(laneMove(...ground(cam,p.x,p.y))){drag.moved=true;updatePlace()}return}
   if(drag?.draw&&mode&&mode.id==='light'){const q=V(...ground(cam,p.x,p.y));if(mode.a&&(!mode.b||q[0]!==mode.b[0]||q[1]!==mode.b[1])){mode.b=q[0]===mode.a[0]&&q[1]===mode.a[1]?null:q;drag.moved=true;updatePlace()}return}
@@ -227,6 +227,7 @@ export function bagastore(c){
   noparking:()=>['Impossible de se garer !',-2],nocart:()=>['Il n’y a même pas de caddies.',-1],nocheckout:()=>['Aucune caisse ouverte !',-2],
   need:k=>[{faim:'J’ai faim et il n’y a rien à manger.',soif:'J’ai soif, rien à boire ici.',wc:'Il n’y a même pas de toilettes !',fatigue:'Pas un banc pour s’asseoir…'}[k],-2],
   ok:k=>[{faim:'Bien mangé, merci !',soif:'Ça fait du bien de boire un coup.',wc:'Heureusement qu’il y a des toilettes.',fatigue:'Une petite pause sur un banc, parfait.'}[k],1],
+  full:k=>[{faim:'Trop d’attente pour manger.',soif:'Trop d’attente pour boire.',wc:'Trop de queue aux toilettes.',fatigue:'Tous les bancs étaient pris.'}[k],-1],
   shop:t=>['J’adore '+(D.ITEM[t]?D.ITEM[t].name.toLowerCase():'cette boutique')+' !',2],shopcher:t=>['Trop cher, '+(D.ITEM[t]?D.ITEM[t].name.toLowerCase():'cette boutique')+'.',-2],svqueue:t=>['Trop d’attente : '+(D.ITEM[t]?D.ITEM[t].name.toLowerCase():'')+'.',-2]};
  function opinions(body){const list=E.thoughts(S);if(!list.length){body.append(el('p','st-note','Ouvre le magasin pour entendre tes clients.'));return}
   const box=el('div','st-opinions'),max=list[0][1];

@@ -30,9 +30,9 @@ export function createRenderer(canvas){
 // ---------------------------------------------------------------- caméra
 export function camera(){return {tx:30,tz:30,yaw:Math.PI/4,yawTo:Math.PI/4,pitch:.62,zoom:13,w:1,h:1}}
 const norm=v=>{const l=Math.hypot(...v)||1;return v.map(x=>x/l)},cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
-export function basis(c){const D=60,e=[c.tx+D*Math.sin(c.yaw)*Math.cos(c.pitch),D*Math.sin(c.pitch),c.tz+D*Math.cos(c.yaw)*Math.cos(c.pitch)];
+export function basis(c){const D=150,e=[c.tx+D*Math.sin(c.yaw)*Math.cos(c.pitch),D*Math.sin(c.pitch),c.tz+D*Math.cos(c.yaw)*Math.cos(c.pitch)];
  const f=norm([c.tx-e[0],-e[1],c.tz-e[2]]),s=norm(cross(f,[0,1,0])),u=cross(s,f);return {e,f,s,u}}
-export function viewProj(c){const {e,f,s,u}=basis(c),a=c.w/c.h,hh=c.zoom,hw=hh*a,n=1,fa=200;
+export function viewProj(c){const {e,f,s,u}=basis(c),a=c.w/c.h,hh=c.zoom,hw=hh*a,n=1,fa=500;
  const V=[s[0],u[0],-f[0],0,s[1],u[1],-f[1],0,s[2],u[2],-f[2],0,-dot(s,e),-dot(u,e),dot(f,e),1];
  const P=[1/hw,0,0,0,0,1/hh,0,0,0,0,-2/(fa-n),0,0,0,-(fa+n)/(fa-n),1],M=new Float32Array(16);
  for(let col=0;col<4;col++)for(let r=0;r<4;r++){let v=0;for(let k=0;k<4;k++)v+=P[k*4+r]*V[col*4+k];M[col*4+r]=v}return M}

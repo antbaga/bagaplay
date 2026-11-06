@@ -41,8 +41,8 @@ function defaultGround(S){const g=new Array(N).fill(0),set=(x,y,t)=>{if(inLot(x,
 // et un demi-tour pour ceux qui arrivent de l'ouest
 function defaultRoads(S){S.lanes=[];S.yields=[];S.laneNext=0;const L=pts=>RD.addLane(S,{pts});
  L([[W,RY+1],[0,RY+1]]);L([[0,RE-1],[W,RE-1]]);
- L([[52,RY+1],[49,RY-2],[15,RY-2],[12,RY+1]]);
- L([[58,RE-1],[58,RY+1]]);RD.roadsChanged(S)}
+ const X=D.OFF.x;L([[52+X,RY+1],[49+X,RY-2],[15+X,RY-2],[12+X,RY+1]]);
+ L([[58+X,RE-1],[58+X,RY+1]]);RD.roadsChanged(S)}
 // trottoirs : le long de la route principale et tout autour du magasin
 function addSidewalks(S,g){for(let x=0;x<W;x++)for(const y of [RY-1,RE])if(!g[idx(x,y)]&&!S.built[idx(x,y)])g[idx(x,y)]=3;
  for(let y=0;y<RY;y++)for(let x=0;x<W;x++){const i=idx(x,y);if(g[i]||S.built[i])continue;let near=false;for(let dy=-1;dy<=1&&!near;dy++)for(let dx=-1;dx<=1;dx++)if(inside(S,x+dx,y+dy)){near=true;break}if(near)g[i]=3}}
@@ -55,18 +55,18 @@ export function clearTrees(S,cellsIdx){const set=new Set(cellsIdx);const n=(S.tr
 // magasin de départ : trottoirs, accès camion, quai, racks, rayons d'épicerie et caisses (sans frais ni coupe)
 export function starter(S){
  // voie de service pour le camion : part de la route vers l'ouest, passe derrière le magasin (contre le quai) et rejoint l'allée du parking
- RD.addLane(S,{pts:[[6,RY+1],[6,17],[46,17],[46,RY-2]]});RD.roadsChanged(S);clearTrees(S,RD.laneCells(S,S.laneNext));dirty(S);
+ const X=D.OFF.x,Y=D.OFF.y;RD.addLane(S,{pts:[[6+X,RY+1],[6+X,17+Y],[46+X,17+Y],[46+X,RY-2]]});RD.roadsChanged(S);clearTrees(S,RD.laneCells(S,S.laneNext));dirty(S);
  const P=(t,x,y,r,cat)=>{const why=canPlace(S,t,x,y,r);if(why)throw new Error('starter '+t+' '+x+','+y+': '+why);S.items.push({id:S.nid++,t,x,y,r,cat:cat||null,stock:0});dirty(S)};
- P('dock',20,18,0);for(const x of [24,26,30,32])P('rack',x,18,0);
+ P('dock',20+X,18+Y,0);for(const x of [24,26,30,32])P('rack',x+X,18+Y,0);
  const am=['epicerie','boissons','sucre','epicerie','petitdej','hygiene','boissons','epicerie','sucre','alcool','entretien','petitdej'];let k=0;
- for(const [y,r] of [[26,2],[27,0]])for(const x of [21,23,25,32,34,36])P('shelf',x,y,r,am[k++]);
- for(const x of [25,32])P('checkout',x,36,0);
+ for(const [y,r] of [[26,2],[27,0]])for(const x of [21,23,25,32,34,36])P('shelf',x+X,y+Y,r,am[k++]);
+ for(const x of [25,32])P('checkout',x+X,36+Y,0);
  for(const it of S.items)if(def(it.t).kind==='sale')it.stock=def(it.t).cap;
  S.cash=D.START.starterCash;applyPlan(S);return S}
 // % d'achat par défaut : seulement les rayons présents dans le magasin
 export function allocFor(S){const o=new Set();for(const it of S.items)if(it.cat)o.add(it.cat);if(!o.size)return defaultAlloc();
  const w={};for(const c of D.CATS)w[c.id]=o.has(c.id)?c.demand:0;return defaultAlloc(w)}
-function defaultParking(S){for(const x of [20,22,24,26,32,34,36,38]){if(!canPlace(S,'spot',x,S.fy+2,0)){const it={id:S.nid++,t:'spot',x,y:S.fy+2,r:0,cat:null,stock:0};S.items.push(it);for(const c of cells(it))S.ground[c]=1}dirty(S)}}
+function defaultParking(S){for(const x0 of [20,22,24,26,32,34,36,38]){const x=x0+D.OFF.x;if(!canPlace(S,'spot',x,S.fy+2,0)){const it={id:S.nid++,t:'spot',x,y:S.fy+2,r:0,cat:null,stock:0};S.items.push(it);for(const c of cells(it))S.ground[c]=1}dirty(S)}}
 // répartition du budget d'achat en valeur : demande × prix d'achat (total 100 %)
 export function defaultAlloc(weights){const w={};let t=0;for(const c of D.CATS){w[c.id]=weights?weights[c.id]||0:c.demand;t+=w[c.id]}
  const o={};if(!t){for(const c of D.CATS)o[c.id]=0;return o}let sum=0;for(const c of D.CATS){o[c.id]=Math.round(w[c.id]/t*100);sum+=o[c.id]}
@@ -401,7 +401,7 @@ export function hourLabel(S){const h=Math.floor(S.hour),m=Math.floor((S.hour-h)*
 export const monthOf=S=>Math.floor((S.d-1)/D.DAYS_PER_MONTH)+1,dayOfMonth=S=>(S.d-1)%D.DAYS_PER_MONTH+1;
 
 // dt : secondes réelles × vitesse
-export function step(S,R,dt){if(S.over)return;layout(S);R.lt=(R.lt||0)+dt;LIGHT_R=R;
+export function step(S,R,dt){if(S.over)return;layout(S);R.lt=(R.lt||0)+dt;LIGHT_R=R;buildOcc(R);
  if(R.staffDay!==S.d)spawnStaff(S,R);
  const h0=Math.floor(S.hour);S.hour+=dt/D.HOURS.realSecPerHour;if(Math.floor(S.hour)!==h0)startDay(S,R);// mise en rayon de la nuit à l'ouverture, une fois la livraison du matin rangée (au plus tard à 10 h)
  if(S.hour>=D.HOURS.open&&R.restockDay!==S.d&&(!(R.dawn||R.truck&&R.truck.dawn&&R.truck.st!=='out')||S.hour>=D.HOURS.open+2)){R.restockDay=S.d;morningRestock(S)}
@@ -420,7 +420,7 @@ export function startDay(S,R){R.perDay=attraction(S).perDay}
 function spawnCustomer(S,R){const r=R.rnd,T=D.TRAFFIC,stop=S.items.find(o=>o.t==='busstop'),spots=S.items.filter(o=>o.t==='spot');
  const free=spots.filter(o=>!R.spotTaken.has(o.id)&&reachable(S,'vspot:'+o.id)),u=r();
  if(stop&&u<T.busShare){R.busWaiting++;return}
- if(u<T.busShare+T.carShare){if(free.length){if(spawnCar(S,R,free[Math.floor(r()*free.length)])!==false)return}else{th(S,'noparking');if(r()<.25)return}}
+ if(u<T.busShare+T.carShare){if(free.length){if(spawnCar(S,R,free[Math.floor(r()*free.length)])!==false)return}else{th(S,'noparking');if(r()<T.noParkLeave)return}}
  const L=layout(S),side=r()<.5?0:W-1;let y=r()<.5?RY-1:RE;if(!L.pc[idx(side,y)])y=y===RE?RY-1:RE;makeCustomer(S,R,side,y,0)}
 export function makeCustomer(S,R,x,y,extra){const r=R.rnd,cats=activeCats(S);
  const want=[],n=3+extra+Math.floor(Math.pow(r(),1.3)*14),tot=cats.reduce((a,c)=>a+c.demand,0);
@@ -544,19 +544,28 @@ export function syncStaff(S,R){// après une embauche ou un licenciement en jour
 
 // déplacement d'une case à l'autre en suivant le champ de distance ; renvoie true à l'arrivée
 let LIGHT_R=null;   // runtime courant (phase des feux piétons pour les piétons qui attendent)
+// une personne par case : chaque agent présent occupe sa case et celle où il va (assis, aux toilettes, dans une boutique ou dans le bus : non)
+let OCC=null;
+const present=a=>!a.hidden&&a.st!=='svuse'&&a.st!=='waitBus';
+function buildOcc(R){if(!OCC||OCC.length!==N)OCC=new Uint8Array(N);else OCC.fill(0);for(const a of R.agents){if(!present(a))continue;if(a.c>=0)OCC[a.c]++;if(a.nx>=0)OCC[a.nx]++}}
 function move(S,a,key,mode,speed,dt){const f=field(S,key,mode);let budget=speed*dt;
  for(let guard=0;guard<6&&budget>0;guard++){
   if(a.nx<0){if(f[a.c]===0)return true;
    if(f[a.c]<0){const j=rescue(S,a,f);if(j<0)return null;a.c=j;a.x=j%W+.5;a.y=(j/W|0)+.5;continue}
-   const x=a.c%W,y=a.c/W|0,d=f[a.c];let best=-1,bd=d;
-   for(const [dx,dy] of DIRS){const nx=x+dx,ny=y+dy;if(inLot(nx,ny)){const v=f[idx(nx,ny)];if(v>=0&&v<bd&&canStep(S,mode==='c'?S._L.pc:S._L.ps,x,y,nx,ny)){bd=v;best=idx(nx,ny)}}}
+   const x=a.c%W,y=a.c/W|0,d=f[a.c],cust=a.k==='c'&&OCC,free=j=>!cust||!OCC[j]||(a.block||0)>1.6;let best=-1,bd=d,anyway=-1,ad=d;
+   // case suivante : la plus proche du but ; un client ne va pas sur une case occupée (il attend ou contourne, et passe quand même s'il est coincé)
+   for(const [dx,dy] of DIRS){const nx=x+dx,ny=y+dy;if(inLot(nx,ny)){const j=idx(nx,ny),v=f[j];if(v>=0&&v<d&&canStep(S,mode==='c'?S._L.pc:S._L.ps,x,y,nx,ny)){if(v<ad){ad=v;anyway=j}if(v<bd&&free(j)){bd=v;best=j}}}}
+   // bloqué : après un court instant, pas de côté sur une case libre aussi proche du but (pour se croiser dans une allée)
+   if(best<0&&anyway>=0&&cust&&(a.block||0)>.35){for(const [dx,dy] of DIRS){const nx=x+dx,ny=y+dy;if(!inLot(nx,ny))continue;const j=idx(nx,ny);if(j!==a.prev&&f[j]>=0&&f[j]<=d&&!OCC[j]&&canStep(S,mode==='c'?S._L.pc:S._L.ps,x,y,nx,ny)){best=j;bd=f[j];break}}}
+   if(best<0&&anyway>=0){a.block=(a.block||0)+dt;a.dir=Math.atan2(anyway%W-x,(anyway/W|0)-y);return false}
    // raccourci en diagonale quand les deux côtés sont libres (même revêtement)
-   if(best>=0&&bd>=1)for(const [dx,dy] of [[1,1],[1,-1],[-1,1],[-1,-1]]){const nx=x+dx,ny=y+dy;if(!inLot(nx,ny))continue;const v=f[idx(nx,ny)],a1=f[idx(x+dx,y)],a2=f[idx(x,y+dy)];if(v>=0&&v<bd&&v<d-1&&inside(S,x,y)===inside(S,nx,ny)&&a1>=0&&a2>=0&&a1<d&&a2<d){best=idx(nx,ny);break}}
+   if(best>=0&&bd>=1)for(const [dx,dy] of [[1,1],[1,-1],[-1,1],[-1,-1]]){const nx=x+dx,ny=y+dy;if(!inLot(nx,ny))continue;const j=idx(nx,ny),v=f[j],a1=f[idx(x+dx,y)],a2=f[idx(x,y+dy)];if(v>=0&&v<bd&&v<d-1&&free(j)&&inside(S,x,y)===inside(S,nx,ny)&&a1>=0&&a2>=0&&a1<d&&a2<d){best=j;break}}
+   if(best>=0){a.block=0;if(OCC)OCC[best]++}
    if(best>=0&&LIGHT_R){const NT=RD.net(S),lid=NT.lightCell[best];if(lid&&!NT.raster[a.c]&&RD.lightPhase(LIGHT_R,lid)!=='walk'){a.dir=Math.atan2(best%W-x,(best/W|0)-y);return false}}
    if(best<0)return null;a.nx=best}
   const tx=a.nx%W+.5,ty=(a.nx/W|0)+.5,dx=tx-a.x,dy=ty-a.y,dist=Math.hypot(dx,dy);
   a.dir=Math.atan2(dx,dy);
-  if(dist<=budget){a.x=tx;a.y=ty;a.c=a.nx;a.nx=-1;budget-=dist;a.steps=(a.steps||0)+1;if(a.k==='c'&&inside(S,a.c%W,a.c/W|0)){S.dirt&&(S.dirt[a.c]=Math.min(1,(S.dirt[a.c]||0)+.01));a.dirt+=S.dirt?Math.max(0,(S.dirt[a.c]||0)-.2):0}}
+  if(dist<=budget){if(OCC&&present(a)&&OCC[a.c])OCC[a.c]--;a.prev=a.c;a.x=tx;a.y=ty;a.c=a.nx;a.nx=-1;budget-=dist;a.steps=(a.steps||0)+1;if(a.k==='c'&&inside(S,a.c%W,a.c/W|0)){S.dirt&&(S.dirt[a.c]=Math.min(1,(S.dirt[a.c]||0)+.01));a.dirt+=S.dirt?Math.max(0,(S.dirt[a.c]||0)-.2):0}}
   else{a.x+=dx/dist*budget;a.y+=dy/dist*budget;budget=0}}
  return false}
 function rescue(S,a,f){const x=a.c%W,y=a.c/W|0;for(let r=1;r<5;r++)for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++){const nx=x+dx,ny=y+dy;if(inLot(nx,ny)&&f[idx(nx,ny)]>=0)return idx(nx,ny)}return -1}
@@ -564,6 +573,9 @@ function rescue(S,a,f){const x=a.c%W,y=a.c/W|0;for(let r=1;r<5;r++)for(let dy=-r
 function customer(S,R,a,dt){const sp=D.CUSTOMER.speed;
  if(a.st==='cart'){const co=S.items.find(o=>o.t==='corral');if(!co){a.st='in';return}const r=move(S,a,'item:'+co.id,'c',sp,dt);if(r===null){a.st='in';return}
   if(r){if((R.cartsOut||0)<cartCap(S)){a.hasCart=true;R.cartsOut=(R.cartsOut||0)+1}else{a.want.length=Math.min(a.want.length,8);th(S,'nocart')}a.st='in'}return}
+ // caddie : on pousse les courses jusqu'à la voiture, on charge le coffre, puis on range le caddie à l'abri avant de repartir
+ if(a.st==='tocar'){const car=R.cars.find(c=>c.id===a.car);if(!car){a.st='retcart';return}const r=move(S,a,'cell:'+car.exit,'c',sp,dt);if(r||r===null){a.st='load';a.t=2.5;a.dir=Math.atan2(car.cx-a.x,car.cz-a.y)}return}
+ if(a.st==='load'){a.t-=dt;if(a.t<=0){a.loaded=true;a.st='retcart'}return}
  if(a.st==='retcart'){const co=S.items.find(o=>o.t==='corral');const r=co?move(S,a,'item:'+co.id,'c',sp,dt):true;if(r||r===null){if(a.hasCart){a.hasCart=false;R.cartsOut=Math.max(0,(R.cartsOut||0)-1)}a.st='leave'}return}
  if(a.st==='in'){const r=move(S,a,'ent','c',sp,dt);if(r===null)return leaveNow(S,R,a);if(r){a.st='shop'}return}
  if(a.st==='waitBus')return;
@@ -576,7 +588,7 @@ function customer(S,R,a,dt){const sp=D.CUSTOMER.speed;
  if(a.st==='queue'){const it=S.items.find(o=>o.id===a.item);if(!it||!usable(S,it)){unqueue(R,a);a.st='checkout';return}
   a.wait+=dt;if(a.wait>D.CUSTOMER.patience){unqueue(R,a);a.sat-=25;bubble(R,a,'⌛');S.dayStats.angry++;th(S,'queue');returnGoods(S,a);a.st='leave';return}
   const q=R.queues.get(it.id)||[];const r=move(S,a,'item:'+it.id,'c',sp,dt);if(r&&q[0]===a){a.st='pay';a.t=(D.CUSTOMER.serviceBase+D.CUSTOMER.servicePerUnit*a.basket.units)*(it.t==='self'?D.CUSTOMER.selfFactor:1)}return}
- if(a.st==='pay'){a.t-=dt;if(a.t<=0){const it=S.items.find(o=>o.id===a.item);unqueue(R,a);payAt(S,R,a,it);a.st=a.hasCart?'retcart':'leave'}return}
+ if(a.st==='pay'){a.t-=dt;if(a.t<=0){const it=S.items.find(o=>o.id===a.item);unqueue(R,a);payAt(S,R,a,it);a.st=a.hasCart?(a.car&&R.cars.some(c=>c.id===a.car)?'tocar':'retcart'):'leave'}return}
  if(a.st==='leave'){const car=a.car&&R.cars.find(c=>c.id===a.car),stop=a.bus&&S.items.find(o=>o.t==='busstop');
   const goal=car?'cell:'+car.exit:stop?'item:'+stop.id:'street',r=move(S,a,goal,'c',sp,dt);
   if(r||r===null){if(stop&&r){finishCustomer(S,R,a,false,true);a.st='waitBus';a.dir=Math.PI}else finishCustomer(S,R,a,false)}}}
@@ -610,7 +622,12 @@ function service(S,R,a,dt){const it=S.items.find(o=>o.id===a.item),d=it&&def(it.
   if(d.kind==='shop'){const px=shopPx(S,it.t),p=px<=100?1:Math.max(.05,1-(px-100)*.012);if(R.rnd()>=p){a.sat-=5;S.dayStats.expensive++;th(S,'shopcher:'+it.t);bubble(R,a,'€');a.st='shop';return}}
   const q=R.queues.get(it.id)||[];q.push(a);R.queues.set(it.id,q);a.st='svq';a.wait=0;return}
  if(a.st==='svq'){const q=R.queues.get(it.id)||[],k=q.indexOf(a);if(k<0){a.st='shop';return}
-  a.wait+=dt;if(a.wait>D.CUSTOMER.patience){unqueue(R,a);a.sat-=8;th(S,'svqueue:'+it.t);bubble(R,a,'⌛');if(a.svc!=='shop')a.need[a.svc]*=.5;a.st='shop';return}
+  a.wait+=dt;if(a.wait>(d.wait||D.CUSTOMER.patience)){unqueue(R,a);bubble(R,a,'⌛');
+   // équipement plein : on en cherche un autre, sinon on renonce (et ça se ressent sur l'humeur)
+   if(a.svc!=='shop'){const k=a.svc;(a.tried||(a.tried=[])).push(it.id);const other=providers(S,k).filter(o=>!a.tried.includes(o.id));
+    if(other.length&&a.tried.length<3){const x=a.c%W,y=a.c/W|0;let b2=other[0],bv=1e9;for(const o of other){const v=Math.abs(o.x-x)+Math.abs(o.y-y)+(R.queues.get(o.id)||[]).length*4;if(v<bv){bv=v;b2=o}}a.item=b2.id;a.st='svgo';a.sat-=1;return}
+    a.sat-=D.NEEDS.pen[k]*.7;th(S,'full:'+k);S.dayStats.needs++;a.need[k]*=.4;a.tried=null;a.st='shop';return}
+   a.sat-=8;th(S,'svqueue:'+it.t);a.st='shop';return}
   if(k<(d.slots||1)){a.st='svuse';a.t=(d.kind==='shop'?d.svc:d.use)*(.8+.4*R.rnd());a.hidden=!!(d.hide||d.inside);if(a.hidden){const F=[it.x+size(it)[0]/2,it.y+size(it)[1]/2];a.hx=F[0];a.hy=F[1]}}
   else move(S,a,'item:'+it.id,'c',sp,dt);return}
  // en service
@@ -618,6 +635,7 @@ function service(S,R,a,dt){const it=S.items.find(o=>o.id===a.item),d=it&&def(it.
  const f=.7+.6*R.rnd(),sell=(v,cost,key)=>{S.cash+=v-cost;S.dayStats.rev+=v;S.month.rev+=v;S.dayStats.shop+=v;S.month.shop+=v;S.dayStats.buy+=cost;S.month.buy+=cost;S.dayStats.shops[key]=(S.dayStats.shops[key]||0)+v;S.monthShop=S.monthShop||{};S.monthShop[key]=(S.monthShop[key]||0)+v;ev(R,{t:'pay',x:a.x,y:a.y,v})};
  if(d.kind==='shop'){const px=shopPx(S,it.t),v=d.ticket*f*px/100;sell(v,d.ticket*f*d.cr,it.t);a.sat+=2+(px<100?(100-px)*.05:0);if(R.rnd()<.25)th(S,'shop:'+it.t)}
  else if(d.sale)sell(d.sale*f,d.sale*f*d.cr,it.t);
+ a.tried=null;
  if(d.serves&&a.need)for(const k in d.serves){if(a.need[k]>=D.NEEDS.th*.8){a.sat+=1.5;if(R.rnd()<.2)th(S,'ok:'+k)}a.need[k]=Math.max(0,a.need[k]-d.serves[k]);if(a.need[k]<D.NEEDS.th)a.nq[k]=0}
  a.st='shop'}
 function usable(S,it){const k=def(it.t).kind;return k==='self'||(k==='checkout'&&manned(S,it))}
@@ -783,12 +801,25 @@ export function restore(S,o){const t=o&&o.rt;if(!t||!S)return null;const R=runti
  if(t.dirt&&S.dirt)for(let k=0;k<t.dirt.length;k+=2)S.dirt[t.dirt[k]]=t.dirt[k+1]/100;
  return R}
 // sauvegarde : version 2 (routes en lignes). Les parties d'avant (routes en cases) ne se reprennent pas : nouvelle partie.
-export function load(o){if(!o||o.v!==2||(o.lw&&o.lw!==W)||(o.lh&&o.lh!==H))return null;const S={...o,wall:[...o.wall].map(Number),zone:[...o.zone].map(Number),built:[...o.built].map(Number),ground:[...o.ground].map(Number),items:o.items.map(it=>({...it,inc:0}))};
+// sauvegarde d'avant la 5.1 (terrain de 80 × 76) : recopiée au milieu du nouveau terrain (décalage D.OFF), voies du bord prolongées
+// jusqu'aux nouveaux bords, trottoirs de la route principale et arbres complétés. La journée en cours repart du matin.
+function migrateLot(o){const ow=D.OLD_LOT.w,oh=D.OLD_LOT.h,X=D.OFF.x,Y=D.OFF.y,sh=(str,fill)=>{const a=new Array(N).fill(fill);for(let y=0;y<oh;y++)for(let x=0;x<ow;x++)a[(y+Y)*W+x+X]=str[y*ow+x];return a.join('')};
+ const n={...o,lw:W,lh:H,ground:sh(o.ground,'0'),built:sh(o.built,'0'),wall:sh(o.wall,'0'),zone:sh(o.zone,'0')};
+ n.items=o.items.map(it=>({...it,x:it.x+X,y:it.y+Y}));n.ent=o.ent+X;n.fy=o.fy+Y;if(o.b)n.b={x0:o.b.x0+X,y0:o.b.y0+Y,x1:o.b.x1+X,y1:o.b.y1+Y};
+ n.doors=(o.doors||[]).map(e=>({...e,x:e.x+X,y:e.y+Y}));n.yields=(o.yields||[]).map(y=>({...y,x:y.x+X,y:y.y+Y}));n.lights=(o.lights||[]).map(l=>({...l,a:[l.a[0]+X,l.a[1]+Y],b:[l.b[0]+X,l.b[1]+Y]}));
+ const onOld=p=>p[0]===X||p[0]===X+ow||p[1]===Y||p[1]===Y+oh,onNew=p=>p[0]<=0||p[1]<=0||p[0]>=W||p[1]>=H;
+ const ext=(p,q)=>{if(!onOld(p))return p;const dx=Math.sign(p[0]-q[0]),dy=Math.sign(p[1]-q[1]);if(!dx&&!dy)return p;const r=[p[0],p[1]];let g=0;while(!onNew(r)&&g++<400){r[0]+=dx;r[1]+=dy}return onNew(r)?r:p};
+ n.lanes=(o.lanes||[]).map(l=>{if(l.ring)return {...l,ring:{...l.ring,cx:l.ring.cx+X,cy:l.ring.cy+Y}};const pts=l.pts.map(p=>[p[0]+X,p[1]+Y]);const k=pts.length;pts[0]=ext(pts[0],pts[1]);pts[k-1]=ext(pts[k-1],pts[k-2]);return {...l,pts}});
+ n.trees=(o.trees||[]).map(([x,y,s])=>[x+X,y+Y,s]);delete n.rt;delete o.rt;n.migrated=true;return n}
+export function load(o){if(o&&o.v===2&&o.lw===D.OLD_LOT.w&&o.lh===D.OLD_LOT.h&&W!==D.OLD_LOT.w)o=migrateLot(o);
+ if(!o||o.v!==2||(o.lw&&o.lw!==W)||(o.lh&&o.lh!==H))return null;const S={...o,wall:[...o.wall].map(Number),zone:[...o.zone].map(Number),built:[...o.built].map(Number),ground:[...o.ground].map(Number),items:o.items.map(it=>({...it,inc:0}))};
  S.lanes=S.lanes||[];S.yields=S.yields||[];S.lights=S.lights||[];S.lic=S.lic||{};S.shopPx=S.shopPx||{};
  for(const c of D.CATS){if(S.reserve[c.id]==null)S.reserve[c.id]=0;if(S.margin[c.id]==null)S.margin[c.id]=c.ref*(S.mscale||D.MARGIN_SCALE)/D.MARGIN_SCALE;if(S.alloc[c.id]==null)S.alloc[c.id]=0;if(S.sold[c.id]==null)S.sold[c.id]=0}
  for(const r of D.ROLES){if(S.staff[r.id]==null)S.staff[r.id]=0;if(S.staffDays[r.id]==null)S.staffDays[r.id]=0}
  {const m=blankMonth(),d=blankDay();for(const k in m)if(S.month[k]==null)S.month[k]=m[k];if(S.dayStats)for(const k in d)if(S.dayStats[k]==null)S.dayStats[k]=d[k]}S.monthCat=S.monthCat||{};S.catHist=S.catHist||[];bounds(S);if(!S.trees)S.trees=genTrees(S);if(!S.plog)S.plog=(S.history||[]).map(h=>[h.d,h.profit,h.cash]);
  if(S.mscale!==D.MARGIN_SCALE){const f=D.MARGIN_SCALE/(S.mscale||1);for(const c of D.CATS)if(S.margin[c.id]!=null)S.margin[c.id]=Math.round(S.margin[c.id]*f);S.mscale=D.MARGIN_SCALE}
+ if(S.migrated){delete S.migrated;RD.roadsChanged(S);addSidewalks(S,S.ground);const X=D.OFF.x,Y=D.OFF.y,ow=D.OLD_LOT.w,oh=D.OLD_LOT.h;
+  for(const t of genTrees(S))if(!(t[0]>=X&&t[0]<X+ow&&t[1]>=Y&&t[1]<Y+oh))S.trees.push(t)}
  if(!o.rt){if(S.hour>D.HOURS.open)S.hour=D.HOURS.start;S.dayStats=blankDay()}delete S.rt;S.dirt=new Float32Array(N);return S}
 export function withDirt(S){S.dirt=S.dirt||new Float32Array(N);return S}
 
