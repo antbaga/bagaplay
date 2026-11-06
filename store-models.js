@@ -61,8 +61,35 @@ export function buildStatic(B,S,v){const b=S.b,L=E.layout(S);B.reset();B.setYaw(
  // tapis d'entrée
  for(const e of E.entrances(S)){const xs=e.cells.map(c=>c[0]),ys=e.cells.map(c=>c[1]),x0=Math.min(...xs),x1=Math.max(...xs)+1,y0=Math.min(...ys),y1=Math.max(...ys)+1,[dx,dy]=e.d;
   B.tile(x0+Math.min(0,dx*1.2),y0+Math.min(0,dy*1.2),x1+Math.max(0,dx*1.2),y1+Math.max(0,dy*1.2),.02,rgb('#55606b'))}
+ // sens des entrées : flèches peintes sur le tapis (entrée seulement, sortie seulement, les deux)
+ for(const e of E.entrances(S)){const [dx,dy]=e.d,m=e.mode||'both',cx=(e.cells[0][0]+e.cells[1][0])/2+.5+dx*1.05,cz=(e.cells[0][1]+e.cells[1][1])/2+.5+dy*1.05,px=-dy,py=dx;
+  if(m==='both'){floorArrow(B,cx-px*.5,cz-py*.5,-dx,-dy,.5,.03,C.line);floorArrow(B,cx+px*.5,cz+py*.5,dx,dy,.5,.03,C.line)}
+  else floorArrow(B,cx,cz,m==='in'?-dx:dx,m==='in'?-dy:dy,.6,.03,m==='in'?rgb('#8fe0a0'):rgb('#ffcf8a'))}
+ // sens de passage : chevrons au sol, panneau au début de chaque tronçon
+ const FL=S.flows||{};for(const k in FL){const i=+k,x=i%W,y=i/W|0,r=FL[k],[dx,dy]=E.DIRS[r],ins=E.inside(S,x,y),col=ins?rgb('#f2c230'):C.line;
+  floorArrow(B,x+.5,y+.5,dx,dy,.36,.017,col);
+  const pi=E.idx(x-dx,y-dy);if(FL[pi]!==r)signPost(B,x+.5,y+.5,dx,dy)}
+ // barrières : potelets à sangle dedans, barrières métalliques dehors
+ const BS=new Set(S.bars||[]);for(const i of BS){const x=i%W,y=i/W|0,cx=x+.5,cz=y+.5,ins=E.inside(S,x,y);
+  const nb=[[1,0],[0,1],[-1,0],[0,-1]].filter(([dx,dy])=>BS.has(E.idx(x+dx,y+dy)));
+  if(ins){B.box(cx-.16,0,cz-.16,cx+.16,.04,cz+.16,C.dark);B.box(cx-.04,0,cz-.04,cx+.04,.95,cz+.04,C.metal,C.white)}
+  else{B.box(cx-.05,0,cz-.05,cx+.05,1.05,cz+.05,C.dark)}
+  const seg=(x0,z0,x1,z1)=>{if(ins)B.box(Math.min(x0,x1)-.02,.82,Math.min(z0,z1)-.02,Math.max(x0,x1)+.02,.9,Math.max(z0,z1)+.02,rgb('#c0392b'));
+   else{for(const h of [.18,.98])B.box(Math.min(x0,x1)-.025,h,Math.min(z0,z1)-.025,Math.max(x0,x1)+.025,h+.05,Math.max(z0,z1)+.025,C.metal);
+    const n=4,hor=Math.abs(x1-x0)>Math.abs(z1-z0);for(let k=1;k<n;k++){const t=k/n,bx=x0+(x1-x0)*t,bz=z0+(z1-z0)*t;B.box(bx-.015,.2,bz-.015,bx+.015,1,bz+.015,C.metal)}}};
+  for(const [dx,dy] of nb)if(dx>0||dy>0)seg(cx,cz,cx+dx,cz+dy);
+  if(!nb.length)seg(cx-.45,cz,cx+.45,cz)}
  // meubles
  for(const it of S.items)if(it.id!==v.hide)item(B,S,it,v)}
+// flèche peinte au sol (direction dx,dy ; s : demi-longueur)
+function floorArrow(B,cx,cz,dx,dy,s,h,col){const px=-dy,py=dx,P=(a,l)=>[cx+dx*a*s+px*l*s,h,cz+dy*a*s+py*l*s];
+ B.quad(P(-1,-.22),P(-1,.22),P(.15,.22),P(.15,-.22),col);B.tri(P(.15,-.7),P(.15,.7),P(1,0),col);B.tri(P(.15,.7),P(.15,-.7),P(1,0),col)}
+// panneau de sens : poteau sur le côté, plaque bleue avec flèche blanche (lisible des deux côtés)
+function signPost(B,cx,cz,dx,dy){const px=-dy,py=dx,sx=cx+px*.42,sz=cz+py*.42,blue=rgb('#2f6fd0');
+ B.box(sx-.03,0,sz-.03,sx+.03,1.75,sz+.03,C.metal);
+ const ax=Math.abs(dx)>0;if(ax)B.box(sx-.32,1.45,sz-.02,sx+.32,1.85,sz+.02,blue);else B.box(sx-.02,1.45,sz-.32,sx+.02,1.85,sz+.32,blue);
+ for(const f of [1,-1]){const o=.03*f,P=(a,y)=>[sx+dx*a+px*o,y,sz+dy*a+py*o],w=C.white;
+  B.quad(P(-.22,1.61),P(.05,1.61),P(.05,1.69),P(-.22,1.69),w);B.tri(P(.05,1.56),P(.22,1.65),P(.05,1.74),w);B.tri(P(.05,1.74),P(.22,1.65),P(.05,1.56),w)}}
 function dockGap(S,it){const [w,d]=E.size(it),o=[];
  if(it.r===0)for(let i=0;i<w;i++)o.push('N'+E.idx(it.x+i,it.y));if(it.r===2)for(let i=0;i<w;i++)o.push('S'+E.idx(it.x+i,it.y+d-1));
  if(it.r===1)for(let j=0;j<d;j++)o.push('E'+E.idx(it.x+w-1,it.y+j));if(it.r===3)for(let j=0;j<d;j++)o.push('W'+E.idx(it.x,it.y+j));return o}
@@ -265,6 +292,9 @@ export function buildAgents(B,S,R,v,time){B.reset();B.setYaw(v.yaw);
   if(a.k==='c'&&a.st==='svuse'){const it=S.items.find(o=>o.id===a.item);if(it){const F=frame(it),k=(users.get(it.id)||[]).indexOf(a),st=seat(it,F,k);if(st){x=st[0];z=st[1];ang=st[2];sitting=true}else if(a.hidden)continue}}
   else if(a.hidden)continue;
   if(a.k==='c'&&(a.st==='queue'||a.st==='pay')){const it=S.items.find(o=>o.id===a.item),k=E.queueIndex(R,a);if(it&&k>=0&&a.nx<0){const sl=queueSlots(S,it,k+1)[k];if(sl){x=sl[0];z=sl[1];ang=sl[2]}}}
+  // file d'attente devant un rayon, un comptoir, une boutique ou un équipement : les suivants se placent derrière
+  if(a.k==='c'&&(a.st==='pq'||a.st==='svq')&&a.nx<0){const it=S.items.find(o=>o.id===a.item),k=E.queueIndex(R,a),d=it&&D.ITEM[it.t];
+   if(d){const sl=a.st==='pq'?(d.kind==='counter'?1:E.front(it).length):(d.slots||1),j=k-sl+1;if(j>=1){const q=queueSlots(S,it,j+1)[j];if(q){x=q[0];z=q[1];ang=q[2]}}}}
   else if(a.k==='c'){const o=a.id*2654435761>>>0;x+=((o%7)-3)*.05;z+=(((o>>3)%7)-3)*.05}
   const g=walk(a,x,z,v.dt||.016),ph=g.ph,amp=g.amp,bob=Math.abs(Math.sin(ph))*.035*amp;
   // au rayon : face au meuble, bras tendu ; à l'arrêt : regarde autour de soi

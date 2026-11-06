@@ -100,10 +100,17 @@ function back(it){const [w,d]=size(it),o=[];
 export function area(S){let n=0;for(let i=0;i<N;i++)n+=S.built[i];return n}
 export function salesArea(S){let n=0;for(let i=0;i<N;i++)if(S.built[i]&&!S.zone[i]&&!S.wall[i])n++;return n}
 // entrées : la porte principale (façade sud) et celles ajoutées (S.doors : {x,y,dx,dy}, 2 cases le long du mur, (dx,dy) vers l'extérieur)
-export function entrances(S){const o=[{cells:[[S.ent,S.fy],[S.ent+1,S.fy]],d:[0,1],main:true}];
+// mode : 'both' (entrée et sortie), 'in' (entrée seulement), 'out' (sortie seulement) ; vaut pour les clients, pas pour le personnel
+export function entrances(S){const o=[{cells:[[S.ent,S.fy],[S.ent+1,S.fy]],d:[0,1],main:true,mode:S.entMode||'both'}];
  for(const e of S.doors||[]){const ax=e.dy?1:0,ay=e.dy?0:1,c=[[e.x,e.y],[e.x+ax,e.y+ay]];
-  if(c.every(([x,y])=>inside(S,x,y)&&!inside(S,x+e.dx,y+e.dy)))o.push({cells:c,d:[e.dx,e.dy],door:e})}
+  if(c.every(([x,y])=>inside(S,x,y)&&!inside(S,x+e.dx,y+e.dy)))o.push({cells:c,d:[e.dx,e.dy],door:e,mode:e.mode||'both'})}
  return o}
+export const entranceAt=(S,x,y)=>entrances(S).find(e=>e.cells.some(([a,b])=>a===x&&b===y));
+export function setEntranceMode(S,x,y,m){const e=entranceAt(S,x,y);if(!e)return 'Touche une entrée.';if(!['both','in','out'].includes(m))return 'Mode inconnu.';
+ const old=e.mode,apply=v=>{if(e.main)S.entMode=v;else e.door.mode=v};apply(m);const es=entrances(S);
+ if(!es.some(o=>o.mode!=='out')){apply(old);return 'Il faut au moins une entrée pour les clients.'}
+ if(!es.some(o=>o.mode!=='in')){apply(old);return 'Il faut au moins une sortie pour les clients.'}
+ dirty(S);const bad=reachProblem(S);if(bad){apply(old);dirty(S);return bad}return null}
 const entCells=S=>entrances(S).flatMap(e=>e.cells);
 const entAt=(S,x,y)=>entrances(S).find(e=>e.cells.some(([a,b])=>a===x&&b===y));
 const isEntrance=(S,x,y)=>!!entAt(S,x,y);
@@ -136,24 +143,30 @@ export function layout(S){if(S._L)return S._L;
   if(!inside(S,x,y)){const o=occ[i]&&S.items.find(it=>it.id===occ[i]);if(o&&o.t==='corral')continue;if(!S.ground||S.ground[i]||RR[i]||(o&&o.t==='busstop')){pc[i]=ps[i]=1}continue}
   if(occ[i]||S.wall[i]===1)continue;ps[i]=1;if(!S.zone[i])pc[i]=1}
  for(const [tx,ty] of S.trees||[]){const i=idx(tx,ty);pc[i]=ps[i]=0}
+ // barrières : les clients ne passent pas (le personnel, si) ; sens de passage : 1 + direction (DIRS)
+ for(const i of S.bars||[])pc[i]=0;const fl=new Uint8Array(N);for(const k in S.flows||{})fl[+k]=S.flows[k]+1;
  // coût de marche : trottoir, passage piéton et intérieur 1, goudron 2, place de parking 6, bord de route 4, milieu de la route 14
  // (on sort de la voiture vers le trottoir le plus proche, sinon on longe le bord de la route ; on ne traverse que si besoin)
  const wc=new Uint8Array(N).fill(1),G=S.ground;
  if(G)for(let i=0;i<N;i++){if(S.built[i])continue;const g=G[i];
   if(RR[i]){if(g===4){wc[i]=1;continue}const x=i%W,y=i/W|0;wc[i]=DIRS.some(([dx,dy])=>inLot(x+dx,y+dy)&&!RR[idx(x+dx,y+dy)])?4:14;continue}
   if(g===1)wc[i]=occ[i]&&S.items.find(it=>it.id===occ[i])?.t==='spot'?6:2}
- S._L={occ,pc,ps,wc,fields:new Map()};assign(S);return S._L}
+ S._L={occ,pc,ps,wc,fl,fields:new Map()};assign(S);return S._L}
 export const dirty=S=>{S._L=null};
 function canStep(S,P,x,y,nx,ny){if(!inLot(nx,ny)||!P[idx(nx,ny)])return false;
+ const L=S._L,cust=L&&P===L.pc;
+ // sens de passage (clients) : pas à contre-sens d'une flèche, ni en y entrant ni en en sortant
+ if(cust){const f0=L.fl[idx(x,y)],f1=L.fl[idx(nx,ny)],dx=nx-x,dy=ny-y;if(f0&&DIRS[f0-1][0]*dx+DIRS[f0-1][1]*dy<0)return false;if(f1&&DIRS[f1-1][0]*dx+DIRS[f1-1][1]*dy<0)return false}
  const a=inside(S,x,y),b=inside(S,nx,ny);if(a===b)return true;
- // on n'entre et ne sort que par une entrée
- const [ix,iy,ox,oy]=a?[x,y,nx,ny]:[nx,ny,x,y],e=entAt(S,ix,iy);return !!e&&ix+e.d[0]===ox&&iy+e.d[1]===oy}
+ // on n'entre et ne sort que par une entrée (et dans le sens permis pour les clients)
+ const [ix,iy,ox,oy]=a?[x,y,nx,ny]:[nx,ny,x,y],e=entAt(S,ix,iy);if(!e||ix+e.d[0]!==ox||iy+e.d[1]!==oy)return false;
+ if(cust&&(a?e.mode==='in':e.mode==='out'))return false;return true}
 export function field(S,key,mode){const L=layout(S),k=mode+key;let f=L.fields.get(k);if(f)return f;
  // distances pondérées (Dijkstra par seaux) : trottoir et intérieur 1, chaussée et parking 3
  const P=mode==='c'?L.pc:L.ps;f=new Int16Array(N).fill(-1);const cost=i=>L.wc[i],B=[[]];let nb=0;
  for(const [x,y] of targets(S,key))if(inLot(x,y)&&P[idx(x,y)]&&f[idx(x,y)]<0){f[idx(x,y)]=0;B[0].push(idx(x,y));nb++}
  for(let d=0;nb>0;d++){const bk=B[d];if(!bk)continue;for(let h=0;h<bk.length;h++){const i=bk[h];nb--;if(f[i]!==d)continue;const x=i%W,y=i/W|0;
-  for(const [dx,dy] of DIRS){const nx=x+dx,ny=y+dy;if(!canStep(S,P,x,y,nx,ny))continue;const j=idx(nx,ny),nd=d+cost(j);if(f[j]<0||nd<f[j]){f[j]=nd;(B[nd]||(B[nd]=[])).push(j);nb++}}}B[d]=null}
+  for(const [dx,dy] of DIRS){const nx=x+dx,ny=y+dy;if(!inLot(nx,ny)||!P[idx(nx,ny)]||!canStep(S,P,nx,ny,x,y))continue;const j=idx(nx,ny),nd=d+cost(j);if(f[j]<0||nd<f[j]){f[j]=nd;(B[nd]||(B[nd]=[])).push(j);nb++}}}B[d]=null}
  L.fields.set(k,f);return f}
 function targets(S,key){
  if(key==='street'){const o=[];for(let y=0;y<H;y++){if(!roadAt(S,0,y))o.push([0,y]);if(!roadAt(S,W-1,y))o.push([W-1,y])}return o}
@@ -191,7 +204,17 @@ export function canPlace(S,t,x,y,r){const d=def(t),it={t,x,y,r},L=layout(S);
 export function reachProblem(S){const fc=field(S,'ent','c'),fs=field(S,'ent','s');
  for(const it of S.items){const d=def(it.t);if(d.kind==='decor'||d.zone===2)continue;
   const f=d.zone||d.kind==='dock'?fs:fc;if(!front(it).some(([x,y])=>inLot(x,y)&&f[idx(x,y)]>=0))return 'Cela bloquerait l’accès à un meuble.'}
+ // clients à l'intérieur : arriver par une entrée et repartir par une sortie (barrières, sens de passage, entrées dédiées)
+ const L=layout(S),es=entrances(S),cin=es.filter(e=>e.mode!=='out').flatMap(e=>e.cells),cout=es.filter(e=>e.mode!=='in').flatMap(e=>e.cells);
+ const go=reach(S,L.pc,cin,false),back=reach(S,L.pc,cout,true);
+ for(const it of S.items){const d=def(it.t);if(d.kind==='decor'||d.zone||d.kind==='dock'||!inside(S,it.x,it.y))continue;const fr=front(it).filter(([x,y])=>inside(S,x,y));if(!fr.length)continue;
+  if(!fr.some(([x,y])=>go[idx(x,y)]))return 'Les clients ne pourraient plus atteindre un meuble depuis une entrée.';
+  if(!fr.some(([x,y])=>go[idx(x,y)]&&back[idx(x,y)]))return 'Les clients ne pourraient plus ressortir après un meuble.'}
  return null}
+// cases atteignables depuis src (rev : cases d'où l'on peut atteindre src), dans le magasin uniquement
+function reach(S,P,src,rev){const m=new Uint8Array(N),st=[];for(const [x,y] of src){const i=idx(x,y);if(P[i]&&!m[i]){m[i]=1;st.push(i)}}
+ while(st.length){const i=st.pop(),x=i%W,y=i/W|0;for(const [dx,dy] of DIRS){const nx=x+dx,ny=y+dy;if(!inside(S,nx,ny))continue;const j=idx(nx,ny);if(m[j])continue;
+  if(rev?canStep(S,P,nx,ny,x,y)&&P[j]:canStep(S,P,x,y,nx,ny)){m[j]=1;st.push(j)}}}return m}
 export function placeCost(S,t,x,y,r){const d=def(t);if(d.kind!=='spot')return d.price;return d.price+cells({t,x,y,r}).filter(c=>S.ground[c]!==1).length*GROUND_COST[1]}
 export function place(S,t,x,y,r,cat){const why=canPlace(S,t,x,y,r);if(why)return why;const d=def(t),price=placeCost(S,t,x,y,r);
  if(S.cash<price)return 'Pas assez d’argent.';if(d.kind==='spot')for(const c of cells({t,x,y,r}))S.ground[c]=1;
@@ -216,6 +239,8 @@ export function canUndo(S){return !!S._undo&&Date.now()-S._undo.at<UNDO_MS}
 export function undo(S){const u=S._undo;S._undo=null;if(!u||Date.now()-u.at>UNDO_MS)return 'Trop tard pour annuler.';
  if(u.type==='item'){const k=S.items.findIndex(o=>o.id===u.id);if(k<0)return 'Déjà retiré.';const it=S.items[k];if(it.cat&&it.stock)S.reserve[it.cat]+=it.stock;S.items.splice(k,1)}
  if(u.type==='wall')for(const i of u.cells)S.wall[i]=0;
+ if(u.type==='bars')S.bars=(S.bars||[]).filter(i=>!u.cells.includes(i));
+ if(u.type==='flows')for(const i in u.prev){if(u.prev[i]==null)delete S.flows[i];else S.flows[i]=u.prev[i]}
  if(u.type==='ground')u.cells.forEach((i,k)=>S.ground[i]=u.prev[k]);
  if(u.type==='lanes'){const o=JSON.parse(u.prev);S.lanes=o.lanes;S.yields=o.yields;S.laneNext=o.laneNext;S.lights=o.lights||[];S.lightNext=o.lightNext||0;RD.roadsChanged(S)}
  if(u.type==='extend'){const L=layout(S);if(u.cells.some(i=>L.occ[i]||S.wall[i]))return 'Des objets sont posés sur l’extension.';for(const i of u.cells)S.built[i]=0;bounds(S)}
@@ -225,6 +250,21 @@ function pay(S,v,k){S.cash-=v;S.month[k]+=v;if(S.dayStats&&k in S.dayStats)S.day
 // murs : ligne droite entre deux cases
 export function lineCells(a,b){const o=[];if(Math.abs(a[0]-b[0])>=Math.abs(a[1]-b[1])){const y=a[1],s=Math.sign(b[0]-a[0])||1;for(let x=a[0];x!==b[0]+s;x+=s)o.push([x,y])}else{const x=a[0],s=Math.sign(b[1]-a[1])||1;for(let y=a[1];y!==b[1]+s;y+=s)o.push([x,y])}return o}
 export function wallPlan(S,a,b){const L=layout(S);return lineCells(a,b).filter(([x,y])=>inside(S,x,y)&&!S.wall[idx(x,y)]&&!L.occ[idx(x,y)]&&!nearEntrance(S,x,y))}
+// ---------------------------------------------------------------- barrières et sens de passage (dedans comme dehors)
+// barrière : les clients ne passent pas (files d'attente, passages fermés) ; sens de passage : flèches au sol, pas de marche à contre-sens
+function walkable(S,x,y){if(!inLot(x,y))return false;const i=idx(x,y),L=layout(S);if(L.occ[i]||RD.net(S).raster[i])return false;if(inside(S,x,y))return !S.wall[i];return !!S.ground[i]}
+// cases voisines dans le même sens (une flèche se démolit en entier)
+function flowRun(S,i){const k=S.flows[i],out=[i],seen=new Set(out);for(let h=0;h<out.length;h++){const c=out[h],x=c%W,y=c/W|0;for(const [dx,dy] of DIRS){const j=idx(x+dx,y+dy);if(inLot(x+dx,y+dy)&&!seen.has(j)&&S.flows[j]===k){seen.add(j);out.push(j)}}}return out}
+export function barrierPlan(S,a,b){const has=new Set(S.bars||[]);return lineCells(a,b).filter(([x,y])=>walkable(S,x,y)&&!has.has(idx(x,y))&&!entApron(S,x,y)&&!isEntrance(S,x,y))}
+export function buildBarriers(S,a,b){const c=barrierPlan(S,a,b);if(!c.length)return 'Rien à installer ici.';const cost=c.length*D.BARRIER_COST;if(S.cash<cost)return 'Pas assez d’argent.';
+ const bars=S.bars||(S.bars=[]),add=c.map(([x,y])=>idx(x,y));bars.push(...add);dirty(S);const bad=reachProblem(S);if(bad){S.bars=bars.filter(i=>!add.includes(i));dirty(S);return bad}
+ pay(S,cost,'build');remember(S,{type:'bars',cells:add,cost});return null}
+const flowDir=(a,b)=>{const dx=b[0]-a[0],dy=b[1]-a[1];if(!dx&&!dy)return -1;return Math.abs(dx)>=Math.abs(dy)?(dx>0?3:1):(dy>0?0:2)};
+export function flowPlan(S,a,b){const k=flowDir(a,b);if(k<0)return {cells:[],dir:-1};const end=k%2?[b[0],a[1]]:[a[0],b[1]];
+ return {dir:k,cells:lineCells(a,end).filter(([x,y])=>walkable(S,x,y)&&!(S.bars||[]).includes(idx(x,y))&&S.flows?.[idx(x,y)]!==k)}}
+export function buildFlow(S,a,b){const p=flowPlan(S,a,b);if(p.dir<0)return 'Glisse le doigt dans le sens de passage.';if(!p.cells.length)return 'Rien à installer ici.';const cost=p.cells.length*D.FLOW_COST;if(S.cash<cost)return 'Pas assez d’argent.';
+ const fl=S.flows||(S.flows={}),prev={};for(const [x,y] of p.cells){const i=idx(x,y);prev[i]=fl[i];fl[i]=p.dir}dirty(S);const bad=reachProblem(S);
+ if(bad){for(const i in prev){if(prev[i]==null)delete fl[i];else fl[i]=prev[i]}dirty(S);return bad}pay(S,cost,'build');remember(S,{type:'flows',prev,cost});return null}
 export function buildWall(S,a,b){const c=wallPlan(S,a,b);if(!c.length)return 'Rien à construire ici.';const cost=c.length*D.WALL_COST;if(S.cash<cost)return 'Pas assez d’argent.';
  for(const [x,y] of c)S.wall[idx(x,y)]=1;dirty(S);const bad=reachProblem(S);if(bad){for(const [x,y] of c)S.wall[idx(x,y)]=0;dirty(S);return bad}
  pay(S,cost,'build');remember(S,{type:'wall',cells:c.map(([x,y])=>idx(x,y)),cost});return null}
@@ -237,6 +277,8 @@ const yieldNear=(S,x,z)=>(S.yields||[]).findIndex(y=>Math.hypot(y.x-x,y.y-z)<1.3
 export function eraseAt(S,x,y){if(!inLot(x,y))return 'Rien à démolir ici.';const i=idx(x,y),L=layout(S);
  if(L.occ[i]){removeItem(S,L.occ[i]);return null}
  {const e=entAt(S,x,y);if(e&&e.door){S.doors.splice(S.doors.indexOf(e.door),1);S.cash+=Math.round(D.ENTRANCE_COST*D.REFUND);dirty(S);return null}}
+ if((S.bars||[]).includes(i)){S.bars=S.bars.filter(c=>c!==i);S.cash+=Math.round(D.BARRIER_COST*D.REFUND);dirty(S);return null}
+ if(S.flows&&S.flows[i]!=null){for(const c of flowRun(S,i))delete S.flows[c];dirty(S);return null}
  if(S.wall[i]){S.cash+=Math.round((S.wall[i]===2?D.DOOR_COST:D.WALL_COST)*D.REFUND);S.wall[i]=0;dirty(S);return null}
  const t=treeAt(S,x,y);if(t>=0){S.trees.splice(t,1);dirty(S);return null}
  {const q=RD.lightAt(S,x+.5,y+.5);if(q){const snap=snapRoads(S);RD.removeLight(S,q.id);const r=Math.round(RD.LIGHT.cost*D.REFUND);S.cash+=r;dirty(S);remember(S,{type:'lanes',prev:snap,cost:-r});return null}}
@@ -248,6 +290,8 @@ export function eraseAt(S,x,y){if(!inLot(x,y))return 'Rien à démolir ici.';con
 export function eraseInfo(S,x,y){if(!inLot(x,y))return null;const i=idx(x,y),L=layout(S);
  if(L.occ[i]){const it=S.items.find(o=>o.id===L.occ[i]);return {label:def(it.t).name,refund:Math.round(def(it.t).price*D.REFUND),cells:cells(it),lost:reserveLoss(S,it.id)}}
  {const e=entAt(S,x,y);if(e&&e.door)return {label:'Entrée',refund:Math.round(D.ENTRANCE_COST*D.REFUND),cells:e.cells.map(([a,b])=>idx(a,b))}}
+ if((S.bars||[]).includes(i))return {label:'Barrière',refund:Math.round(D.BARRIER_COST*D.REFUND),cells:[i]};
+ if(S.flows&&S.flows[i]!=null)return {label:'Sens de passage',refund:0,cells:flowRun(S,i)};
  if(S.wall[i])return {label:S.wall[i]===2?'Porte':'Mur',refund:Math.round((S.wall[i]===2?D.DOOR_COST:D.WALL_COST)*D.REFUND),cells:[i]};
  if(treeAt(S,x,y)>=0)return {label:'Arbre',refund:0,cells:[i]};
  {const q=RD.lightAt(S,x+.5,y+.5);if(q)return {label:'Feu piéton',refund:Math.round(RD.LIGHT.cost*D.REFUND),cells:RD.net(S).lightCell.reduce((o,v,k)=>(v===q.id&&o.push(k),o),[])}}
@@ -401,7 +445,7 @@ export function hourLabel(S){const h=Math.floor(S.hour),m=Math.floor((S.hour-h)*
 export const monthOf=S=>Math.floor((S.d-1)/D.DAYS_PER_MONTH)+1,dayOfMonth=S=>(S.d-1)%D.DAYS_PER_MONTH+1;
 
 // dt : secondes réelles × vitesse
-export function step(S,R,dt){if(S.over)return;layout(S);R.lt=(R.lt||0)+dt;LIGHT_R=R;buildOcc(R);
+export function step(S,R,dt){if(S.over)return;layout(S);R.lt=(R.lt||0)+dt;LIGHT_R=R;
  if(R.staffDay!==S.d)spawnStaff(S,R);
  const h0=Math.floor(S.hour);S.hour+=dt/D.HOURS.realSecPerHour;if(Math.floor(S.hour)!==h0)startDay(S,R);// mise en rayon de la nuit à l'ouverture, une fois la livraison du matin rangée (au plus tard à 10 h)
  if(S.hour>=D.HOURS.open&&R.restockDay!==S.d&&(!(R.dawn||R.truck&&R.truck.dawn&&R.truck.st!=='out')||S.hour>=D.HOURS.open+2)){R.restockDay=S.d;morningRestock(S)}
@@ -544,28 +588,20 @@ export function syncStaff(S,R){// après une embauche ou un licenciement en jour
 
 // déplacement d'une case à l'autre en suivant le champ de distance ; renvoie true à l'arrivée
 let LIGHT_R=null;   // runtime courant (phase des feux piétons pour les piétons qui attendent)
-// une personne par case : chaque agent présent occupe sa case et celle où il va (assis, aux toilettes, dans une boutique ou dans le bus : non)
-let OCC=null;
-const present=a=>!a.hidden&&a.st!=='svuse'&&a.st!=='waitBus';
-function buildOcc(R){if(!OCC||OCC.length!==N)OCC=new Uint8Array(N);else OCC.fill(0);for(const a of R.agents){if(!present(a))continue;if(a.c>=0)OCC[a.c]++;if(a.nx>=0)OCC[a.nx]++}}
+
 function move(S,a,key,mode,speed,dt){const f=field(S,key,mode);let budget=speed*dt;
  for(let guard=0;guard<6&&budget>0;guard++){
   if(a.nx<0){if(f[a.c]===0)return true;
    if(f[a.c]<0){const j=rescue(S,a,f);if(j<0)return null;a.c=j;a.x=j%W+.5;a.y=(j/W|0)+.5;continue}
-   const x=a.c%W,y=a.c/W|0,d=f[a.c],cust=a.k==='c'&&OCC,free=j=>!cust||!OCC[j]||(a.block||0)>1.6;let best=-1,bd=d,anyway=-1,ad=d;
-   // case suivante : la plus proche du but ; un client ne va pas sur une case occupée (il attend ou contourne, et passe quand même s'il est coincé)
-   for(const [dx,dy] of DIRS){const nx=x+dx,ny=y+dy;if(inLot(nx,ny)){const j=idx(nx,ny),v=f[j];if(v>=0&&v<d&&canStep(S,mode==='c'?S._L.pc:S._L.ps,x,y,nx,ny)){if(v<ad){ad=v;anyway=j}if(v<bd&&free(j)){bd=v;best=j}}}}
-   // bloqué : après un court instant, pas de côté sur une case libre aussi proche du but (pour se croiser dans une allée)
-   if(best<0&&anyway>=0&&cust&&(a.block||0)>.35){for(const [dx,dy] of DIRS){const nx=x+dx,ny=y+dy;if(!inLot(nx,ny))continue;const j=idx(nx,ny);if(j!==a.prev&&f[j]>=0&&f[j]<=d&&!OCC[j]&&canStep(S,mode==='c'?S._L.pc:S._L.ps,x,y,nx,ny)){best=j;bd=f[j];break}}}
-   if(best<0&&anyway>=0){a.block=(a.block||0)+dt;a.dir=Math.atan2(anyway%W-x,(anyway/W|0)-y);return false}
-   // raccourci en diagonale quand les deux côtés sont libres (même revêtement)
-   if(best>=0&&bd>=1)for(const [dx,dy] of [[1,1],[1,-1],[-1,1],[-1,-1]]){const nx=x+dx,ny=y+dy;if(!inLot(nx,ny))continue;const j=idx(nx,ny),v=f[j],a1=f[idx(x+dx,y)],a2=f[idx(x,y+dy)];if(v>=0&&v<bd&&v<d-1&&free(j)&&inside(S,x,y)===inside(S,nx,ny)&&a1>=0&&a2>=0&&a1<d&&a2<d){best=j;break}}
-   if(best>=0){a.block=0;if(OCC)OCC[best]++}
+   const x=a.c%W,y=a.c/W|0,d=f[a.c],P=mode==='c'?S._L.pc:S._L.ps,FL=S._L.fl;let best=-1,bd=d;
+   for(const [dx,dy] of DIRS){const nx=x+dx,ny=y+dy;if(inLot(nx,ny)){const j=idx(nx,ny),v=f[j];if(v>=0&&v<bd&&canStep(S,P,x,y,nx,ny)){bd=v;best=j}}}
+   // raccourci en diagonale quand les deux côtés sont libres (même revêtement, pas de sens de passage)
+   if(best>=0&&bd>=1)for(const [dx,dy] of [[1,1],[1,-1],[-1,1],[-1,-1]]){const nx=x+dx,ny=y+dy;if(!inLot(nx,ny))continue;const j=idx(nx,ny),v=f[j],a1=f[idx(x+dx,y)],a2=f[idx(x,y+dy)];if(mode==='c'&&(FL[a.c]||FL[j]||FL[idx(x+dx,y)]||FL[idx(x,y+dy)]||!P[idx(x+dx,y)]||!P[idx(x,y+dy)]))continue;if(v>=0&&v<bd&&v<d-1&&inside(S,x,y)===inside(S,nx,ny)&&a1>=0&&a2>=0&&a1<d&&a2<d){best=j;break}}
    if(best>=0&&LIGHT_R){const NT=RD.net(S),lid=NT.lightCell[best];if(lid&&!NT.raster[a.c]&&RD.lightPhase(LIGHT_R,lid)!=='walk'){a.dir=Math.atan2(best%W-x,(best/W|0)-y);return false}}
    if(best<0)return null;a.nx=best}
   const tx=a.nx%W+.5,ty=(a.nx/W|0)+.5,dx=tx-a.x,dy=ty-a.y,dist=Math.hypot(dx,dy);
   a.dir=Math.atan2(dx,dy);
-  if(dist<=budget){if(OCC&&present(a)&&OCC[a.c])OCC[a.c]--;a.prev=a.c;a.x=tx;a.y=ty;a.c=a.nx;a.nx=-1;budget-=dist;a.steps=(a.steps||0)+1;if(a.k==='c'&&inside(S,a.c%W,a.c/W|0)){S.dirt&&(S.dirt[a.c]=Math.min(1,(S.dirt[a.c]||0)+.01));a.dirt+=S.dirt?Math.max(0,(S.dirt[a.c]||0)-.2):0}}
+  if(dist<=budget){a.x=tx;a.y=ty;a.c=a.nx;a.nx=-1;budget-=dist;a.steps=(a.steps||0)+1;if(a.k==='c'&&inside(S,a.c%W,a.c/W|0)){S.dirt&&(S.dirt[a.c]=Math.min(1,(S.dirt[a.c]||0)+.01));a.dirt+=S.dirt?Math.max(0,(S.dirt[a.c]||0)-.2):0}}
   else{a.x+=dx/dist*budget;a.y+=dy/dist*budget;budget=0}}
  return false}
 function rescue(S,a,f){const x=a.c%W,y=a.c/W|0;for(let r=1;r<5;r++)for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++){const nx=x+dx,ny=y+dy;if(inLot(nx,ny)&&f[idx(nx,ny)]>=0)return idx(nx,ny)}return -1}
@@ -582,8 +618,11 @@ function customer(S,R,a,dt){const sp=D.CUSTOMER.speed;
  if(a.need&&inside(S,a.c%W,a.c/W|0)&&a.st!=='svuse')for(const k of D.NEEDS.keys)a.need[k]+=D.NEEDS.rate[k]*dt;
  if(a.st==='shop')return nextWant(S,R,a);
  if(a.st==='svgo'||a.st==='svq'||a.st==='svuse')return service(S,R,a,dt);
- if(a.st==='goto'){const r=move(S,a,'item:'+a.item,'c',sp,dt);if(r===null){a.st='shop';return}if(r){const it=S.items.find(o=>o.id===a.item),w=a.want[0];a.st='pick';a.t=it&&def(it.t).kind==='counter'?2.2:(w&&D.CAT[w.cat]?.pick)||D.CUSTOMER.pick}return}
- if(a.st==='pick'){a.t-=dt;if(a.t<=0)pick(S,R,a);return}
+ if(a.st==='goto'){const r=move(S,a,'item:'+a.item,'c',sp,dt);if(r===null){a.st='shop';return}if(r)return joinPick(S,R,a);return}
+ if(a.st==='pq'){const it=S.items.find(o=>o.id===a.item),q=it&&R.queues.get(it.id);if(!it||!q||!q.includes(a)){unqueue(R,a);a.st='shop';return}
+  const sl=pickSlots(it);if(q.indexOf(a)<sl){a.st='pick';a.t=pickTime(it,a);return}
+  a.wait+=dt;if(a.wait>pickWait(it,a)*1.6){unqueue(R,a);giveUpPick(S,R,a,it)}return}
+ if(a.st==='pick'){a.t-=dt;if(a.t<=0){unqueue(R,a);pick(S,R,a)}return}
  if(a.st==='checkout')return chooseCheckout(S,R,a);
  if(a.st==='queue'){const it=S.items.find(o=>o.id===a.item);if(!it||!usable(S,it)){unqueue(R,a);a.st='checkout';return}
   a.wait+=dt;if(a.wait>D.CUSTOMER.patience){unqueue(R,a);a.sat-=25;bubble(R,a,'⌛');S.dayStats.angry++;th(S,'queue');returnGoods(S,a);a.st='leave';return}
@@ -604,7 +643,7 @@ function nextWant(S,R,a){
   const all=S.items.filter(it=>sells(S,it,w.cat)),ok=all.filter(it=>it.stock>0);
   if(!all.length){th(S,'notsold:'+w.cat);a.want.shift();a.sat-=1.5;S.dayStats.notSold++;continue}
   if(!ok.length){th(S,'rupture:'+w.cat);a.want.shift();a.sat-=12;S.dayStats.rupture++;bubble(R,a,'!');continue}
-  let best=ok[0],bd=1e9;for(const it of ok){const d=Math.abs(it.x-x)+Math.abs(it.y-y);if(d<bd){bd=d;best=it}}
+  let best=ok[0],bd=1e9;for(const it of ok){if(a.skip&&a.skip.includes(it.id))continue;const d=Math.abs(it.x-x)+Math.abs(it.y-y)+(R.queues.get(it.id)||[]).length*3;if(d<bd){bd=d;best=it}}
   a.item=best.id;a.st='goto';return}
  a.st='checkout'}
 function pick(S,R,a){const w=a.want[0],it=S.items.find(o=>o.id===a.item);
@@ -620,14 +659,11 @@ function service(S,R,a,dt){const it=S.items.find(o=>o.id===a.item),d=it&&def(it.
  if(!it||(d.kind==='shop'&&!manned(S,it))){unqueue(R,a);a.hidden=false;a.st='shop';return}
  if(a.st==='svgo'){const r=move(S,a,'item:'+it.id,'c',sp,dt);if(r===null){a.st='shop';return}if(!r)return;
   if(d.kind==='shop'){const px=shopPx(S,it.t),p=px<=100?1:Math.max(.05,1-(px-100)*.012);if(R.rnd()>=p){a.sat-=5;S.dayStats.expensive++;th(S,'shopcher:'+it.t);bubble(R,a,'€');a.st='shop';return}}
-  const q=R.queues.get(it.id)||[];q.push(a);R.queues.set(it.id,q);a.st='svq';a.wait=0;return}
+  const q=R.queues.get(it.id)||[],sl=d.slots||1,est=Math.max(0,q.length-sl+1)*(d.kind==='shop'?d.svc:d.use)/sl,urg=a.svc!=='shop'&&a.need?Math.min(2,a.need[a.svc]/D.NEEDS.th):1;
+  if(q.length>=sl&&est>(d.wait||D.CUSTOMER.patience*.6)*urg)return queueGiveUp(S,R,a,it,d);
+  q.push(a);R.queues.set(it.id,q);a.st='svq';a.wait=0;return}
  if(a.st==='svq'){const q=R.queues.get(it.id)||[],k=q.indexOf(a);if(k<0){a.st='shop';return}
-  a.wait+=dt;if(a.wait>(d.wait||D.CUSTOMER.patience)){unqueue(R,a);bubble(R,a,'⌛');
-   // équipement plein : on en cherche un autre, sinon on renonce (et ça se ressent sur l'humeur)
-   if(a.svc!=='shop'){const k=a.svc;(a.tried||(a.tried=[])).push(it.id);const other=providers(S,k).filter(o=>!a.tried.includes(o.id));
-    if(other.length&&a.tried.length<3){const x=a.c%W,y=a.c/W|0;let b2=other[0],bv=1e9;for(const o of other){const v=Math.abs(o.x-x)+Math.abs(o.y-y)+(R.queues.get(o.id)||[]).length*4;if(v<bv){bv=v;b2=o}}a.item=b2.id;a.st='svgo';a.sat-=1;return}
-    a.sat-=D.NEEDS.pen[k]*.7;th(S,'full:'+k);S.dayStats.needs++;a.need[k]*=.4;a.tried=null;a.st='shop';return}
-   a.sat-=8;th(S,'svqueue:'+it.t);a.st='shop';return}
+  a.wait+=dt;if(a.wait>(d.wait||D.CUSTOMER.patience)){unqueue(R,a);return queueGiveUp(S,R,a,it,d)}
   if(k<(d.slots||1)){a.st='svuse';a.t=(d.kind==='shop'?d.svc:d.use)*(.8+.4*R.rnd());a.hidden=!!(d.hide||d.inside);if(a.hidden){const F=[it.x+size(it)[0]/2,it.y+size(it)[1]/2];a.hx=F[0];a.hy=F[1]}}
   else move(S,a,'item:'+it.id,'c',sp,dt);return}
  // en service
@@ -638,6 +674,12 @@ function service(S,R,a,dt){const it=S.items.find(o=>o.id===a.item),d=it&&def(it.
  a.tried=null;
  if(d.serves&&a.need)for(const k in d.serves){if(a.need[k]>=D.NEEDS.th*.8){a.sat+=1.5;if(R.rnd()<.2)th(S,'ok:'+k)}a.need[k]=Math.max(0,a.need[k]-d.serves[k]);if(a.need[k]<D.NEEDS.th)a.nq[k]=0}
  a.st='shop'}
+// attente trop longue (estimée ou subie) : pour un besoin, on essaie un autre équipement (3 au plus), sinon on renonce ; ça se ressent sur l'humeur
+function queueGiveUp(S,R,a,it,d){bubble(R,a,'⌛');
+ if(a.svc!=='shop'){const k=a.svc;(a.tried||(a.tried=[])).push(it.id);const other=providers(S,k).filter(o=>!a.tried.includes(o.id));
+  if(other.length&&a.tried.length<3){const x=a.c%W,y=a.c/W|0;let b2=other[0],bv=1e9;for(const o of other){const v=Math.abs(o.x-x)+Math.abs(o.y-y)+(R.queues.get(o.id)||[]).length*4;if(v<bv){bv=v;b2=o}}a.item=b2.id;a.st='svgo';a.sat-=1;return}
+  a.sat-=D.NEEDS.pen[k]*.7;th(S,'full:'+k);S.dayStats.needs++;a.need[k]*=.4;a.tried=null;a.st='shop';return}
+ a.sat-=d.kind==='shop'?3:2;th(S,'svqueue:'+it.t);a.st='shop'}
 function usable(S,it){const k=def(it.t).kind;return k==='self'||(k==='checkout'&&manned(S,it))}
 function chooseCheckout(S,R,a){if(!a.basket.units){a.st='leave';return}
  const list=S.items.filter(it=>usable(S,it));
@@ -652,6 +694,19 @@ function payAt(S,R,a,it){const b=a.basket,wp=Math.min(30,Math.max(0,a.wait-8)*1.
  else{S.cash+=b.value;S.dayStats.rev+=b.value;S.month.rev+=b.value;ev(R,{t:'pay',x:a.x,y:a.y,v:b.value})}
  S.dayStats.cogs+=b.cost;S.month.cogs+=b.cost;S.dayStats.units+=b.units;
  for(const c in b.cats){S.sold[c]=(S.sold[c]||0)+b.cats[c];S.dayStats.cats[c]=(S.dayStats.cats[c]||0)+b.cats[c];S.monthCat=S.monthCat||{};S.monthCat[c]=(S.monthCat[c]||0)+b.cats[c]*price(S,c)}b.paid=true}
+// rayons et comptoirs : autant de clients à la fois que de cases devant (un seul au comptoir) ; les autres font la queue.
+// Avant de s'y mettre, le client estime l'attente : trop longue pour ce qu'il veut, il essaie un autre rayon du même produit ou renonce.
+const pickSlots=it=>def(it.t).kind==='counter'?1:Math.max(1,front(it).length);
+const pickTime=(it,a)=>{const w=a.want[0];return def(it.t).kind==='counter'?2.2:(w&&D.CAT[w.cat]?.pick)||D.CUSTOMER.pick};
+const pickWait=(it,a)=>(def(it.t).kind==='counter'?24:9)*(1+.25*((a.want[0]?.q||1)-1));
+function joinPick(S,R,a){const it=S.items.find(o=>o.id===a.item);if(!it){a.st='shop';return}
+ const q=R.queues.get(it.id)||[],sl=pickSlots(it),est=Math.max(0,q.length-sl+1)*pickTime(it,a)/sl;
+ if(q.length>=sl&&est>pickWait(it,a))return giveUpPick(S,R,a,it);
+ q.push(a);R.queues.set(it.id,q);if(q.indexOf(a)<sl){a.st='pick';a.t=pickTime(it,a)}else{a.st='pq';a.wait=0}}
+function giveUpPick(S,R,a,it){bubble(R,a,'⌛');(a.skip||(a.skip=[])).push(it.id);
+ const w=a.want[0],other=w&&S.items.find(o=>o.id!==it.id&&!a.skip.includes(o.id)&&o.cat===w.cat&&o.stock>0&&usable(S,o));
+ if(other&&a.skip.length<3){a.st='shop';return}
+ a.want.shift();a.skip=null;a.sat-=2;th(S,'attente:'+(w?w.cat:''));a.st='shop'}
 function returnGoods(S,a){for(const c in a.basket.cats)S.reserve[c]+=a.basket.cats[c];a.basket={units:0,value:0,cost:0,cats:{}}}
 function leaveNow(S,R,a){finishCustomer(S,R,a,false)}
 function finishCustomer(S,R,a,forced,keep){if(!a.done){a.done=true;if(forced&&a.basket.units&&!a.basket.paid){unqueue(R,a);payAt(S,R,a,null)}else unqueue(R,a);
@@ -813,7 +868,7 @@ function migrateLot(o){const ow=D.OLD_LOT.w,oh=D.OLD_LOT.h,X=D.OFF.x,Y=D.OFF.y,s
  n.trees=(o.trees||[]).map(([x,y,s])=>[x+X,y+Y,s]);delete n.rt;delete o.rt;n.migrated=true;return n}
 export function load(o){if(o&&o.v===2&&o.lw===D.OLD_LOT.w&&o.lh===D.OLD_LOT.h&&W!==D.OLD_LOT.w)o=migrateLot(o);
  if(!o||o.v!==2||(o.lw&&o.lw!==W)||(o.lh&&o.lh!==H))return null;const S={...o,wall:[...o.wall].map(Number),zone:[...o.zone].map(Number),built:[...o.built].map(Number),ground:[...o.ground].map(Number),items:o.items.map(it=>({...it,inc:0}))};
- S.lanes=S.lanes||[];S.yields=S.yields||[];S.lights=S.lights||[];S.lic=S.lic||{};S.shopPx=S.shopPx||{};
+ S.lanes=S.lanes||[];S.yields=S.yields||[];S.lights=S.lights||[];S.lic=S.lic||{};S.shopPx=S.shopPx||{};S.bars=S.bars||[];S.flows=S.flows||{};
  for(const c of D.CATS){if(S.reserve[c.id]==null)S.reserve[c.id]=0;if(S.margin[c.id]==null)S.margin[c.id]=c.ref*(S.mscale||D.MARGIN_SCALE)/D.MARGIN_SCALE;if(S.alloc[c.id]==null)S.alloc[c.id]=0;if(S.sold[c.id]==null)S.sold[c.id]=0}
  for(const r of D.ROLES){if(S.staff[r.id]==null)S.staff[r.id]=0;if(S.staffDays[r.id]==null)S.staffDays[r.id]=0}
  {const m=blankMonth(),d=blankDay();for(const k in m)if(S.month[k]==null)S.month[k]=m[k];if(S.dayStats)for(const k in d)if(S.dayStats[k]==null)S.dayStats[k]=d[k]}S.monthCat=S.monthCat||{};S.catHist=S.catHist||[];bounds(S);if(!S.trees)S.trees=genTrees(S);if(!S.plog)S.plog=(S.history||[]).map(h=>[h.d,h.profit,h.cash]);

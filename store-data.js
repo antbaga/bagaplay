@@ -164,10 +164,13 @@ export const NEEDS={keys:['faim','soif','wc','fatigue'],start:{faim:78,soif:78,w
 export const MAX_CUSTOMERS=1000;   // plafond de clients par jour (au-delà, le centre ne grossit plus en monde mais en paniers)
 export const TABS=[['rayons','Rayons'],['frais','Frais'],['coupe','À la coupe'],['caisses','Caisses'],['reserve','Réserve'],['parking','Extérieur'],['murs','Murs'],['deco','Déco'],['agrandir','Agrandir'],['special','Spécialisés'],['boutiques','Boutiques'],['galerie','Galerie'],['licences','Licences']];
 export const ENTRANCE_COST=2500;
+export const BARRIER_COST=60,FLOW_COST=20;
 export const TOOLS=[
  {id:'wall',name:'Mur',price:WALL_COST,hint:'Touche le début puis la fin du mur.'},
  {id:'door',name:'Porte',price:DOOR_COST,hint:'Touche un mur pour y mettre une porte (employés seulement vers la réserve).'},
- {id:'entrance',name:'Entrée',price:ENTRANCE_COST,hint:'Touche le bord du magasin, côté intérieur : une entrée de 2 cases s’ouvre vers l’extérieur.'},
+ {id:'entrance',name:'Entrée',price:ENTRANCE_COST,hint:'Touche le bord du magasin, côté intérieur : une entrée de 2 cases s’ouvre vers l’extérieur. Touche ensuite une entrée (sans outil) pour la régler en entrée, sortie ou les deux.'},
+ {id:'barrier',name:'Barrière',price:BARRIER_COST,hint:'Trace une ligne de barrières : les clients ne passent pas. Pour guider une file ou fermer un passage, dedans comme dehors.'},
+ {id:'flow',name:'Sens de passage',price:FLOW_COST,hint:'Glisse le doigt dans le sens de marche : flèches au sol, les clients ne vont pas à contre-sens.'},
  {id:'zoneR',name:'Zone réserve',price:0,hint:'Touche deux coins : les clients n’y entrent pas.'},
  {id:'zoneS',name:'Zone magasin',price:0,hint:'Touche deux coins pour rendre la zone aux clients.'},
  {id:'erase',name:'Démolir',price:0,hint:'Touche un meuble ou un mur : il est revendu à moitié prix.'}

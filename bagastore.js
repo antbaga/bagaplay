@@ -41,7 +41,7 @@ export function bagastore(c){
  if(!ren){wrap.append(el('p','st-nogl','La 3D (WebGL) n’est pas disponible sur cet appareil.'));return {}}
  const cam=camera();const home=()=>{cam.tx=(S.b.x0+S.b.x1)/2;cam.tz=(S.b.y0+S.b.y1)/2+2;cam.zoom=Math.max(14,Math.min(26,(S.b.x1-S.b.x0)*.8))};home();
  const Bs=new Builder(1<<17),Ba=new Builder(1<<14),Bg=new Builder(1<<12),Bsel=new Builder(1<<11),Bac=new Builder(1<<9);
- let mode=null,sel=null,panel=null,speedIdx=0,hold=false,lastStatic=-1,staticKey='',time=0,saveT=0,floats=[],pending=null,ghostTint=[0,0,0,0],anchor=null,frameDt=.016;
+ let doorSel=null,mode=null,sel=null,panel=null,speedIdx=0,hold=false,lastStatic=-1,staticKey='',time=0,saveT=0,floats=[],pending=null,ghostTint=[0,0,0,0],anchor=null,frameDt=.016;
  const view=()=>{const s=Math.sin(cam.yawTo),k=Math.cos(cam.yawTo);return {yaw:cam.yaw,near:{S:k>.3,N:k<-.3,E:s>.3,W:s<-.3},sel:null,zones:!!mode,hide:mode?.move||null,dt:frameDt}};
 
  // ---- bruitages (synthétisés)
@@ -79,7 +79,7 @@ export function bagastore(c){
 
  // ---- toucher : glisser = déplacer la vue, pincer = zoom, toucher = action
  const pts=new Map();let pinch=null,drag=null;
- const DRAW=new Set(['wall','zoneR','zoneS','extend','asphalt','walk','cross']);const GT={asphalt:1,walk:3,cross:4};
+ const DRAW=new Set(['wall','barrier','flow','zoneR','zoneS','extend','asphalt','walk','cross']);const GT={asphalt:1,walk:3,cross:4};
  const cellAt=(px,py)=>{const [gx,gz]=ground(cam,px,py);return [Math.floor(gx),Math.floor(gz)]};
  c.listen(cv,'pointerdown',e=>{cv.setPointerCapture?.(e.pointerId);pts.set(e.pointerId,{x:e.offsetX,y:e.offsetY,x0:e.offsetX,y0:e.offsetY,t:performance.now()});
   if(pts.size===2){const [a,b]=[...pts.values()];pinch={d:Math.hypot(a.x-b.x,a.y-b.y),z:cam.zoom,mx:(a.x+b.x)/2,my:(a.y+b.y)/2};if(drag?.draw&&mode){mode.a=mode.b=null;updatePlace()}drag={moved:true}}
@@ -111,8 +111,10 @@ export function bagastore(c){
    if(t==='ring'){const vx=Math.round(gx),vz=Math.round(gz);if(mode.pos&&mode.pos[0]===vx&&mode.pos[1]===vz)return applyTool();mode.pos=[vx,vz];updatePlace();return}
    if(t==='yield'){const why=E.placeYield(S,gx,gz);if(why){msg(why);sfx('error')}else{sfx('place');save()}updatePlace();return}
    return}
-  // sans outil : sélection d'un meuble (contour)
-  const L=E.layout(S),id=E.inLot(x,y)?L.occ[E.idx(x,y)]:0;sel=id||null;if(sel){sfx('click');openPanel('item')}else if(panel==='item')closePanel()}
+  // sans outil : sélection d'un meuble (contour) ou d'une entrée (sens entrée / sortie)
+  const L=E.layout(S),id=E.inLot(x,y)?L.occ[E.idx(x,y)]:0;sel=id||null;if(sel){sfx('click');openPanel('item');return}
+  if(E.inLot(x,y)&&E.entranceAt(S,x,y)){doorSel=[x,y];sfx('click');openPanel('door');return}
+  if(panel==='item'||panel==='door')closePanel()}
 
  // ---- placement : aperçu, petite bulle ✕ / ✓ au-dessus de l'objet
  const TOOL_NAMES={extend:'Agrandir',asphalt:'Goudron',lane:'Route',ring:'Rond-point',walk:'Trottoir',cross:'Passage piéton',yield:'Cédez le passage',light:'Feu piéton'},TOOL_HINT={lane:'Trace une voie dans le sens de circulation. Tire un bout pour la rallonger, un rond blanc ou un + pour la courber.',ring:'Touche le centre du rond-point. ↻ change la taille. Les voies qui le traversent sont coupées et raccordées à l’anneau.',yield:'Touche une voie juste avant un croisement : elle laisse passer l’autre. Touche-le à nouveau pour l’enlever.',light:'Glisse le doigt d’un trottoir à l’autre, en travers des voies (sur un passage piéton). Le feu alterne voitures et piétons.',cross:'Glisse le doigt en travers d’une route.',extend:'Glisse le doigt pour tracer l’extension.',asphalt:'Glisse le doigt pour goudronner une zone.',walk:'Glisse le doigt pour poser un trottoir.',road:'Glisse le doigt pour tracer une route.',wall:'Glisse le doigt pour tracer le mur.',zoneR:'Glisse le doigt sur la zone.',zoneS:'Glisse le doigt sur la zone.',erase:'Touche ce que tu veux démolir.'};
@@ -125,6 +127,9 @@ export function bagastore(c){
    if(mode.pos){why=mode.move?E.canMove(S,mode.move,mode.pos[0],mode.pos[1],mode.r):E.canPlace(S,mode.t,mode.pos[0],mode.pos[1],mode.r);if(d.zone!==2&&d.kind!=='decor')access=E.front({t:mode.t,x:mode.pos[0],y:mode.pos[1],r:mode.r});ok=!why;g.item={t:mode.t,x:mode.pos[0],y:mode.pos[1],r:mode.r};const [w,dd]=mode.r%2?[d.d,d.w]:[d.w,d.d];anchor=[mode.pos[0]+w/2,d.h+1.6,mode.pos[1]+dd/2]}}
   else{const t=mode.id;label=TOOL_NAMES[t]||D.TOOLS.find(o=>o.id===t).name;const b=mode.b||mode.a;
    if(t==='wall'&&mode.a){const cl=E.wallPlan(S,mode.a,b);g.cells=cl;g.h=1.3;cost=cl.length*D.WALL_COST;ok=cl.length>0;why=cl.length?'':'Rien à construire ici.'}
+   if(t==='barrier'&&mode.a){const cl=E.barrierPlan(S,mode.a,b);g.cells=cl;g.h=1;cost=cl.length*D.BARRIER_COST;ok=cl.length>0;why=cl.length?'':'Rien à installer ici.';if(cl.length)label=`Barrière : ${cl.length} m`}
+   if(t==='flow'&&mode.a){const p=E.flowPlan(S,mode.a,b);g.cells=p.cells;g.h=.04;cost=p.cells.length*D.FLOW_COST;ok=p.cells.length>0;why=p.dir<0?'':p.cells.length?'':'Rien à installer ici.';
+    if(p.dir>=0){const [dx,dy]=E.DIRS[p.dir],e=p.dir%2?[b[0],mode.a[1]]:[mode.a[0],b[1]];g.poly=[[mode.a[0]+.5-dx*.4,mode.a[1]+.5-dy*.4],[e[0]+.5+dx*.4,e[1]+.5+dy*.4]];if(p.cells.length)label=`Sens de passage : ${p.cells.length} m`}}
    if((t==='zoneR'||t==='zoneS')&&mode.a){const o=[];for(let y=Math.min(mode.a[1],b[1]);y<=Math.max(mode.a[1],b[1]);y++)for(let x=Math.min(mode.a[0],b[0]);x<=Math.max(mode.a[0],b[0]);x++)if(E.inside(S,x,y))o.push([x,y]);g.cells=o;g.h=.06;ok=o.length>0}
    if(t==='extend'&&mode.a){const p=E.extendPlan(S,mode.a,b);g.cells=p.cells;g.h=.12;cost=p.cost;ok=!p.why;why=p.why||'';if(p.m2)label=`Agrandir : ${p.m2} m²`}
    if(GT[t]&&mode.a){const p=E.groundPlan(S,mode.a,b,GT[t]);g.cells=p.cells.map(i=>[i%D.LOT_W,i/D.LOT_W|0]);g.h=.04;cost=p.cost;ok=!p.why;why=p.why||'';if(p.cells.length)label=`${TOOL_NAMES[t]} : ${p.cells.length} m²`}
@@ -177,6 +182,8 @@ export function bagastore(c){
   const ret=JSON.stringify([mode.poly,mode.trim])!==key0;if(!first)return ret;return ret}
  function applyTool(){let why=null;const t=mode.id;
   if(t==='wall')why=E.buildWall(S,mode.a,mode.b);
+  if(t==='barrier')why=E.buildBarriers(S,mode.a,mode.b);
+  if(t==='flow')why=E.buildFlow(S,mode.a,mode.b);
   if(t==='zoneR'||t==='zoneS')why=E.paintZone(S,mode.a,mode.b,t==='zoneR'?1:0);
   if(t==='erase')why=E.eraseAt(S,...mode.a);
   if(t==='extend'){why=E.extendRect(S,mode.a,mode.b);if(!why)save()}
@@ -201,10 +208,16 @@ export function bagastore(c){
  const bars=(items,fmt=eur)=>{const box=el('div','st-hbars'),max=Math.max(1,...items.map(i=>Math.abs(i[1])));for(const [k,v,col] of items){const r=el('div','st-hbar');const m=el('i');const u=el('u');u.style.width=Math.abs(v)/max*100+'%';if(col)u.style.background=col;m.append(u);r.append(el('span',null,k),m,el('b',null,fmt(v)));box.append(r)}return box};
  let panelKey='';
  function renderPanel(){if(!panel)return;const old=sheet.querySelector('.st-body'),top=old?old.scrollTop:0,key=[panel,buildTab,stockTab,moneyTab,sel].join(),ot=sheet.querySelector('.st-tabs'),left=ot?ot.scrollLeft:0,samePanel=panelKey.split(',')[0]===panel;
-  const fn={build:pBuild,stock:pStock,team:pTeam,money:pMoney,item:pItem,report:pReport,welcome:pWelcome}[panel];fn&&fn();
+  const fn={build:pBuild,stock:pStock,team:pTeam,money:pMoney,item:pItem,door:pDoor,report:pReport,welcome:pWelcome}[panel];fn&&fn();
   const nb=sheet.querySelector('.st-body');if(nb&&key===panelKey)nb.scrollTop=top;const nt=sheet.querySelector('.st-tabs');if(nt&&samePanel)nt.scrollLeft=left;panelKey=key}
+ // entrée sélectionnée : réglage du sens (entrée, sortie, les deux)
+ const DOOR_MODES=[['both','Entrée et sortie','Les clients entrent et sortent par ici.'],['in','Entrée seulement','Les clients entrent par ici, mais ressortent ailleurs.'],['out','Sortie seulement','Les clients ressortent par ici, mais entrent ailleurs.']];
+ function pDoor(){const e=doorSel&&E.entranceAt(S,doorSel[0],doorSel[1]);if(!e){closePanel();return}const body=head(e.main?'Entrée principale':'Entrée');
+  body.append(el('p','st-note','Choisis le sens de passage des clients. Le personnel passe toujours dans les deux sens.'));
+  for(const [m,name,sub] of DOOR_MODES){const b=btn(name,()=>{const why=E.setEntranceMode(S,doorSel[0],doorSel[1],m);if(why){msg(why);sfx('error')}else{staticKey='';save()}renderPanel()},'st-small wide st-door'+(e.mode===m?' on':''));
+   const r=row(b);r.append(el('small','st-note',sub));body.append(r)}}
  function pBuild(){const body=head('Construire · '+eur(S.cash),D.TABS,buildTab,v=>buildTab=v);const grid=el('div','st-cards');body.append(grid);
-  if(buildTab==='murs'){for(const t of D.TOOLS){const b=card(t.name,t.price?eur(t.price)+(t.id==='wall'?' / m':''):'');b.onclick=()=>{sfx('click');startTool(t.id)};grid.append(b)}return}
+  if(buildTab==='murs'){for(const t of D.TOOLS){const b=card(t.name,t.price?eur(t.price)+(['wall','barrier','flow'].includes(t.id)?' / m':''):'');b.onclick=()=>{sfx('click');startTool(t.id)};grid.append(b)}return}
   if(buildTab==='parking'){for(const [id,name,price,sub] of [['lane','Route',RD.LANE_COST+' € / m','Une voie à sens unique, 2 de large'],['ring','Rond-point',eur(RD.laneCost({ring:{r:4}})),'Les voies qui arrivent cèdent'],['yield','Cédez le passage','Gratuit','À poser avant un croisement'],['cross','Passage piéton',eur(E.GROUND_COST[4])+' / m²','Sur une voie, 1 de large'],['light','Feu piéton',eur(RD.LIGHT.cost),'En travers des voies, sur un passage piéton'],['walk','Trottoir',eur(E.GROUND_COST[3])+' / m²','Chemin des piétons (1 de large)'],['asphalt','Goudron',eur(E.GROUND_COST[1])+' / m²','Sol des places, piétons']]){const b=card(name,price,sub);b.onclick=()=>{sfx('click');startTool(id)};grid.append(b)}}
   if(buildTab==='agrandir'){const b=card('Agrandir le magasin',eur(D.EXTEND.perM2)+' / m²','Sol et murs compris');b.onclick=()=>{sfx('click');startTool('extend')};grid.append(b);
    body.append(el('p','st-note',`Surface : ${E.area(S)} m² · vente ${E.salesArea(S)} m²`));return}
@@ -223,7 +236,7 @@ export function bagastore(c){
  function pStock(){const body=head('Stock',[['stock','Stock'],['stats','Statistiques'],['avis','Avis']],stockTab,v=>stockTab=v);({stock:stockList,stats:stockStats,avis:opinions})[stockTab](body)}
  const cn=k=>D.CAT[k]?D.CAT[k].name.toLowerCase():k;
  const PHRASES={rupture:k=>['Il n’y a plus de '+cn(k)+' !',-2],notsold:k=>['Dommage, pas de '+cn(k)+' ici.',-1],cher:k=>['Le rayon '+cn(k)+' est trop cher.',-2],cheap:k=>['Les prix '+cn(k)+' sont intéressants.',1],
-  counter:k=>['J’adore le comptoir '+cn(k)+' !',2],queue:()=>['La queue aux caisses est interminable.',-2],dirt:()=>['C’est sale par terre…',-2],happy:()=>['Super magasin, je reviendrai !',2],decor:()=>['C’est joli et agréable ici.',1],
+  counter:k=>['J’adore le comptoir '+cn(k)+' !',2],queue:()=>['La queue aux caisses est interminable.',-2],attente:k=>['Trop de monde au rayon '+cn(k)+', j’ai laissé tomber.',-1],dirt:()=>['C’est sale par terre…',-2],happy:()=>['Super magasin, je reviendrai !',2],decor:()=>['C’est joli et agréable ici.',1],
   noparking:()=>['Impossible de se garer !',-2],nocart:()=>['Il n’y a même pas de caddies.',-1],nocheckout:()=>['Aucune caisse ouverte !',-2],
   need:k=>[{faim:'J’ai faim et il n’y a rien à manger.',soif:'J’ai soif, rien à boire ici.',wc:'Il n’y a même pas de toilettes !',fatigue:'Pas un banc pour s’asseoir…'}[k],-2],
   ok:k=>[{faim:'Bien mangé, merci !',soif:'Ça fait du bien de boire un coup.',wc:'Heureusement qu’il y a des toilettes.',fatigue:'Une petite pause sur un banc, parfait.'}[k],1],
