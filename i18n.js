@@ -161,9 +161,9 @@
   "L’entrée de la place doit donner sur le côté d’une voie.":"The space’s entrance must face the side of a lane.",
   "L’arrêt de bus se place au bord d’une voie (devant tourné vers la voie).":"The bus stop goes beside a lane (front facing the lane).",
   "Aucune route n’entre sur le terrain : trace une ligne depuis un bord.":"No road enters the plot: draw a line from an edge.",
-  "Le camion ne peut pas venir au quai : fais passer une voie juste derrière, reliée à une entrée et à une sortie du terrain.":"The truck can’t reach the dock: run a lane right behind it, connected to an entry and an exit of the plot.",
+  "Le camion ne peut pas venir au quai : fais passer une voie juste derrière (ou derrière une zone de retournement collée au quai), reliée à une entrée et à une sortie du terrain.":"The truck can’t reach the dock: run a lane right behind it (or behind a turning area placed against the dock), connected to an entrance and an exit of the lot.",
   "Les places de parking ne sont reliées à aucune entrée ou sortie du terrain.":"The parking spaces aren’t connected to an entry or exit of the plot.",
-  "Le camion ne peut pas venir au quai (voie derrière le quai).":"The truck can’t reach the dock (lane behind the dock).",
+  "Le camion ne peut pas venir au quai (voie derrière le quai).":"The truck can’t reach the dock (lane behind the dock).","Le camion ne peut pas venir au quai (voie derrière le quai ou zone de retournement).":"The truck can’t reach the dock (lane behind the dock, or a turning area).","Zone de retournement":"Truck turning area","Derrière un quai : le camion recule à quai":"Behind a dock: the truck backs up to it","En attente du quai":"Waiting for the dock","Le chauffeur décharge seul":"The driver is unloading alone",
   "Rond-point":"Roundabout",
   "Sol":"Ground",
   "Bouchons : sépare les entrées et les sorties de parking (lignes à sens unique), et pose des cédez-le-passage aux croisements.":"Traffic jams: keep parking entries and exits apart (one-way lines), and add give-way signs at crossings.",
@@ -217,6 +217,7 @@
 function storeCat(x){for(var k in D)if(k.toLowerCase()===x.toLowerCase())return D[k];return x}
  var P=[
   // BagaStore
+  [/^Livraisons rangées : (\d+) camions · (.+)$/,function(m){return 'Deliveries put away: '+m[1]+' trucks · '+m[2]}],
   [/^Déchargement (\d+) %$/,function(m){return 'Unloading '+m[1]+'%'}],
   [/^(Trottoir) : (\d+) m²$/,function(m){return 'Sidewalk: '+m[2]+' m²'}],
   [/^Tu gagnes de l’argent : (.+) par jour en moyenne\.$/,function(m){return 'You’re making money: '+m[1]+' a day on average.'}],
@@ -453,7 +454,8 @@ function storeCat(x){for(var k in D)if(k.toLowerCase()===x.toLowerCase())return 
   [/^Carte (.+)$/,function(m){return 'Card '+m[1]}],
   [/^Retourner la carte (\d+)$/,function(m){return 'Flip card '+m[1]}],
   [/^Case (\d+)$/,function(m){return 'Square '+m[1]}],
-  [/^Déplacer la pièce (\d+)$/,function(m){return 'Move tile '+m[1]}]
+  [/^Déplacer la pièce (\d+)$/,function(m){return 'Move tile '+m[1]}],
+  [/^(.+) · (\d+) %$/,function(m){var c=storeCat(m[1]);return c===m[1]?null:c+' · '+m[2]+'%'}]
  ];
  var cache=new Map();
  function translate(s){

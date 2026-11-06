@@ -156,6 +156,13 @@ export function item(B,S,it,v){const F=frame(it),d=F.d,w=d.w,dd=d.d,fill=d.cap?M
  case 'dock':{L(0,0,0,w,.15,dd,rgb('#a7aaae'));for(let x=0;x<w;x+=.5)L(x,.15,.02,x+.25,.17,.12,C.yellow);
   L(.1,0,-.05,w-.1,1.3,.02,C.dark);
   break}
+ case 'turn':{// zone de retournement : goudron, bordure jaune en tirets, flèche de demi-tour peinte au centre
+  L(0,0,0,w,.006,dd,mix(C.asphalt,[.2,.2,.22],.25));const Y=C.yellow;
+  for(let k=0;k<w;k+=1){L(k+.1,.006,.05,k+.6,.014,.2,Y);L(k+.1,.006,dd-.2,k+.6,.014,dd-.05,Y)}
+  for(let k=0;k<dd;k+=1){L(.05,.006,k+.1,.2,.014,k+.6,Y);L(w-.2,.006,k+.1,w-.05,.014,k+.6,Y)}
+  const cx=w/2,cz=dd/2,R=Math.min(w,dd)*.26;for(let a=-.2;a<Math.PI*1.25;a+=.16){const x=cx+Math.cos(a)*R,z=cz+Math.sin(a)*R;L(x-.18,.006,z-.18,x+.18,.016,z+.18,C.line)}
+  {const a=Math.PI*1.32,x=cx+Math.cos(a)*R,z=cz+Math.sin(a)*R;L(x-.42,.006,z-.42,x+.42,.016,z+.42,C.line)}
+  break}
  case 'spot':{L(0,0,0,.08,.012,dd,C.line);L(w-.08,0,0,w,.012,dd,C.line);L(0,0,0,w,.012,.08,C.line);L(.6,0,.35,w-.6,.1,.5,rgb('#9aa0a6'));break}
  case 'busstop':{L(.1,0,.2,.2,2.3,.3,C.metal);L(w-.2,0,.2,w-.1,2.3,.3,C.metal);L(0,2.3,0,w,2.42,1,rgb('#4c8fd1'),rgb('#6aa6e0'));L(.15,0,.15,w-.15,2.2,.22,C.glass);
   L(.4,.45,.3,w-.4,.52,.7,C.wood);for(const x of [.5,w-.6])L(x,0,.4,x+.1,.45,.6,C.dark);L(w-.05,0,.85,w+.05,2.6,.95,C.metal);L(w-.35,2.2,.82,w+.35,2.7,.98,C.yellow);L(w-.2,2.32,.98,w+.2,2.58,1,rgb('#2f6f45'));break}
@@ -263,7 +270,7 @@ function truck(B,x,z,ang,open){const c=Math.cos(ang),sn=Math.sin(ang),P=(lx,lz)=
  if(open){for(const k of [-1,1]){const [dx,dz]=P(k*1.4,-4.35);B.obox(dx,1.75,dz,.04,1.25,.55,ang+k*Math.PI/2*.0,rgb('#dcdcdc'))}const [ix,iz]=P(0,-3.9);B.obox(ix,1.75,iz,.88,1.15,.3,ang,rgb('#6b5a48'))}
  else{const [rx,rz]=P(0,-4.21);B.obox(rx,1.75,rz,1.1,1.25,.02,ang,rgb('#dcdcdc'))}}
 export function buildAgents(B,S,R,v,time){B.reset();B.setYaw(v.yaw);
- if(R.truck)truck(B,R.truck.x,R.truck.z,R.truck.ang,R.truck.st==='unload');
+ for(const t of R.trucks||[])truck(B,t.x,t.z,t.ang,t.st==='unload');
  for(const c of R.cars||[])car(B,c.x,c.z,c.ang,c.col);if(R.bus)bus(B,R.bus.x,R.bus.z,R.bus.ang);
  // feux piétons : un poteau à chaque bout de la ligne ; feu voitures (rouge / orange / vert) et bonhomme piéton
  for(const L of RD.net(S).lights){const ph=RD.lightPhase(R,L.id),off=[.16,.17,.18];

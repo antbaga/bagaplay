@@ -84,7 +84,7 @@ function chooseDifficulty(id){dialog('Difficulté','','Jouer',()=>{difficulty=+d
 const RESUME={bagastore:()=>savedRun('bagastore'),sudoku:savedSudoku,binero:()=>savedRun('binero'),crossword:()=>savedRun('crossword'),arrowword:()=>savedRun('arrowword')};
 function resumeGame(id){const run=RESUME[id]?.();if(!run)return;difficulty=run.level??1;launch(id,false,{resume:true})}
 document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-filter]').forEach(x=>x.classList.toggle('active',x===b));renderCards(b.dataset.filter)});
-const VERSION='5.2.0';
+const VERSION='5.3.0';
 function setVolume(kind,v){vol[kind]=Math.max(0,Math.min(1,v));saved.vol=vol;persist();if(kind==='music'){setMusicVolume(vol.music);sound=vol.music>0;if(!paused)music(sound)}}
 function updateSound(){$('#footer-version').textContent=`BagaPlay ${VERSION} · Sans pub, sans compte.`}
 // Réglages : son, langue, version.
@@ -145,7 +145,7 @@ function launch(id,fresh=false,duelOpts=null){stop();if(RESUME[id]){saved.openGa
   swipe:fn=>{let start=null;ctx.listen($('#board'),'pointerdown',e=>{start=[e.clientX,e.clientY];e.currentTarget.setPointerCapture?.(e.pointerId)});ctx.listen($('#board'),'pointerup',e=>{if(!start)return;const x=e.clientX-start[0],y=e.clientY-start[1];start=null;if(Math.max(Math.abs(x),Math.abs(y))>18)fn(Math.abs(x)>Math.abs(y)?x>0?'right':'left':y>0?'down':'up')})}
  };
  function record(s,allow=true){if(!allow||!Number.isFinite(s))return;const old=saved[key];if(old==null||(current.lower?s<old:s>old)){saved[key]=s;$('#best').textContent=TIMED.includes(id)?formatDuration(s):s;persist()}}
- runtime=(id==='bagastore'?bagastore:id==='petanque'?petanque:id==='battleship'?battleship:isDuel(id)?duel(id):id==='binero'?binero:id==='crossword'?crossword:id==='arrowword'?arrowword:id==='cookie'?cookie:id==='breakout'?breakoutNew:(puzzles[id]||arcade[id]))(ctx);fitBoard();let last=performance.now();function frame(now){const dt=Math.min((now-last)/1000,.05);last=now;if(!paused&&!ended){time+=dt*1000;const due=tasks.filter(t=>t.at<=time);tasks=tasks.filter(t=>t.at>time);due.forEach(t=>t.fn());if(!ended)runtime?.update?.(dt)}raf=requestAnimationFrame(frame)}raf=requestAnimationFrame(frame);
+ runtime=(id==='bagastore'?bagastore:id==='petanque'?petanque:id==='battleship'?battleship:isDuel(id)?duel(id):id==='binero'?binero:id==='crossword'?crossword:id==='arrowword'?arrowword:id==='cookie'?cookie:id==='breakout'?breakoutNew:(puzzles[id]||arcade[id]))(ctx);fitBoard();let last=performance.now();function frame(now){const dt=Math.min((now-last)/1000,.05);last=now;if(!paused&&!ended){time+=dt*1000;const due=tasks.filter(t=>t.at<=time);tasks=tasks.filter(t=>t.at>time);due.forEach(t=>t.fn());if(!ended){try{runtime?.update?.(dt)}catch(e){console.error(e)}}}raf=requestAnimationFrame(frame)}raf=requestAnimationFrame(frame);
  ctx.listen(document,'keydown',e=>{if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key))e.preventDefault();runtime?.key?.(e.key)});
 }
 renderCards();updateSound();if(RESUME[saved.openGame]?.())setTimeout(()=>resumeGame(saved.openGame),50);document.addEventListener('pointerdown',()=>{if(sound)music(true)},{once:true});

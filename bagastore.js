@@ -227,7 +227,7 @@ export function bagastore(c){
    return}
   const NI=D.NEEDS.icon,servesTxt=d=>d.serves?Object.keys(d.serves).map(k=>NI[k]).join(' '):'';
   for(const d of D.ITEMS.filter(i=>i.tab===buildTab)){const locked=d.lic&&!E.hasLic(S,d.lic);
-   const sub=locked?'Licence '+D.LICENSE[d.lic].name+' · '+eur(D.LICENSE[d.lic].price):d.kind==='shop'?`Ticket ${eur(d.ticket)} · ${E.roleFor(d.id).name}${d.serves?' · '+servesTxt(d):''}`:d.kind==='amenity'?servesTxt(d)+(d.sale?' · petite vente':'')+(d.attract?' · + attractif':''):d.boost?'Les clients achètent plus de vêtements':d.kind==='spot'?'+ clients en voiture':d.kind==='bus'?'Un bus amène des clients':d.kind==='corral'?'Caddies : paniers plus gros':d.kind==='sale'||d.kind==='counter'||d.kind==='reserve'?`${d.cap} articles`:d.attract?'+ attractif':d.security?'− vols':d.clean?'− saleté':'';
+   const sub=locked?'Licence '+D.LICENSE[d.lic].name+' · '+eur(D.LICENSE[d.lic].price):d.kind==='shop'?`Ticket ${eur(d.ticket)} · ${E.roleFor(d.id).name}${d.serves?' · '+servesTxt(d):''}`:d.kind==='amenity'?servesTxt(d)+(d.sale?' · petite vente':'')+(d.attract?' · + attractif':''):d.boost?'Les clients achètent plus de vêtements':d.kind==='spot'?'+ clients en voiture':d.kind==='bus'?'Un bus amène des clients':d.kind==='corral'?'Caddies : paniers plus gros':d.kind==='turn'?'Derrière un quai : le camion recule à quai':d.kind==='sale'||d.kind==='counter'||d.kind==='reserve'?`${d.cap} articles`:d.attract?'+ attractif':d.security?'− vols':d.clean?'− saleté':'';
    const b=card((locked?'🔒 ':'')+d.name,eur(d.price),sub,d.w+'×'+d.d);if(locked)b.classList.add('st-locked');b.onclick=()=>{sfx('click');if(locked)licenseDialog(d.lic);else startItem(d.id)};grid.append(b)}}
  function licenseDialog(id){const L=D.LICENSE[id];if(E.hasLic(S,id)){const names=E.licItems(id).map(d=>d.name).join(', ');c.dialog(L.name,'Licence achetée. '+(names?'Débloque : '+names+'.':''),'OK',()=>{},null,null);return}
   const names=E.licItems(id).map(d=>d.name).join(', ');
@@ -379,7 +379,7 @@ export function bagastore(c){
   if(e.t==='pay'){floats.push({x:e.x,z:e.y,y:2,txt:'+'+Math.round(e.v)+' €',col:'#2f8a45',life:1.4});sfx('cash',.18)}
   if(e.t==='bubble'){const a=R.agents.find(o=>o.id===e.id);if(a){floats.push({x:a.x,z:a.y,y:2.2,txt:e.txt,col:e.txt==='€'?'#b8860b':'#c62f2f',life:1.6,big:true});sfx('bad',1.2)}}
   if(e.t==='bus'&&e.n)sfx('horn',3);
-  if(e.t==='truck')sfx('truck');if(e.t==='delivery'&&e.cost)toast('Livraison reçue : '+eur(e.cost));if(e.t==='noroad')toast('Le camion ne peut pas atteindre le quai : construis une route.');
+  if(e.t==='truck')sfx('truck');if(e.t==='deliveries'&&e.cost)toast(e.n>1?`Livraisons rangées : ${e.n} camions · ${eur(e.cost)}`:'Livraison reçue : '+eur(e.cost));if(e.t==='noroad')toast('Le camion ne peut pas atteindre le quai : construis une route.');
   if(e.t==='night'){const d=e.day;toast(`Jour ${d.d} · ${d.customers} clients · ${eur(d.rev)}`);sfx('night');save()}
   if(e.t==='month'){pending=e;hold=true;openPanel('report');sfx('month');save()}}}
 
@@ -420,9 +420,11 @@ export function bagastore(c){
    if(o.stock>0){g2.fillStyle='#f0b429';g2.beginPath();g2.arc(px,py,4.5,0,7);g2.fill();continue}
    const lab=res?'À remplir':'Réserve vide',col=res?'#e8892b':'#d93a30';g2.font='bold 9px sans-serif';const tw=g2.measureText(lab).width+20;
    g2.fillStyle=col;g2.beginPath();g2.roundRect?g2.roundRect(px-tw/2,py-8*s,tw,16*s,8):g2.rect(px-tw/2,py-8,tw,16);g2.fill();g2.fillStyle='#fff';g2.fillText((res?'! ':'📦 ')+lab,px,py+.5)}
-  const tk=R.truck;if(tk&&tk.st==='unload'&&tk.total>0){const [px,py]=project(M,cam,tk.x,4.4,tk.z),k=Math.min(1,tk.done/tk.total),w=64;
-   g2.fillStyle='#fffaf1e6';g2.beginPath();g2.roundRect?g2.roundRect(px-w/2-4,py-13,w+8,22,7):g2.rect(px-w/2-4,py-13,w+8,22);g2.fill();g2.fillStyle='#e6e1d3';g2.fillRect(px-w/2,py+1,w,5);g2.fillStyle='#5aa36a';g2.fillRect(px-w/2,py+1,w*k,5);
-   g2.fillStyle='#27453c';g2.font='bold 9px sans-serif';g2.fillText(S.staff.rayon?'Déchargement '+Math.round(k*100)+' %':'Personne pour décharger !',px,py-5)}
+  // camions : rayon livré et avancement du déchargement, ou attente du quai
+  for(const tk of R.trucks||[]){const wait=tk.wait&&tk.st==='in';if(!(tk.st==='unload'&&tk.total>0)&&!wait)continue;const [px,py]=project(M,cam,tk.x,4.4,tk.z),k=Math.min(1,tk.done/Math.max(1,tk.total)),w=84,cat=D.CAT[tk.cat]?D.CAT[tk.cat].name:'';
+   g2.fillStyle='#fffaf1e6';g2.beginPath();g2.roundRect?g2.roundRect(px-w/2-4,py-13,w+8,22,7):g2.rect(px-w/2-4,py-13,w+8,22);g2.fill();
+   if(!wait){g2.fillStyle='#e6e1d3';g2.fillRect(px-w/2,py+1,w,5);g2.fillStyle='#5aa36a';g2.fillRect(px-w/2,py+1,w*k,5)}
+   g2.fillStyle='#27453c';g2.font='bold 9px sans-serif';g2.fillText(wait?'En attente du quai':S.staff.rayon?cat+' · '+Math.round(k*100)+' %':'Le chauffeur décharge seul',px,wait?py-2:py-5)}
   for(const f of floats){f.life-=dt;f.y+=dt*.8;const [px,py]=project(M,cam,f.x,f.y,f.z);g2.globalAlpha=Math.max(0,Math.min(1,f.life));g2.font=(f.big?'bold 15px':'bold 11px')+' sans-serif';g2.fillStyle=f.col;g2.fillText(f.txt,px,py)}
   g2.globalAlpha=1;floats=floats.filter(f=>f.life>0);if(floats.length>60)floats.splice(0,floats.length-60)}
  function hudUpdate(){const n=R.agents.filter(a=>a.k==='c').length;info.textContent=`★ ${Math.round(S.rep)} · ${n} 🛒`;

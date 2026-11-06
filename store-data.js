@@ -7,6 +7,13 @@
 export const LOT_W=160,LOT_H=152,ROAD={y:84,h:4},OFF={x:40,y:38},OLD_LOT={w:80,h:76};
 export const START={x0:60,y0:56,x1:80,y1:76,entrance:69,reserveRows:5,cash:140000,starterCash:100000,loan:420000,loanMonthly:2900,rep:50};
 export const EXTEND={perM2:900,margin:2};
+// livraisons : un camion par rayon, au plus 3 par quai (+1) sur le terrain ; écart entre deux camions (s),
+// temps pour prendre une palette (camion à quai sur une zone de retournement / resté sur la route), chauffeur seul (articles par s)
+export const TRUCK={gap:3,liftZone:2,liftRoad:5,driverRate:10};
+// la nuit, quand il n'y a plus ni client ni livraison, l'horloge tourne plus vite (pas de saut dans le temps)
+export const NIGHT_RATE=12;
+// pendant les livraisons de nuit, les heures passent deux fois moins vite qu'en journée (le temps de vider les camions)
+export const NIGHT_WORK_RATE=.5;
 export const HOURS={start:6,open:8,close:20,realSecPerHour:20};   // 6 h–8 h : livraison et mise en place avant l'ouverture       // 12 h d'ouverture = 4 min en ×1
 export const DAYS_PER_MONTH=30;
 export const BANKRUPTCY=-40000;
@@ -73,6 +80,7 @@ export const ITEMS=[
  {id:'dock',   tab:'reserve', name:'Quai de livraison',    w:3,d:2,h:0.4,price:9000, kind:'dock',zone:1},
  {id:'spot',   tab:'parking', name:'Place de parking',     w:2,d:4,h:.05,price:800,  kind:'spot',zone:2},
  {id:'busstop',tab:'parking', name:'Arrêt de bus',         w:3,d:1,h:2.4,price:6000, kind:'bus',zone:2},
+ {id:'turn',   tab:'parking', name:'Zone de retournement', w:10,d:10,h:.03,price:4000,kind:'turn',zone:2},
  {id:'corral', tab:'parking', name:'Abri à caddies',       w:2,d:1,h:1.2,price:1500, kind:'corral',zone:2,cap:15},
  {id:'plant',  tab:'deco',    name:'Plante',               w:1,d:1,h:1.2,price:90,   kind:'decor',zone:0,attract:1},
  {id:'lamp',   tab:'deco',    name:'Éclairage d’ambiance', w:1,d:1,h:2.2,price:300,  kind:'decor',zone:0,attract:2,power:12},
