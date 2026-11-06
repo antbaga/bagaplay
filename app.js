@@ -84,7 +84,7 @@ function chooseDifficulty(id){dialog('Difficulté','','Jouer',()=>{difficulty=+d
 const RESUME={bagastore:()=>savedRun('bagastore'),sudoku:savedSudoku,binero:()=>savedRun('binero'),crossword:()=>savedRun('crossword'),arrowword:()=>savedRun('arrowword')};
 function resumeGame(id){const run=RESUME[id]?.();if(!run)return;difficulty=run.level??1;launch(id,false,{resume:true})}
 document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-filter]').forEach(x=>x.classList.toggle('active',x===b));renderCards(b.dataset.filter)});
-const VERSION='4.0.0';
+const VERSION='4.0.1';
 function setVolume(kind,v){vol[kind]=Math.max(0,Math.min(1,v));saved.vol=vol;persist();if(kind==='music'){setMusicVolume(vol.music);sound=vol.music>0;if(!paused)music(sound)}}
 function updateSound(){$('#footer-version').textContent=`BagaPlay ${VERSION} · Sans pub, sans compte.`}
 // Réglages : son, langue, version.
@@ -254,7 +254,11 @@ function matchRow(g,withGame){const over=!['active','pending'].includes(g.status
 function gameAction(g){
  if(g.invite)return respondDialog(g);
  if(g.kind==='party'){
-  if(g.status==='pending'){if(g.from_me)dialog('Annuler la partie ?','Les invitations seront retirées.','Annuler la partie',async()=>{try{await online.respondParty(g.id,false);refreshAll()}catch(e){toast(e.message)}},'Garder',()=>{});else toast('En attente des autres joueurs.');return}
+  if(g.status==='pending'){const cancel=()=>dialog('Annuler la partie ?','Les invitations seront retirées.','Annuler la partie',async()=>{try{await online.respondParty(g.id,false);refreshAll()}catch(e){toast(e.message)}},'Garder',()=>{});
+   if(!g.from_me){toast('En attente des autres joueurs.');return}
+   const pl=g.players||[],ok=pl.filter(p=>p.accepted).length;
+   // au moins un invité a accepté : on peut lancer sans attendre les autres
+   if(ok>=2)dialog('Lancer la partie ?',`${ok} joueurs sur ${pl.length} ont accepté. Ceux qui n’ont pas répondu ne joueront pas.`,'Lancer',async()=>{try{const v=await online.partyGo(g.id);refreshAll();launch(v.game,false,{mode:'online',party:v})}catch(e){toast(e.message)}},'Annuler la partie',()=>setTimeout(cancel,0));else cancel();return}
   if(g.status==='cancelled'){online.hideParty(g.id).catch(()=>{}).then(refreshAll);return}
   return openParty(g.id)}
  if(g.status==='pending'){dialog('Annuler le défi ?',others(g)[0]+' n’a pas encore répondu.','Annuler le défi',async()=>{try{await online.declineMatch(g.id);refreshAll()}catch(e){toast(e.message)}},'Garder',()=>{});return}

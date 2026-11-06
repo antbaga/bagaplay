@@ -160,6 +160,8 @@ export function petanque(c){
   if(changed&&v.state?.last&&v.state.last.n>shownN){const L=v.state.last,s0={...v.state,jack:L.before.jack,balls:L.before.balls};startAnim(s0,L.by,L.tp,P.simulate(s0,L.tp,L.by),()=>settle(v.state));return}
   if(changed)settle(v.state);else{thrower=currentThrower();refreshHud()}}
  if(isOnline)c.every(poll,POLL);
+ // quitter la partie : l'équipe perd, la partie se termine pour tout le monde
+ function leaveParty(){c.dialog('Quitter la partie ?','Ton équipe perd et la partie s’arrête pour tout le monde.','Quitter',async()=>{busy=true;try{view=await online.partyLeave(view.id);busy=false;settle(view.state)}catch(e){busy=false;errorText=e.message;refreshHud()}},'Rester',()=>{})}
  async function act(fn){busy=true;try{view=await fn();errorText=''}catch(e){errorText=e.message}busy=false;thrower=currentThrower();refreshHud()}
 
  // ---- interface
@@ -182,10 +184,11 @@ export function petanque(c){
    if(view.need_vote){text=`${view.ask_name} veut lancer`;btn('✕','Refuser',()=>act(()=>online.partyVote(view.id,false)),'no');btn('✓','Accepter',()=>act(()=>online.partyVote(view.id,true)),'yes')}
    else if(view.ask_by===me){text='Demande envoyée à ton équipe…';btn('✕','Annuler la demande',()=>act(()=>online.partyVote(view.id,false)),'no')}
    else if(view.ask_by)text=`${view.ask_name} demande à lancer`;
-   else if(view.can_ask){text='À ton équipe : demande à lancer';btn('✋','Demander à lancer',()=>act(()=>online.partyAsk(view.id)),'yes')}
+   else if(view.can_ask){text='À ton équipe de lancer : qui y va ?';btn('✋','Je lance',()=>act(()=>online.partyAsk(view.id)),'yes')}
    else if(view.thrower)text='Au tour de '+view.thrower_name;
    else text=String(state.turnTeam)===String(view.my_team)?'Ton équipe choisit qui lance…':'L’équipe adverse joue…'}
   else if(vsAI&&thrower==='cpu')text='L’ordinateur réfléchit…';
+  if(isOnline&&!ended&&state.phase!=='over')btn('🏳','Quitter la partie',leaveParty,'no');
   $h('.pq-prompt').textContent=errorText||text;hud.classList.toggle('with-pad',!throwBox.hidden)}
 
  function gameOver(){if(ended)return;ended=true;sfx?.cheer();refreshHud();const w=state.winner,mineT=isOnline?view.my_team:vsAI?pTeam('me'):w,win=mineT===w;
