@@ -215,7 +215,7 @@ export function undo(S){const u=S._undo;S._undo=null;if(!u||Date.now()-u.at>UNDO
  if(u.type==='item'){const k=S.items.findIndex(o=>o.id===u.id);if(k<0)return 'Déjà retiré.';const it=S.items[k];if(it.cat&&it.stock)S.reserve[it.cat]+=it.stock;S.items.splice(k,1)}
  if(u.type==='wall')for(const i of u.cells)S.wall[i]=0;
  if(u.type==='ground')u.cells.forEach((i,k)=>S.ground[i]=u.prev[k]);
- if(u.type==='lanes'){const o=JSON.parse(u.prev);S.lanes=o.lanes;S.yields=o.yields;S.laneNext=o.laneNext;RD.roadsChanged(S)}
+ if(u.type==='lanes'){const o=JSON.parse(u.prev);S.lanes=o.lanes;S.yields=o.yields;S.laneNext=o.laneNext;S.lights=o.lights||[];S.lightNext=o.lightNext||0;RD.roadsChanged(S)}
  if(u.type==='extend'){const L=layout(S);if(u.cells.some(i=>L.occ[i]||S.wall[i]))return 'Des objets sont posés sur l’extension.';for(const i of u.cells)S.built[i]=0;bounds(S)}
  S.cash+=u.cost;S.month.build-=u.cost;dirty(S);return null}
 function pay(S,v,k){S.cash-=v;S.month[k]+=v;if(S.dayStats&&k in S.dayStats)S.dayStats[k]+=v}
@@ -237,6 +237,7 @@ export function eraseAt(S,x,y){if(!inLot(x,y))return 'Rien à démolir ici.';con
  {const e=entAt(S,x,y);if(e&&e.door){S.doors.splice(S.doors.indexOf(e.door),1);S.cash+=Math.round(D.ENTRANCE_COST*D.REFUND);dirty(S);return null}}
  if(S.wall[i]){S.cash+=Math.round((S.wall[i]===2?D.DOOR_COST:D.WALL_COST)*D.REFUND);S.wall[i]=0;dirty(S);return null}
  const t=treeAt(S,x,y);if(t>=0){S.trees.splice(t,1);dirty(S);return null}
+ {const q=RD.lightAt(S,x+.5,y+.5);if(q){const snap=snapRoads(S);RD.removeLight(S,q.id);const r=Math.round(RD.LIGHT.cost*D.REFUND);S.cash+=r;dirty(S);remember(S,{type:'lanes',prev:snap,cost:-r});return null}}
  if(S.ground[i]===4){for(const c of groundGroup(S,i))S.ground[c]=0;dirty(S);return null}
  {const k=yieldNear(S,x+.5,y+.5);if(k>=0){const snap=snapRoads(S);S.yields.splice(k,1);RD.roadsChanged(S);dirty(S);remember(S,{type:'lanes',prev:snap,cost:0});return null}}
  {const q=RD.laneAt(S,x+.5,y+.5,1.05);if(q){const snap=snapRoads(S),r=RD.removeLane(S,q.id);S.cash+=r;dirty(S);remember(S,{type:'lanes',prev:snap,cost:-r});return null}}
@@ -247,6 +248,7 @@ export function eraseInfo(S,x,y){if(!inLot(x,y))return null;const i=idx(x,y),L=l
  {const e=entAt(S,x,y);if(e&&e.door)return {label:'Entrée',refund:Math.round(D.ENTRANCE_COST*D.REFUND),cells:e.cells.map(([a,b])=>idx(a,b))}}
  if(S.wall[i])return {label:S.wall[i]===2?'Porte':'Mur',refund:Math.round((S.wall[i]===2?D.DOOR_COST:D.WALL_COST)*D.REFUND),cells:[i]};
  if(treeAt(S,x,y)>=0)return {label:'Arbre',refund:0,cells:[i]};
+ {const q=RD.lightAt(S,x+.5,y+.5);if(q)return {label:'Feu piéton',refund:Math.round(RD.LIGHT.cost*D.REFUND),cells:RD.net(S).lightCell.reduce((o,v,k)=>(v===q.id&&o.push(k),o),[])}}
  if(S.ground[i]===4)return {label:'Passage piéton',refund:0,cells:groundGroup(S,i)};
  {const k=yieldNear(S,x+.5,y+.5);if(k>=0)return {label:'Cédez le passage',refund:0,cells:[i]}}
  {const q=RD.laneAt(S,x+.5,y+.5,1.05);if(q){const l=S.lanes.find(o=>o.id===q.id);return {label:l.ring?'Rond-point':'Route',refund:Math.round(RD.laneCost(l)*D.REFUND),cells:RD.laneCells(S,q.id),lane:q.id}}}
@@ -264,13 +266,20 @@ export function groundPlan(S,a,b,type){const L=layout(S),RR=RD.net(S).raster,set
 export function paintGround(S,a,b,type){const p=groundPlan(S,a,b,type);if(p.why)return p.why;if(S.cash<p.cost)return 'Pas assez d’argent.';
  const prev=p.cells.map(i=>S.ground[i]);for(const i of p.cells)S.ground[i]=type;clearTrees(S,p.cells);pay(S,p.cost,'build');dirty(S);remember(S,{type:'ground',cells:p.cells,prev,cost:p.cost});return null}
 // ---- routes : tracer, raccourcir, rond-point, cédez-le-passage (géométrie dans store-roads.js)
-const snapRoads=S=>JSON.stringify({lanes:S.lanes||[],yields:S.yields||[],laneNext:S.laneNext||0});
+const snapRoads=S=>JSON.stringify({lanes:S.lanes||[],yields:S.yields||[],laneNext:S.laneNext||0,lights:S.lights||[],lightNext:S.lightNext||0});
 const laneBlocked=S=>{const L=layout(S);return i=>inside(S,i%W,i/W|0)||!!L.occ[i]};
 export function lanePlan(S,pts){return RD.lanePlan(S,pts,laneBlocked(S))}
 function roadsEdited(S,snap,cost,cellsCleared){if(cellsCleared){const set=new Set();for(const i of cellsCleared){const x=i%W,y=i/W|0;for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)if(inLot(x+dx,y+dy))set.add(idx(x+dx,y+dy))}clearTrees(S,[...set])}RD.roadsChanged(S);dirty(S);remember(S,{type:'lanes',prev:snap,cost})}
 export function buildLane(S,pts){const p=lanePlan(S,pts);if(p.why)return p.why;if(S.cash<p.cost)return 'Pas assez d’argent.';const snap=snapRoads(S);RD.addLane(S,p);pay(S,p.cost,'build');roadsEdited(S,snap,p.cost,p.cells);return null}
 export function ringPlan(S,cx,cy,r){return RD.ringPlan(S,cx,cy,r,laneBlocked(S))}
-export function buildRing(S,cx,cy,r){const p=ringPlan(S,cx,cy,r);if(p.why)return p.why;if(S.cash<p.cost)return 'Pas assez d’argent.';const snap=snapRoads(S);RD.addRing(S,p);pay(S,p.cost,'build');roadsEdited(S,snap,p.cost,p.cells.concat(p.island));return null}
+export function buildRing(S,cx,cy,r){const p=ringPlan(S,cx,cy,r);if(p.why)return p.why;if(p.cost>0&&S.cash<p.cost)return 'Pas assez d’argent.';const snap=snapRoads(S);RD.addRing(S,p);
+ for(const i of p.island)if(S.ground[i]&&!inside(S,i%W,i/W|0))S.ground[i]=0;S.yields=(S.yields||[]).filter(y=>Math.hypot(y.x-cx,y.y-cy)>r-.5);
+ if(p.cost>0)pay(S,p.cost,'build');else S.cash-=p.cost;roadsEdited(S,snap,p.cost,p.cells.concat(p.island));return null}
+export const lightPlan=(S,a,b)=>RD.lightPlan(S,a,b);
+export function buildLight(S,a,b){const p=RD.lightPlan(S,a,b);if(p.why)return p.why;if(S.cash<p.cost)return 'Pas assez d’argent.';const snap=snapRoads(S);RD.addLight(S,p);pay(S,p.cost,'build');roadsEdited(S,snap,p.cost);return null}
+export function vertexPlan(S,id,i,x,z,ins){return RD.vertexPlan(S,id,i,x,z,ins,laneBlocked(S))}
+export function moveVertex(S,id,i,x,z,ins){const p=vertexPlan(S,id,i,x,z,ins);if(p.why)return p.why;if(p.cost>S.cash)return 'Pas assez d’argent.';const snap=snapRoads(S);RD.moveVertex(S,id,p);
+ if(p.cost)pay(S,p.cost,'build');S.cash+=p.refund;roadsEdited(S,snap,p.cost-p.refund,p.cells);return null}
 export const trimPlan=(S,id,end,x,y)=>RD.trimPlan(S,id,end,x,y);
 // bout de voie près d'un rond-point : accroché au coin de case le plus proche du cercle (même objet renvoyé sinon)
 export function snapRing(S,p){for(const l of S.lanes||[]){if(!l.ring)continue;const {cx,cy,r}=l.ring;if(Math.abs(Math.hypot(p[0]-cx,p[1]-cy)-r)>1.6)continue;let best=null;
@@ -368,7 +377,7 @@ export function hourLabel(S){const h=Math.floor(S.hour),m=Math.floor((S.hour-h)*
 export const monthOf=S=>Math.floor((S.d-1)/D.DAYS_PER_MONTH)+1,dayOfMonth=S=>(S.d-1)%D.DAYS_PER_MONTH+1;
 
 // dt : secondes réelles × vitesse
-export function step(S,R,dt){if(S.over)return;layout(S);
+export function step(S,R,dt){if(S.over)return;layout(S);R.lt=(R.lt||0)+dt;LIGHT_R=R;
  if(R.staffDay!==S.d)spawnStaff(S,R);
  const h0=Math.floor(S.hour);S.hour+=dt/D.HOURS.realSecPerHour;if(Math.floor(S.hour)!==h0)startDay(S,R);// mise en rayon de la nuit à l'ouverture, une fois la livraison du matin rangée (au plus tard à 10 h)
  if(S.hour>=D.HOURS.open&&R.restockDay!==S.d&&(!(R.dawn||R.truck&&R.truck.dawn&&R.truck.st!=='out')||S.hour>=D.HOURS.open+2)){R.restockDay=S.d;morningRestock(S)}
@@ -507,6 +516,7 @@ export function syncStaff(S,R){// après une embauche ou un licenciement en jour
   for(const a of have.slice(want)){if(a.carry){if(a.carry.pallet){for(const q of a.carry.items)S.reserve[q.cat]+=q.n;R.carrying[a.carry.store]-=a.carry.n;if(R.truck)R.truck.done+=a.carry.n}else S.reserve[a.carry.cat]+=a.carry.n}dropTask(S,a);R.agents.splice(R.agents.indexOf(a),1)}}}
 
 // déplacement d'une case à l'autre en suivant le champ de distance ; renvoie true à l'arrivée
+let LIGHT_R=null;   // runtime courant (phase des feux piétons pour les piétons qui attendent)
 function move(S,a,key,mode,speed,dt){const f=field(S,key,mode);let budget=speed*dt;
  for(let guard=0;guard<6&&budget>0;guard++){
   if(a.nx<0){if(f[a.c]===0)return true;
@@ -515,6 +525,7 @@ function move(S,a,key,mode,speed,dt){const f=field(S,key,mode);let budget=speed*
    for(const [dx,dy] of DIRS){const nx=x+dx,ny=y+dy;if(inLot(nx,ny)){const v=f[idx(nx,ny)];if(v>=0&&v<bd&&canStep(S,mode==='c'?S._L.pc:S._L.ps,x,y,nx,ny)){bd=v;best=idx(nx,ny)}}}
    // raccourci en diagonale quand les deux côtés sont libres (même revêtement)
    if(best>=0&&bd>=1)for(const [dx,dy] of [[1,1],[1,-1],[-1,1],[-1,-1]]){const nx=x+dx,ny=y+dy;if(!inLot(nx,ny))continue;const v=f[idx(nx,ny)],a1=f[idx(x+dx,y)],a2=f[idx(x,y+dy)];if(v>=0&&v<bd&&v<d-1&&inside(S,x,y)===inside(S,nx,ny)&&a1>=0&&a2>=0&&a1<d&&a2<d){best=idx(nx,ny);break}}
+   if(best>=0&&LIGHT_R){const NT=RD.net(S),lid=NT.lightCell[best];if(lid&&!NT.raster[a.c]&&RD.lightPhase(LIGHT_R,lid)!=='walk'){a.dir=Math.atan2(best%W-x,(best/W|0)-y);return false}}
    if(best<0)return null;a.nx=best}
   const tx=a.nx%W+.5,ty=(a.nx/W|0)+.5,dx=tx-a.x,dy=ty-a.y,dist=Math.hypot(dx,dy);
   a.dir=Math.atan2(dx,dy);
@@ -720,8 +731,8 @@ export function restore(S,o){const t=o&&o.rt;if(!t||!S)return null;const R=runti
  return R}
 // sauvegarde : version 2 (routes en lignes). Les parties d'avant (routes en cases) ne se reprennent pas : nouvelle partie.
 export function load(o){if(!o||o.v!==2||(o.lw&&o.lw!==W)||(o.lh&&o.lh!==H))return null;const S={...o,wall:[...o.wall].map(Number),zone:[...o.zone].map(Number),built:[...o.built].map(Number),ground:[...o.ground].map(Number),items:o.items.map(it=>({...it,inc:0}))};
- S.lanes=S.lanes||[];S.yields=S.yields||[];S.monthCat=S.monthCat||{};S.catHist=S.catHist||[];bounds(S);if(!S.trees)S.trees=genTrees(S);if(!S.plog)S.plog=(S.history||[]).map(h=>[h.d,h.profit,h.cash]);
- if(!S.mscale){for(const c of D.CATS)if(S.margin[c.id]!=null)S.margin[c.id]=Math.round(S.margin[c.id]*D.MARGIN_SCALE);S.mscale=D.MARGIN_SCALE}
+ S.lanes=S.lanes||[];S.yields=S.yields||[];S.lights=S.lights||[];S.monthCat=S.monthCat||{};S.catHist=S.catHist||[];bounds(S);if(!S.trees)S.trees=genTrees(S);if(!S.plog)S.plog=(S.history||[]).map(h=>[h.d,h.profit,h.cash]);
+ if(S.mscale!==D.MARGIN_SCALE){const f=D.MARGIN_SCALE/(S.mscale||1);for(const c of D.CATS)if(S.margin[c.id]!=null)S.margin[c.id]=Math.round(S.margin[c.id]*f);S.mscale=D.MARGIN_SCALE}
  if(!o.rt){if(S.hour>D.HOURS.open)S.hour=D.HOURS.start;S.dayStats=blankDay()}delete S.rt;S.dirt=new Float32Array(N);return S}
 export function withDirt(S){S.dirt=S.dirt||new Float32Array(N);return S}
 

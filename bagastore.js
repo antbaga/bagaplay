@@ -84,12 +84,14 @@ export function bagastore(c){
  c.listen(cv,'pointerdown',e=>{cv.setPointerCapture?.(e.pointerId);pts.set(e.pointerId,{x:e.offsetX,y:e.offsetY,x0:e.offsetX,y0:e.offsetY,t:performance.now()});
   if(pts.size===2){const [a,b]=[...pts.values()];pinch={d:Math.hypot(a.x-b.x,a.y-b.y),z:cam.zoom,mx:(a.x+b.x)/2,my:(a.y+b.y)/2};if(drag?.draw&&mode){mode.a=mode.b=null;updatePlace()}drag={moved:true}}
   else if(mode?.kind==='tool'&&mode.id==='lane'){laneDown(...ground(cam,e.offsetX,e.offsetY));drag={draw:true,moved:false};updatePlace()}
+  else if(mode?.kind==='tool'&&mode.id==='light'){mode.a=V(...ground(cam,e.offsetX,e.offsetY));mode.b=null;drag={draw:true,moved:false};updatePlace()}
   else if(mode?.kind==='tool'&&DRAW.has(mode.id)){const c0=cellAt(e.offsetX,e.offsetY);mode.a=c0;mode.b=c0;drag={draw:true,moved:false};updatePlace()}
   else{drag={moved:false}}});
  c.listen(cv,'pointermove',e=>{const p=pts.get(e.pointerId);if(!p)return;const px=p.x,py=p.y;p.x=e.offsetX;p.y=e.offsetY;
   if(pts.size>=2&&pinch){const [a,b]=[...pts.values()];cam.zoom=Math.max(4,Math.min(40,pinch.z*pinch.d/Math.max(20,Math.hypot(a.x-b.x,a.y-b.y))));
    const mx=(a.x+b.x)/2,my=(a.y+b.y)/2,g0=ground(cam,pinch.mx,pinch.my),g1=ground(cam,mx,my);cam.tx+=g0[0]-g1[0];cam.tz+=g0[1]-g1[1];pinch.mx=mx;pinch.my=my;clampCam();return}
   if(drag?.draw&&mode&&mode.id==='lane'){if(laneMove(...ground(cam,p.x,p.y))){drag.moved=true;updatePlace()}return}
+  if(drag?.draw&&mode&&mode.id==='light'){const q=V(...ground(cam,p.x,p.y));if(mode.a&&(!mode.b||q[0]!==mode.b[0]||q[1]!==mode.b[1])){mode.b=q[0]===mode.a[0]&&q[1]===mode.a[1]?null:q;drag.moved=true;updatePlace()}return}
   if(drag?.draw&&mode){const c1=cellAt(p.x,p.y);if(!mode.b||c1[0]!==mode.b[0]||c1[1]!==mode.b[1]){mode.b=c1;drag.moved=true;updatePlace()}return}
   if(drag&&(drag.moved||Math.hypot(p.x-p.x0,p.y-p.y0)>8)){drag.moved=true;const g0=ground(cam,px,py),g1=ground(cam,p.x,p.y);cam.tx+=g0[0]-g1[0];cam.tz+=g0[1]-g1[1];clampCam()}});
  const up=e=>{const p=pts.get(e.pointerId);pts.delete(e.pointerId);if(pts.size<2)pinch=null;if(!p)return;
@@ -113,7 +115,7 @@ export function bagastore(c){
   const L=E.layout(S),id=E.inLot(x,y)?L.occ[E.idx(x,y)]:0;sel=id||null;if(sel){sfx('click');openPanel('item')}else if(panel==='item')closePanel()}
 
  // ---- placement : aperçu, petite bulle ✕ / ✓ au-dessus de l'objet
- const TOOL_NAMES={extend:'Agrandir',asphalt:'Goudron',lane:'Route',ring:'Rond-point',walk:'Trottoir',cross:'Passage piéton',yield:'Cédez le passage'},TOOL_HINT={lane:'Trace une voie dans le sens de circulation (2 de large). Pars du bout d’une voie pour la rallonger, ou glisse le bout le long d’elle pour la raccourcir.',ring:'Touche le centre du rond-point. ↻ change la taille. Relie ensuite tes voies au cercle.',yield:'Touche une voie juste avant un croisement : elle laisse passer l’autre. Touche-le à nouveau pour l’enlever.',cross:'Glisse le doigt en travers d’une route.',extend:'Glisse le doigt pour tracer l’extension.',asphalt:'Glisse le doigt pour goudronner une zone.',walk:'Glisse le doigt pour poser un trottoir.',road:'Glisse le doigt pour tracer une route.',wall:'Glisse le doigt pour tracer le mur.',zoneR:'Glisse le doigt sur la zone.',zoneS:'Glisse le doigt sur la zone.',erase:'Touche ce que tu veux démolir.'};
+ const TOOL_NAMES={extend:'Agrandir',asphalt:'Goudron',lane:'Route',ring:'Rond-point',walk:'Trottoir',cross:'Passage piéton',yield:'Cédez le passage',light:'Feu piéton'},TOOL_HINT={lane:'Trace une voie dans le sens de circulation. Tire un bout pour la rallonger, un rond blanc ou un + pour la courber.',ring:'Touche le centre du rond-point. ↻ change la taille. Les voies qui le traversent sont coupées et raccordées à l’anneau.',yield:'Touche une voie juste avant un croisement : elle laisse passer l’autre. Touche-le à nouveau pour l’enlever.',light:'Glisse le doigt d’un trottoir à l’autre, en travers des voies (sur un passage piéton). Le feu alterne voitures et piétons.',cross:'Glisse le doigt en travers d’une route.',extend:'Glisse le doigt pour tracer l’extension.',asphalt:'Glisse le doigt pour goudronner une zone.',walk:'Glisse le doigt pour poser un trottoir.',road:'Glisse le doigt pour tracer une route.',wall:'Glisse le doigt pour tracer le mur.',zoneR:'Glisse le doigt sur la zone.',zoneS:'Glisse le doigt sur la zone.',erase:'Touche ce que tu veux démolir.'};
  function startMove(id){const it=S.items.find(o=>o.id===id);if(!it)return;mode={kind:'item',t:it.t,r:it.r,pos:[it.x,it.y],move:id};staticKey='';closePanel();bar.hidden=false;updatePlace();msg('Touche la nouvelle place.')}
  function startItem(t){mode={kind:'item',t,r:0,pos:null};closePanel();bar.hidden=false;updatePlace();msg('Touche le sol pour placer.')}
  function startTool(t){mode={kind:'tool',id:t,r:t==='ring'?ringR:0};closePanel();bar.hidden=false;updatePlace();msg(TOOL_HINT[t]||D.TOOLS.find(o=>o.id===t)?.hint||'')}
@@ -127,8 +129,9 @@ export function bagastore(c){
    if(t==='extend'&&mode.a){const p=E.extendPlan(S,mode.a,b);g.cells=p.cells;g.h=.12;cost=p.cost;ok=!p.why;why=p.why||'';if(p.m2)label=`Agrandir : ${p.m2} m²`}
    if(GT[t]&&mode.a){const p=E.groundPlan(S,mode.a,b,GT[t]);g.cells=p.cells.map(i=>[i%D.LOT_W,i/D.LOT_W|0]);g.h=.04;cost=p.cost;ok=!p.why;why=p.why||'';if(p.cells.length)label=`${TOOL_NAMES[t]} : ${p.cells.length} m²`}
    if(t==='lane'&&mode.plan){const p=mode.plan;g.cells=(p.cells||[]).map(i=>[i%D.LOT_W,i/D.LOT_W|0]);g.h=.04;g.poly=mode.poly;ok=!p.why;why=p.why||'';cost=p.refund?-p.refund:(p.cost||0);
-    const e=mode.poly[mode.poly.length-1];anchor=[e[0],1,e[1]];const m=Math.round(mode.len||0);if(m)label=mode.trim?`Raccourcir : ${m} m`:`Route : ${m} m`}
+    const e=mode.vert?[Math.round(mode.vert.tx),Math.round(mode.vert.tz)]:mode.poly[mode.poly.length-1];anchor=[e[0],1,e[1]];const m=Math.round(mode.len||0);if(mode.vert)label='Modifier la voie'+(m?` : ${p.refund?'−':'+'}${m} m`:'');else if(m)label=mode.trim?`Raccourcir : ${m} m`:`Route : ${m} m`}
    if(t==='ring'&&mode.pos){const p=E.ringPlan(S,mode.pos[0],mode.pos[1],RD.RING_R[mode.r]);g.cells=(p.cells||[]).concat(p.island||[]).map(i=>[i%D.LOT_W,i/D.LOT_W|0]);g.h=.04;cost=p.cost||0;ok=!p.why;why=p.why||'';anchor=[mode.pos[0],1,mode.pos[1]];label=`Rond-point · ${RD.RING_R[mode.r]*2+2} m`}
+   if(t==='light'&&mode.a&&mode.b){const p=E.lightPlan(S,mode.a,mode.b),b2=p.b||mode.b;g.poly=[mode.a,b2];g.noArrow=true;cost=p.cost||RD.LIGHT.cost;ok=!p.why;why=p.why||'';if(p.lanes)label=`Feu piéton · ${p.lanes} voie${p.lanes>1?'s':''}`}
    if(t==='erase'&&mode.a){const inf=E.eraseInfo(S,...mode.a);if(inf){g.cells=inf.cells.map(k=>[k%D.LOT_W,k/D.LOT_W|0]);g.h=.3;label='Démolir : '+inf.label;cost=-inf.refund;ok=true;if(inf.lost)why=inf.lost+' articles de la réserve seront perdus.'}else why='Rien à démolir ici.'}
    if(mode.a)anchor=[b[0]+.5,(g.h||0)+1,b[1]+.5]}
   if(ok&&cost>0&&cost>S.cash){ok=false;why='Pas assez d’argent.'}
@@ -143,13 +146,22 @@ export function bagastore(c){
  function confirmPlace(){if(!mode?.pos)return;if(mode.move){const why=E.moveItem(S,mode.move,mode.pos[0],mode.pos[1],mode.r);if(why){msg(why);sfx('error');return}sfx('place');sel=mode.move;stopMode();return}const r=E.place(S,mode.t,mode.pos[0],mode.pos[1],mode.r);
   if(typeof r==='string'){msg(r);sfx('error');return}sfx('place');mode.pos=null;updatePlace()}
  // ---- tracé d'une voie : segments droits ou à 45° entre coins de cases ; un changement de direction ajoute un virage
- function laneReset(){mode.cur=null;mode.pts=null;mode.plan=null;mode.poly=null;mode.trim=null;mode.trim0=false;mode.edit=null;mode.len=0}
+ function laneReset(){mode.cur=null;mode.pts=null;mode.plan=null;mode.poly=null;mode.trim=null;mode.trim0=false;mode.edit=null;mode.vert=null;mode.len=0}
+ // poignées des voies : virages (sommets) et milieux des segments assez longs (pour créer un virage)
+ function laneHandles(){const o=[];for(const l of S.lanes||[]){if(l.ring)continue;const p=l.pts;
+   for(let i=1;i<p.length-1;i++)o.push({id:l.id,i,ins:false,x:p[i][0],z:p[i][1]});
+   for(let i=1;i<p.length;i++){const a=p[i-1],b=p[i];if(Math.hypot(b[0]-a[0],b[1]-a[1])>=4)o.push({id:l.id,i,ins:true,x:(a[0]+b[0])/2,z:(a[1]+b[1])/2})}}return o}
+ function handleAt(x,z){let best=null;for(const h of laneHandles()){const d=Math.hypot(h.x-x,h.z-z),lim=h.ins?.7:.9;if(d<=lim&&(!best||d<best.d))best={...h,d}}return best}
  const V=(x,z)=>[Math.round(x),Math.round(z)];
  function laneDown(x,z){laneReset();const q=RD.laneAt(S,x,z,1.15);
+  const h=!(q&&q.end)&&handleAt(x,z);if(h){mode.vert={id:h.id,i:h.i,ins:h.ins,x:h.x,z:h.z};mode.pts=[];return}
   if(q&&q.end){const l=S.lanes.find(o=>o.id===q.id),e=q.end==='end'?l.pts[l.pts.length-1]:l.pts[0];mode.edit={id:q.id,end:q.end,p:e};mode.pts=[[e[0],e[1]]];mode.trim0=q.end==='start'}
   else{let v=V(x,z);const r=E.snapRing?E.snapRing(S,v):v;mode.pts=[r]}
   laneMove(x,z,true)}
  function laneMove(x,z,first){const pts=mode.pts;if(!pts)return false;const key0=JSON.stringify([mode.poly,mode.trim]);
+  // virage d'une voie qu'on déplace (ou qu'on crée au milieu d'un segment)
+  if(mode.vert){const v=mode.vert;if(first||Math.hypot(x-v.x,z-v.z)<.5&&!mode.plan)return false;const p=E.vertexPlan(S,v.id,v.i,x,z,v.ins);v.tx=x;v.tz=z;mode.plan=p;
+   const l=S.lanes.find(o=>o.id===v.id);mode.poly=(p.pts||l.pts).map(a=>[a[0],a[1]]);mode.len=p.len||0;return JSON.stringify([mode.poly,mode.trim])!==key0}
   // bout d'une voie qu'on fait glisser le long d'elle : on la raccourcit
   if(mode.edit){const q=RD.laneAt(S,x,z,1.0);if(q&&q.id===mode.edit.id&&Math.hypot(x-mode.edit.p[0],z-mode.edit.p[1])>.6){const p=E.trimPlan(S,q.id,mode.edit.end,x,z);
     mode.trim={id:q.id,end:mode.edit.end,x,y:z};mode.plan=p;const l=S.lanes.find(o=>o.id===q.id),keep=p.pts||l.pts;mode.poly=keep.map(a=>[a[0],a[1]]);if(mode.edit.end==='start')mode.poly=mode.poly.slice();mode.len=p.refund?p.refund/RD.LANE_COST/D.REFUND:0;return JSON.stringify([mode.poly,mode.trim])!==key0}
@@ -169,7 +181,9 @@ export function bagastore(c){
   if(t==='erase')why=E.eraseAt(S,...mode.a);
   if(t==='extend'){why=E.extendRect(S,mode.a,mode.b);if(!why)save()}
   if(GT[t])why=E.paintGround(S,mode.a,mode.b,GT[t]);
-  if(t==='lane'&&mode.plan){why=mode.trim?E.trimLane(S,mode.trim.id,mode.trim.end,mode.trim.x,mode.trim.y):E.buildLane(S,mode.plan.pts);if(!why){laneReset();save()}}
+  if(t==='lane'&&mode.plan&&mode.vert){const v=mode.vert;why=E.moveVertex(S,v.id,v.i,v.tx,v.tz,v.ins);if(!why){laneReset();save()}}
+  else if(t==='lane'&&mode.plan){why=mode.trim?E.trimLane(S,mode.trim.id,mode.trim.end,mode.trim.x,mode.trim.y):E.buildLane(S,mode.plan.pts);if(!why){laneReset();save()}}
+  if(t==='light'&&mode.a&&mode.b){why=E.buildLight(S,mode.a,mode.b);if(!why)save()}
   if(t==='ring'&&mode.pos){why=E.buildRing(S,mode.pos[0],mode.pos[1],RD.RING_R[mode.r]);if(!why){mode.pos=null;save()}}
   if(why){msg(why);sfx('error')}else sfx(t==='erase'?'erase':'place');mode.a=mode.b=null;updatePlace()}
 
@@ -186,12 +200,12 @@ export function bagastore(c){
  const tile=(k,v,sub)=>{const d=el('div','st-tile');d.append(el('small',null,k),el('b',null,v));if(sub)d.append(el('i',null,sub));return d};
  const bars=(items,fmt=eur)=>{const box=el('div','st-hbars'),max=Math.max(1,...items.map(i=>Math.abs(i[1])));for(const [k,v,col] of items){const r=el('div','st-hbar');const m=el('i');const u=el('u');u.style.width=Math.abs(v)/max*100+'%';if(col)u.style.background=col;m.append(u);r.append(el('span',null,k),m,el('b',null,fmt(v)));box.append(r)}return box};
  let panelKey='';
- function renderPanel(){if(!panel)return;const old=sheet.querySelector('.st-body'),top=old?old.scrollTop:0,key=[panel,buildTab,stockTab,moneyTab,sel].join();
+ function renderPanel(){if(!panel)return;const old=sheet.querySelector('.st-body'),top=old?old.scrollTop:0,key=[panel,buildTab,stockTab,moneyTab,sel].join(),ot=sheet.querySelector('.st-tabs'),left=ot?ot.scrollLeft:0,samePanel=panelKey.split(',')[0]===panel;
   const fn={build:pBuild,stock:pStock,team:pTeam,money:pMoney,item:pItem,report:pReport,welcome:pWelcome}[panel];fn&&fn();
-  const nb=sheet.querySelector('.st-body');if(nb&&key===panelKey)nb.scrollTop=top;panelKey=key}
+  const nb=sheet.querySelector('.st-body');if(nb&&key===panelKey)nb.scrollTop=top;const nt=sheet.querySelector('.st-tabs');if(nt&&samePanel)nt.scrollLeft=left;panelKey=key}
  function pBuild(){const body=head('Construire · '+eur(S.cash),D.TABS,buildTab,v=>buildTab=v);const grid=el('div','st-cards');body.append(grid);
   if(buildTab==='murs'){for(const t of D.TOOLS){const b=card(t.name,t.price?eur(t.price)+(t.id==='wall'?' / m':''):'');b.onclick=()=>{sfx('click');startTool(t.id)};grid.append(b)}return}
-  if(buildTab==='parking'){for(const [id,name,price,sub] of [['lane','Route',RD.LANE_COST+' € / m','Une voie à sens unique, 2 de large'],['ring','Rond-point',eur(RD.laneCost({ring:{r:4}})),'Les voies qui arrivent cèdent'],['yield','Cédez le passage','Gratuit','À poser avant un croisement'],['cross','Passage piéton',eur(E.GROUND_COST[4])+' / m²','Sur une voie, 1 de large'],['walk','Trottoir',eur(E.GROUND_COST[3])+' / m²','Chemin des piétons (1 de large)'],['asphalt','Goudron',eur(E.GROUND_COST[1])+' / m²','Sol des places, piétons']]){const b=card(name,price,sub);b.onclick=()=>{sfx('click');startTool(id)};grid.append(b)}}
+  if(buildTab==='parking'){for(const [id,name,price,sub] of [['lane','Route',RD.LANE_COST+' € / m','Une voie à sens unique, 2 de large'],['ring','Rond-point',eur(RD.laneCost({ring:{r:4}})),'Les voies qui arrivent cèdent'],['yield','Cédez le passage','Gratuit','À poser avant un croisement'],['cross','Passage piéton',eur(E.GROUND_COST[4])+' / m²','Sur une voie, 1 de large'],['light','Feu piéton',eur(RD.LIGHT.cost),'En travers des voies, sur un passage piéton'],['walk','Trottoir',eur(E.GROUND_COST[3])+' / m²','Chemin des piétons (1 de large)'],['asphalt','Goudron',eur(E.GROUND_COST[1])+' / m²','Sol des places, piétons']]){const b=card(name,price,sub);b.onclick=()=>{sfx('click');startTool(id)};grid.append(b)}}
   if(buildTab==='agrandir'){const b=card('Agrandir le magasin',eur(D.EXTEND.perM2)+' / m²','Sol et murs compris');b.onclick=()=>{sfx('click');startTool('extend')};grid.append(b);
    body.append(el('p','st-note',`Surface : ${E.area(S)} m² · vente ${E.salesArea(S)} m²`));return}
   for(const d of D.ITEMS.filter(i=>i.tab===buildTab)){const sub=d.kind==='spot'?'+ clients en voiture':d.kind==='bus'?'Un bus amène des clients':d.kind==='corral'?'Caddies : paniers plus gros':d.kind==='sale'||d.kind==='counter'||d.kind==='reserve'?`${d.cap} articles`:d.attract?'+ attractif':d.security?'− vols':d.clean?'− saleté':'';
@@ -235,7 +249,7 @@ export function bagastore(c){
    const tg=p.tag==='empty'?'empty':pl&&pl.st!=='ok'?pl.st:p.tag;if(tg){nb.append(el('em','st-tag '+TAG[tg][1],TAG[tg][0]))}
    name.append(nb,el('small',null,E.price(S,k.id).toFixed(2).replace('.',',')+' €'+(pl?` · vend ${Math.round(pl.perDay)} / j · objectif ${Math.round(pl.target)}`:'')));
    const al=el('span','st-step');al.append(btn('−',()=>{S.alloc[k.id]=Math.max(0,(S.alloc[k.id]||0)-1);renderPanel()}),el('b',null,Math.round((S.alloc[k.id]||0)/tot*100)+' %'),btn('+',()=>{S.alloc[k.id]=(S.alloc[k.id]||0)+1;renderPanel()}));
-   const mg=el('span','st-step'+(S.margin[k.id]>k.ref+35?' high':S.margin[k.id]<k.ref-35?' low':''));mg.append(btn('−',()=>{S.margin[k.id]=Math.max(0,S.margin[k.id]-10);renderPanel()}),el('b',null,S.margin[k.id]+' %'),btn('+',()=>{S.margin[k.id]=Math.min(800,S.margin[k.id]+10);renderPanel()}));
+   const mg=el('span','st-step'+(S.margin[k.id]>k.ref+5*D.MARGIN_SCALE?' high':S.margin[k.id]<k.ref-5*D.MARGIN_SCALE?' low':''));mg.append(btn('−',()=>{S.margin[k.id]=Math.max(0,S.margin[k.id]-10);renderPanel()}),el('b',null,S.margin[k.id]+' %'),btn('+',()=>{S.margin[k.id]=Math.min(800,S.margin[k.id]+10);renderPanel()}));
    const sk=el('span','st-stk'+(pl?' '+pl.st:p.tag==='empty'?' missing':''));sk.append(el('span',null,`${p.shelf} / ${p.reserve}`));if(pl)sk.append(el('small',null,dj(pl.days)));
    const rw=row(name,al,mg,sk);if(!pl)rw.classList.add('st-off');tbl.append(rw)}
   body.append(tbl)}
@@ -361,6 +375,11 @@ export function bagastore(c){
   if(anchor&&!pop.hidden){const [px,py]=project(M,cam,...anchor);pop.style.left=Math.max(40,Math.min(cam.w-40,px))+'px';pop.style.top=Math.max(50,Math.min(cam.h-60,py))+'px'}
   // icônes : rayons vides, bulles, encaissements
   const dpr=cv.width/cam.w;g2.setTransform(dpr,0,0,dpr,0,0);g2.clearRect(0,0,cam.w,cam.h);g2.textAlign='center';g2.textBaseline='middle';
+  // outil route : toutes les voies et leurs poignées (bouts, virages, milieux de segment)
+  if(mode?.id==='lane'){const P=(x,z)=>project(M,cam,x,.06,z),editing=mode.vert?.id;
+   for(const l of S.lanes||[]){if(l.ring||l.id===editing)continue;const p=l.pts;g2.lineWidth=2;g2.strokeStyle='#ffffffb0';g2.beginPath();p.forEach((q,i)=>{const [px,py]=P(q[0],q[1]);i?g2.lineTo(px,py):g2.moveTo(px,py)});g2.stroke();
+    for(let i=0;i<p.length;i++){const [px,py]=P(p[i][0],p[i][1]),end=i===0||i===p.length-1;g2.beginPath();g2.arc(px,py,end?6:5,0,7);g2.fillStyle=end?(i?'#e8892b':'#2f7de1'):'#fff';g2.fill();g2.lineWidth=1.5;g2.strokeStyle='#27453c';g2.stroke()}}
+   for(const h of laneHandles()){if(!h.ins||h.id===editing)continue;const [px,py]=P(h.x,h.z);g2.beginPath();g2.arc(px,py,4,0,7);g2.fillStyle='#ffffffd0';g2.fill();g2.fillStyle='#27453c';g2.font='bold 8px sans-serif';g2.fillText('+',px,py+.5)}}
   // rayons vides ou presque : rouge = plus rien en réserve (il faut commander), orange = vide mais la réserve en a (l'équipe va remplir), jaune = presque vide
   for(const o of S.items){const d=D.ITEM[o.t];if(!o.cat||!d.cap||d.kind==='reserve'||o.stock>=d.cap*.25)continue;if(d.kind==='counter'&&!E.manned(S,o))continue;const [w,dd]=E.size(o),[px,py]=project(M,cam,o.x+w/2,d.h+.6,o.y+dd/2);
    const res=S.reserve[o.cat]>0,s=1+Math.sin(time*5+o.id)*.08;
@@ -385,5 +404,6 @@ export function bagastore(c){
    if(panel&&LIVE.has(panel)&&!press&&!hold&&(liveT+=dt)>.5&&performance.now()-scrolled>600){liveT=0;renderPanel()}
    if((saveT+=dt)>20){saveT=0;save()}},
   key(k){if(k==='Escape'){if(mode)stopMode();else closePanel()}if(k==='r'&&mode?.kind==='item'){mode.r=(mode.r+1)%4;updatePlace()}},
+  pause(){save()},
   destroy(){save();document.removeEventListener('visibilitychange',onHide);window.removeEventListener('pagehide',save);window.removeEventListener('pointerup',unpress);window.removeEventListener('pointercancel',unpress)}}
 }

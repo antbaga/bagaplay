@@ -32,9 +32,9 @@ export const CATS=[
  {id:'hygiene',  name:'Hygiène & beauté',  store:'ambiant', cost:3.64, ref:35, demand:6,  loss:0,    color:[[.85,.7,.95],[.6,.85,.85]],theft:2},
  {id:'entretien',name:'Entretien & maison',store:'ambiant', cost:3.25, ref:30, demand:5,  loss:0,    color:[[.3,.6,.9],[.4,.8,.5]]}
 ];
-// 4.1 : marges ×7 (bénéfice par article ×7). MARGIN_SCALE remet à l'échelle la sensibilité des clients aux marges.
-export const MARGIN_SCALE=7;
-for(const c of CATS)c.ref*=MARGIN_SCALE;
+// Marges à l'échelle : 4.1 ×7, 4.2 ×5,6 (bénéfices −20 %). MARGIN_SCALE remet à l'échelle la sensibilité des clients aux marges.
+export const MARGIN_SCALE=5.6;
+for(const c of CATS)c.ref=Math.round(c.ref*MARGIN_SCALE);
 export const CAT=Object.fromEntries(CATS.map(c=>[c.id,c]));
 export const STORES={ambiant:'Ambiant',frais:'Frais',surgele:'Surgelé'};
 const AMB=['epicerie','sucre','petitdej','boissons','alcool','hygiene','entretien'];
@@ -65,8 +65,8 @@ export const ITEMS=[
  {id:'plant',  tab:'deco',    name:'Plante',               w:1,d:1,h:1.2,price:90,   kind:'decor',zone:0,attract:1},
  {id:'lamp',   tab:'deco',    name:'Éclairage d’ambiance', w:1,d:1,h:2.2,price:300,  kind:'decor',zone:0,attract:2,power:12},
  {id:'bin',    tab:'deco',    name:'Poubelle',             w:1,d:1,h:0.8,price:60,   kind:'decor',zone:0,clean:1},
- {id:'camera', tab:'deco',    name:'Caméra',               w:1,d:1,h:2.6,price:1400, kind:'decor',zone:0,security:.07,power:8},
- {id:'gate',   tab:'deco',    name:'Portique antivol',     w:1,d:1,h:1.6,price:3200, kind:'decor',zone:0,security:.2,power:10}
+ {id:'camera', tab:'caisses', name:'Caméra',               w:1,d:1,h:2.6,price:1400, kind:'decor',zone:0,security:.07,power:8},
+ {id:'gate',   tab:'caisses', name:'Portique antivol',     w:1,d:1,h:1.6,price:3200, kind:'decor',zone:0,security:.2,power:10}
 ];
 export const ITEM=Object.fromEntries(ITEMS.map(i=>[i.id,i]));
 export const TABS=[['rayons','Rayons'],['frais','Frais'],['coupe','À la coupe'],['caisses','Caisses'],['reserve','Réserve'],['parking','Extérieur'],['murs','Murs'],['deco','Déco'],['agrandir','Agrandir']];

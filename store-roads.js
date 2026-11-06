@@ -88,7 +88,30 @@ export function net(S){if(S._RN)return S._RN;const lanes=S.lanes||[],base=new Ma
  const raster=new Uint8Array(N),owner=new Int32Array(N);
  for(const g of geo.values())for(let i=0;i<g.n;i++){const x=g.xs[i],z=g.zs[i];for(let cy=Math.floor(z-1.1);cy<=Math.floor(z+1.1);cy++)for(let cx=Math.floor(x-1.1);cx<=Math.floor(x+1.1);cx++){
   if(!inLot(cx,cy))continue;const dx=cx+.5-x,dz=cy+.5-z;if(dx*dx+dz*dz<=1.06*1.06){raster[idx(cx,cy)]=1;if(!owner[idx(cx,cy)])owner[idx(cx,cy)]=g.id}}}
- const NT={geo,trans,entries,exits,yields,raster,owner,att};NT.zones=zones(NT);NT.adj=adjacency(NT);S._RN=NT;return NT}
+ // feux piétons : points où les voies croisent la ligne du feu, et cases de route qu'il protège
+ const lights=[],lightCell=new Int32Array(N);
+ for(const L of S.lights||[]){const xs=[],[ax,ay]=L.a,[bx,by]=L.b;
+  xs.push(...crossings(geo,L.a,L.b));
+  for(let cy=Math.floor(Math.min(ay,by)-2);cy<=Math.max(ay,by)+2;cy++)for(let cx=Math.floor(Math.min(ax,bx)-2);cx<=Math.max(ax,bx)+2;cx++){if(!inLot(cx,cy)||!raster[idx(cx,cy)])continue;if(segDist([cx+.5,cy+.5],L.a,L.b)<=1.25)lightCell[idx(cx,cy)]=L.id}
+  lights.push({id:L.id,a:L.a,b:L.b,xs})}
+ const NT={geo,trans,entries,exits,yields,raster,owner,att,lights,lightCell};NT.zones=zones(NT);NT.adj=adjacency(NT);S._RN=NT;return NT}
+// ---------------------------------------------------------------- feux piétons
+function crossings(geo,[ax,ay],[bx,by]){const xs=[];
+ for(const g of geo.values())for(let i=1;i<g.n;i++){const px=g.xs[i-1],pz=g.zs[i-1],qx=g.xs[i],qz=g.zs[i],d=(qx-px)*(by-ay)-(qz-pz)*(bx-ax);if(Math.abs(d)<1e-9)continue;
+  const t=((ax-px)*(by-ay)-(ay-pz)*(bx-ax))/d,u=((ax-px)*(qz-pz)-(ay-pz)*(qx-px))/d;if(t>=0&&t<1&&u>=-.05&&u<=1.05){xs.push({lane:g.id,s:(i-1+t)*STEP});break}}return xs}
+// cycle (secondes de jeu réelles × vitesse) : vert voitures, orange, rouge voitures = vert piétons
+export const LIGHT={green:11,amber:2.5,walk:8,cost:2500,max:14};
+export function lightPhase(R,id){const T=LIGHT.green+LIGHT.amber+LIGHT.walk,t=(((R.lt||0)+id*5.3)%T+T)%T;return t<LIGHT.green?'car':t<LIGHT.green+LIGHT.amber?'amber':'walk'}
+// ligne du feu : droite ou à 45°, en travers d'au moins une voie
+export function lightPlan(S,a,b){if(!a||!b||(a[0]===b[0]&&a[1]===b[1]))return {why:'Glisse le doigt en travers des voies.'};
+ if(!aligned(a,b))b=snapSeg(a,b);const L=len2(a,b);if(L>LIGHT.max)return {why:'Feu trop long : 14 m au plus.',a,b};
+ const xs=crossings(net(S).geo,a,b).length;
+ if(!xs)return {why:'Le feu se trace en travers d’une voie.',a,b};
+ const mid=[(a[0]+b[0])/2,(a[1]+b[1])/2];if((S.lights||[]).some(o=>segDist(mid,o.a,o.b)<3))return {why:'Il y a déjà un feu ici.',a,b};
+ return {a,b,lanes:xs,cost:LIGHT.cost,why:null}}
+export function addLight(S,p){const ls=S.lights||(S.lights=[]);const id=S.lightNext=(S.lightNext||0)+1;ls.push({id,a:p.a,b:p.b});roadsChanged(S);return id}
+export function lightAt(S,x,z){let best=null;for(const o of S.lights||[]){const d=segDist([x,z],o.a,o.b);if(d<1.3&&(!best||d<best.d))best={id:o.id,d}}return best}
+export function removeLight(S,id){S.lights=(S.lights||[]).filter(o=>o.id!==id);roadsChanged(S)}
 const lenOf=d=>{let l=0;for(let i=1;i<d.length;i++)l+=len2(d[i-1],d[i]);return l};
 function cutEnd(d,c){let l=0;for(let i=d.length-1;i>0;i--){const s=len2(d[i-1],d[i]);if(l+s>=c){const t=(c-l)/s;return d.slice(0,i).concat([[d[i][0]+(d[i-1][0]-d[i][0])*t,d[i][1]+(d[i-1][1]-d[i][1])*t]])}l+=s}return [d[0]]}
 function cutStart(d,c){let l=0;for(let i=1;i<d.length;i++){const s=len2(d[i-1],d[i]);if(l+s>=c){const t=(c-l)/s;return [[d[i-1][0]+(d[i][0]-d[i-1][0])*t,d[i-1][1]+(d[i][1]-d[i-1][1])*t]].concat(d.slice(i))}l+=s}return [d[d.length-1]]}
@@ -165,12 +188,24 @@ function cleanPts(p){const o=[];for(const q of p){if(o.length&&same(o[o.length-1
 function cellsOf(dense){const g=resample(dense),set=new Set();for(let i=0;i<g.n;i++){const x=g.xs[i],z=g.zs[i];for(let cy=Math.floor(z-1.1);cy<=Math.floor(z+1.1);cy++)for(let cx=Math.floor(x-1.1);cx<=Math.floor(x+1.1);cx++){
   if(!inLot(cx,cy))continue;const dx=cx+.5-x,dz=cy+.5-z;if(dx*dx+dz*dz<=1.06*1.06)set.add(idx(cx,cy))}}return [...set]}
 // tracé d'une nouvelle ligne (points sur la grille) ; raccord automatique aux bouts d'autres lignes (prolongement)
-export function lanePlan(S,pts,blocked){pts=cleanPts(pts);if(pts.length<2)return {why:'Trace une ligne plus longue.'};
- for(let i=1;i<pts.length;i++){const k=dir8(pts[i-1],pts[i]);if(k<0)return {why:'Trace une ligne plus longue.'};if(i>1){const k0=dir8(pts[i-2],pts[i-1]),dk=Math.min((k-k0+8)%8,(k0-k+8)%8);if(dk>2)return {why:'Virage trop serré : fais-le en deux fois.'}}}
- for(const p of pts)if(p[0]<0||p[1]<0||p[0]>W||p[1]>H)return {why:'Le terrain s’arrête ici.'};
+function ptsWhy(pts){if(pts.length<2)return 'Trace une ligne plus longue.';
+ for(let i=1;i<pts.length;i++){const k=dir8(pts[i-1],pts[i]);if(k<0)return 'Trace une ligne plus longue.';if(i>1){const k0=dir8(pts[i-2],pts[i-1]),dk=Math.min((k-k0+8)%8,(k0-k+8)%8);if(dk>2)return 'Virage trop serré : fais-le en deux fois.'}}
+ for(const p of pts)if(p[0]<0||p[1]<0||p[0]>W||p[1]>H)return 'Le terrain s’arrête ici.';return null}
+const aligned=(a,b)=>{const dx=b[0]-a[0],dy=b[1]-a[1];return !!(dx||dy)&&(dx===0||dy===0||Math.abs(dx)===Math.abs(dy))};
+// distance d'un point aux autres lignes (géométrie actuelle)
+function nearLane(S,p,skip){const NT=net(S);let best=1e9;for(const g of NT.geo.values()){if(g.id===skip)continue;const q=proj(g,p[0],p[1]);if(q.d<best)best=q.d}return best}
+// raccord par proximité : un bout posé à moins de 1,6 m d'une autre ligne est avancé ou reculé d'un ou deux pas pour s'y poser
+function nudgeEnds(S,pts,skip){const o=pts.map(q=>[q[0],q[1]]);
+ for(const end of ['start','end']){const n=o.length,i=end==='start'?0:n-1,j=end==='start'?1:n-2,P=o[i],d0=nearLane(S,P,skip);if(d0<=SNAP||d0>1.6)continue;
+  const k=dir8(o[j],P),[dx,dy]=DIR8[k],segLen=Math.max(Math.abs(P[0]-o[j][0]),Math.abs(P[1]-o[j][1]));let best=null;
+  for(const t of [1,-1,2,-2]){if(-t>=segLen)continue;const Q=[P[0]+dx*t,P[1]+dy*t];if(Q[0]<0||Q[1]<0||Q[0]>W||Q[1]>H)continue;const d=nearLane(S,Q,skip);if(d<=SNAP-.05){best=Q;break}}
+  if(best)o[i]=best}
+ return o}
+export function lanePlan(S,pts,blocked){pts=cleanPts(pts);{const w=ptsWhy(pts);if(w)return {why:w}}
  const lanes=S.lanes||[];let app=null,pre=null;
  for(const l of lanes){if(l.ring)continue;if(same(l.pts[l.pts.length-1],pts[0])&&!lanes.some(o=>o!==l&&!o.ring&&same(o.pts[0],pts[0])))app=l;if(same(l.pts[0],pts[pts.length-1])&&!lanes.some(o=>o!==l&&!o.ring&&same(o.pts[o.pts.length-1],pts[pts.length-1])))pre=l}
  if(app&&pre&&app===pre)pre=null;
+ if(!app&&!pre){const q=cleanPts(nudgeEnds(S,pts));if(!ptsWhy(q))pts=q}
  const cost=ptsCost(pts),cells=cellsOf(smooth(pts,false)),bad=blocked?cells.filter(blocked):[];
  if(bad.length)return {why:'Il y a quelque chose sur le passage (magasin, meuble ou arbre à couper).',cells,bad,cost,pts};
  return {pts,cells,cost,app:app&&app.id,pre:pre&&pre.id,why:null}}
@@ -186,9 +221,62 @@ export function addLane(S,p){const lanes=S.lanes||(S.lanes=[]);let pts=p.pts;
 export function ringPlan(S,cx,cy,r,blocked){const ring={cx,cy,r};const cells=cellsOf(smooth(ringPts(ring),true)),isl=[];
  for(let y=Math.floor(cy-r);y<=cy+r;y++)for(let x=Math.floor(cx-r);x<=cx+r;x++){if(!inLot(x,y))continue;if(Math.hypot(x+.5-cx,y+.5-cy)<r-1.05)isl.push(idx(x,y))}
  if(cx-r-1<0||cy-r-1<0||cx+r+1>W||cy+r+1>H)return {why:'Le terrain s’arrête ici.',cells};
+ if((S.lanes||[]).some(l=>l.ring&&Math.hypot(l.ring.cx-cx,l.ring.cy-cy)<l.ring.r+r+2))return {why:'Trop près d’un autre rond-point.',cells};
  const bad=blocked?cells.concat(isl).filter(blocked):[];if(bad.length)return {why:'Il y a quelque chose sur le passage (magasin, meuble ou arbre à couper).',cells,bad};
- return {ring,cells,island:isl,cost:laneCost({ring}),why:null}}
-export function addRing(S,p){const lanes=S.lanes||(S.lanes=[]);const id=S.laneNext=(S.laneNext||0)+1;const l={id,ring:p.ring};lanes.push(l);roadsChanged(S);return l}
+ const cut=ringCut(S,ring),base=laneCost({ring});
+ return {ring,cells,island:isl,cut:cut.changes,refund:cut.refund,extra:cut.extra,cost:base+cut.extra-cut.refund,why:null}}
+// suite de points de la grille le long d'une ligne (pas de 1 case, ou 1 diagonale)
+function gridSeq(pts){const seq=[];for(let i=0;i<pts.length-1;i++){const a=pts[i],b=pts[i+1],k=dir8(a,b),[dx,dy]=DIR8[k],n=Math.max(Math.abs(b[0]-a[0]),Math.abs(b[1]-a[1]));for(let t=0;t<n;t++)seq.push({p:[a[0]+dx*t,a[1]+dy*t],seg:i})}
+ seq.push({p:pts[pts.length-1].slice(),seg:pts.length-2});return seq}
+function subPts(pts,seq,i,j){const o=[seq[i].p];for(let s=seq[i].seg+1;s<=seq[j].seg;s++)o.push(pts[s]);o.push(seq[j].p);return cleanPts(o)}
+// voies coupées par un nouveau rond-point : la partie dans le cercle disparaît, les morceaux s'arrêtent sur l'anneau (et s'y raccordent) ;
+// les bouts de voie qui s'arrêtent à moins de 2,5 m de l'anneau y sont prolongés
+function ringCut(S,ring){const {cx,cy,r}=ring,band=.75,dd=p=>Math.hypot(p[0]-cx,p[1]-cy)-r,changes=[];let removed=0,added=0;
+ for(const l of S.lanes||[]){if(l.ring)continue;const seq=gridSeq(l.pts),deep=seq.map(q=>dd(q.p)<-band);let pieces;
+  if(deep.some(Boolean)){pieces=[];let i=0;
+   while(i<seq.length){if(deep[i]){i++;continue}let j=i;while(j+1<seq.length&&!deep[j+1])j++;let a=i,b=j;
+    if(i>0){let best=-1;for(let k=i;k<=j&&dd(seq[k].p)<=band;k++)if(best<0||Math.abs(dd(seq[k].p))<Math.abs(dd(seq[best].p)))best=k;if(best>=0)a=best}
+    if(j<seq.length-1){let best=-1;for(let k=j;k>=a&&dd(seq[k].p)<=band;k--)if(best<0||Math.abs(dd(seq[k].p))<Math.abs(dd(seq[best].p)))best=k;if(best>=0)b=best}
+    if(b>a){const q=subPts(l.pts,seq,a,b);if(q.length>=2&&ptsCost(q)>=LANE_COST)pieces.push(q)}i=j+1}}
+  else pieces=[l.pts.map(q=>[q[0],q[1]])];
+  // prolongement des bouts proches de l'anneau
+  for(const q of pieces){const n=q.length;
+   for(const end of ['start','end']){const i=end==='start'?0:n-1,j=end==='start'?1:n-2,P=q[i],d=dd(P);if(Math.abs(d)<=band||d<0||d>2.5)continue;
+    const k=dir8(q[j],P),[dx,dy]=DIR8[k];for(let t=1;t<=3;t++){const Q=[P[0]+dx*t,P[1]+dy*t];if(dd(Q)<-band)break;if(Math.abs(dd(Q))<=band){q[i]=Q;break}}}}
+  const before=JSON.stringify(l.pts),after=pieces.map(q=>JSON.stringify(q));if(pieces.length===1&&after[0]===before)continue;
+  const lo=ptsCost(l.pts),ln=pieces.reduce((t,q)=>t+ptsCost(q),0);if(ln<lo)removed+=lo-ln;else added+=ln-lo;changes.push({id:l.id,pieces})}
+ return {changes,refund:Math.round(removed*D.REFUND),extra:added}}
+const segDist=(p,a,b)=>{const vx=b[0]-a[0],vy=b[1]-a[1],L=vx*vx+vy*vy||1,t=clamp(((p[0]-a[0])*vx+(p[1]-a[1])*vy)/L,0,1);return Math.hypot(a[0]+vx*t-p[0],a[1]+vy*t-p[1])};
+const polyDist=(p,pts)=>{let d=1e9;for(let i=1;i<pts.length;i++)d=Math.min(d,segDist(p,pts[i-1],pts[i]));return d};
+export function addRing(S,p){const lanes=S.lanes||(S.lanes=[]);
+ for(const c of p.cut||[]){const k=lanes.findIndex(o=>o.id===c.id);if(k<0)continue;lanes.splice(k,1);const made=[];
+  for(const q of c.pieces){const id=S.laneNext=(S.laneNext||0)+1;const nl={id,pts:q};lanes.push(nl);made.push(nl)}
+  S.yields=(S.yields||[]).filter(y=>{if(y.lane!==c.id)return true;let best=null,bd=1.5;for(const nl of made){const d=polyDist([y.x,y.y],nl.pts);if(d<bd){bd=d;best=nl}}if(!best)return false;y.lane=best.id;return true})}
+ const id=S.laneNext=(S.laneNext||0)+1;const l={id,ring:p.ring};lanes.push(l);roadsChanged(S);return l}
+// déplacer un sommet d'une ligne (ins : on crée un nouveau virage au milieu du segment i-1 → i) ; les deux segments voisins restent droits ou à 45°
+export function vertexPlan(S,id,i,x,z,ins,blocked){const l=(S.lanes||[]).find(o=>o.id===id);if(!l||l.ring)return {why:'Introuvable.'};
+ const old=l.pts;let pts=old.map(q=>[q[0],q[1]]);
+ const a0=pts[i-1],b0=pts[i];
+ if(ins&&a0&&b0&&(a0[0]===b0[0]||a0[1]===b0[1])){
+  // segment droit : on crée une bosse (deux biais à 45° et un plateau) à l'endroit tiré, décalée de h cases
+  const L=Math.max(Math.abs(b0[0]-a0[0]),Math.abs(b0[1]-a0[1])),u=[Math.sign(b0[0]-a0[0]),Math.sign(b0[1]-a0[1])],n=[-u[1],u[0]];
+  const t=Math.round((x-a0[0])*u[0]+(z-a0[1])*u[1]),h=clamp(Math.round((x-a0[0])*n[0]+(z-a0[1])*n[1]),-4,4),H=Math.abs(h),w=1;
+  if(!h)return {why:'Tire le + sur le côté pour faire un virage.',pts:old};
+  const t0=clamp(t,w+H,L-w-H);if(L<2*(w+H))return {why:'Segment trop court pour ce virage.',pts:old};
+  const P=k=>[a0[0]+u[0]*k,a0[1]+u[1]*k];const A=P(t0-w-H),Q1=[P(t0-w)[0]+n[0]*h,P(t0-w)[1]+n[1]*h],Q2=[P(t0+w)[0]+n[0]*h,P(t0+w)[1]+n[1]*h],B=P(t0+w+H);
+  pts.splice(i,0,A,Q1,Q2,B)}
+ else{if(ins)pts.splice(i,0,null);const a=pts[i-1],b=pts[i+1];if(!a||!b)return {why:'Introuvable.'};
+  // le virage va là où on tire ; si les segments voisins ne sont plus droits ou à 45°, un coude de plus les raccorde
+  const Q=[Math.round(x),Math.round(z)],elbow=(p,q,m)=>{const dx=q[0]-p[0],dy=q[1]-p[1],k=Math.min(Math.abs(dx),Math.abs(dy));if(!k||Math.abs(dx)===Math.abs(dy))return [];
+   const d=[Math.sign(dx)*k,Math.sign(dy)*k];return [m?[q[0]-d[0],q[1]-d[1]]:[p[0]+d[0],p[1]+d[1]]]};
+  let best=null;for(const m1 of [1,0])for(const m2 of [0,1]){const c=cleanPts(pts.slice(0,i).concat(elbow(a,Q,m1),[Q],elbow(Q,b,m2),pts.slice(i+1)));if(ptsWhy(c))continue;const L=ptsCost(c);if(!best||L<best.L)best={c,L}}
+  if(!best)return {why:'Pas de virage possible ici.',pts:old};pts=best.c}
+ const np=cleanPts(pts);const w=ptsWhy(np);if(w)return {why:w,pts:np};
+ const cells=cellsOf(smooth(np,false)),bad=blocked?cells.filter(blocked):[];
+ const d=ptsCost(np)-ptsCost(old),cost=Math.max(0,d),refund=d<0?Math.round(-d*D.REFUND):0;
+ if(bad.length)return {why:'Il y a quelque chose sur le passage (magasin, meuble ou arbre à couper).',pts:np,cells,bad,cost};
+ return {pts:np,cells,cost,refund,len:Math.abs(d)/LANE_COST,why:JSON.stringify(np)===JSON.stringify(old)?'Rien à changer.':null}}
+export function moveVertex(S,id,p){const l=S.lanes.find(o=>o.id===id);l.pts=p.pts;roadsChanged(S)}
 // raccourcir une ligne par un bout : nouveau bout = point de la ligne le plus proche de (x,y)
 export function trimPlan(S,id,end,x,y){const l=(S.lanes||[]).find(o=>o.id===id);if(!l||l.ring)return {why:'Introuvable.'};
  // points de la grille le long de la ligne
@@ -227,6 +315,7 @@ export function distTo(NT,v,lane,s,max=30){if(!v.route){if(v.lane!==lane)return 
 export function drive(S,R,list,dt,agents){const NT=net(S),arrived=[],blocks=R.blocks||[],all=list.concat(blocks);
  for(const v of list){if(!v.route)continue;const my=half(v);let lim=v.vmax||5;v.why='';
   for(const o of all){if(o===v||o.lane==null)continue;const d=distTo(NT,v,o.lane,o.s,20);if(d==null||d<=0)continue;if(o.h===0&&d<my+.3)continue;const gap=d-my-half(o);if(gap<12){lim=Math.min(lim,Math.max(0,(gap-.7)*2.2));if(gap<.75){lim=0;v.why='suit '+o.id}}}
+  if(NT.lights.length)for(const L of NT.lights){const ph=lightPhase(R,L.id);if(ph==='car')continue;for(const x of L.xs){const d=distTo(NT,v,x.lane,x.s,30);if(d==null||d<my+.2)continue;const g=d-my-1.6;if(ph==='amber'&&g<2.5)continue;lim=Math.min(lim,Math.max(0,g*2.2));if(g<.05){lim=0;v.why=v.why||'feu'}}}
   const z=zoneCheck(NT,v,list,blocks);if(z!=null){const g=z-my-.4;lim=Math.min(lim,Math.max(0,g*2.2));if(g<.05){lim=0;v.why=v.why||'carrefour'}}
   if(agents&&lim>0)for(const a of agents){const q=aheadPt(NT,v,my+1);if(!q)break;if(Math.abs(a.x-q.x)<3.5&&Math.abs(a.y-q.z)<3.5&&pedBlocks(NT,v,a,my)){lim=0;v.why='piéton';break}}
   {const q0=aheadPt(NT,v,0),q=aheadPt(NT,v,3.2);if(q0&&q){let da=Math.abs(q.ang-q0.ang);while(da>Math.PI)da=Math.abs(da-2*Math.PI);if(da>.5)lim=Math.min(lim,2.6)}}

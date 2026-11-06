@@ -106,9 +106,17 @@ export function item(B,S,it,v){const F=frame(it),d=F.d,w=d.w,dd=d.d,fill=d.cap?M
   for(const y of [.9,1.3])L(.1,y-.04,.3,w-.1,y,.55,C.white);products([.9,1.3],.15,w-.15,.32,.52,.22,it.cat,Math.min(1,fill*1.5));
   L(0,0,1.3,w,.85,2,base);L(0,.82,1.3,w,.86,2,C.white);L(.05,.86,1.35,w-.05,.88,1.95,C.white);
   products([.88],.1,w-.1,1.4,1.9,.12,it.cat,fill);L(0,.86,1.3,.06,1.2,2,C.glass);L(w-.06,.86,1.3,w,1.2,2,C.glass);L(0,1.17,1.92,w,1.22,2,C.glass);break}
- case 'checkout':{L(0,0,.2,1.5,.85,.8,rgb('#5b6470'));L(0,.85,.25,1.5,.88,.75,rgb('#22262c'));L(1.5,0,.55,1.98,.95,.85,rgb('#5b6470'));
-  L(1.55,.95,.6,1.9,1.15,.8,C.dark);L(1.6,1.15,.62,1.85,1.35,.68,rgb('#9fd3ff'));
-  L(.04,0,.22,.1,1.9,.28,C.metal);const on=E.manned(S,it);L(-.02,1.9,.18,.16,2.1,.32,on?C.green:C.red);break}
+ case 'checkout':{// caisse à tapis roulant : meuble long côté clients, tapis, scanner, poste de caisse, siège, borne lumineuse
+  const body=rgb('#d9dde2'),side=rgb('#4f6d8f'),belt=rgb('#1f2226'),steel=C.metal,on=E.manned(S,it);
+  L(0,0,.42,1.42,.08,.96,rgb('#2c3138'));L(0,.08,.42,1.42,.8,.96,side,body);L(.02,.8,.44,1.4,.84,.94,body);
+  L(.06,.84,.5,1.22,.875,.88,belt);for(let x=.12;x<1.2;x+=.14)L(x,.875,.5,x+.02,.878,.88,rgb('#3a3f46'));
+  L(.04,.84,.47,1.24,.92,.5,steel);L(.04,.84,.88,1.24,.92,.91,steel);L(.5,.875,.6,.53,.93,.78,rgb('#e8b93c'));
+  L(1.22,.84,.5,1.42,.86,.88,rgb('#9fd3ff'));L(1.36,.86,.5,1.42,1.18,.6,C.dark);L(1.35,1.1,.58,1.43,1.16,.86,rgb('#3a3f46'));
+  L(1.42,0,.5,1.98,.9,.96,side,body);L(1.45,.9,.55,1.95,.94,.93,body);
+  L(1.5,.94,.56,1.62,1.02,.66,C.dark);L(1.54,1.02,.6,1.58,1.18,.64,steel);L(1.47,1.18,.55,1.72,1.38,.62,C.dark);L(1.49,1.2,.62,1.7,1.36,.625,rgb('#7fc4ff'));
+  L(1.78,.94,.78,1.9,1.0,.92,rgb('#2c3138'));L(1.8,1.0,.8,1.88,1.02,.86,rgb('#9fd3ff'));
+  L(1.64,0,.02,1.86,.04,.2,rgb('#3a3f46'));L(1.73,.04,.09,1.77,.46,.13,steel);L(1.62,.46,.0,1.88,.53,.2,rgb('#c2433f'));L(1.62,.53,-.02,1.88,.92,.02,rgb('#c2433f'));
+  L(.03,0,.06,.09,1.95,.12,steel);L(-.03,1.95,.0,.15,2.2,.18,on?C.green:C.red,on?mix(C.green,[1,1,1],.3):mix(C.red,[1,1,1],.3));L(-.04,2.02,.04,.16,2.13,.14,C.white);break}
  case 'self':{L(.3,0,.3,.7,1,.7,rgb('#5b6470'));L(.2,1,.35,.8,1.38,.5,C.dark);L(.25,1.05,.5,.75,1.33,.52,rgb('#9fd3ff'));L(.1,.75,.55,.9,.8,.95,C.metal);break}
  case 'rack':{const store=d.store,cap=E.capacity(S),f=cap.cap[store]?cap.used[store]/cap.cap[store]:0,n=Math.round(Math.min(1,f)*9);
   for(const [x,z] of [[0,0],[w-.08,0],[0,.92],[w-.08,.92]])L(x,0,z,x+.08,d.h,z+.08,C.orange);
@@ -228,6 +236,11 @@ function truck(B,x,z,ang,open){const c=Math.cos(ang),sn=Math.sin(ang),P=(lx,lz)=
 export function buildAgents(B,S,R,v,time){B.reset();B.setYaw(v.yaw);
  if(R.truck)truck(B,R.truck.x,R.truck.z,R.truck.ang,R.truck.st==='unload');
  for(const c of R.cars||[])car(B,c.x,c.z,c.ang,c.col);if(R.bus)bus(B,R.bus.x,R.bus.z,R.bus.ang);
+ // feux piétons : un poteau à chaque bout de la ligne ; feu voitures (rouge / orange / vert) et bonhomme piéton
+ for(const L of RD.net(S).lights){const ph=RD.lightPhase(R,L.id),off=[.16,.17,.18];
+  for(const [x,z] of [L.a,L.b]){B.box(x-.06,0,z-.06,x+.06,2.5,z+.06,rgb('#3a3f45'));B.box(x-.17,1.85,z-.17,x+.17,2.75,z+.17,rgb('#24282d'));
+   const lamp=(y,col,on)=>B.box(x-.2,y,z-.2,x+.2,y+.22,z+.2,on?col:off,on?col:off);lamp(2.48,[1,.18,.15],ph==='walk');lamp(2.22,[1,.7,.1],ph==='amber');lamp(1.96,[.2,.95,.35],ph==='car');
+   B.box(x-.14,1.3,z-.14,x+.14,1.68,z+.14,rgb('#24282d'));B.box(x-.16,1.36,z-.16,x+.16,1.62,z+.16,ph==='walk'?[.25,1,.45]:[1,.25,.2])}}
  // portes coulissantes de l'entrée : s'ouvrent quand quelqu'un approche
  R.doors=R.doors||{};E.entrances(S).forEach((e,k)=>{const [dx,dy]=e.d,xs=e.cells.map(c=>c[0]),ys=e.cells.map(c=>c[1]),x0=Math.min(...xs),y0=Math.min(...ys);
   // ligne de la porte : sur le bord extérieur de la case d'entrée
@@ -276,6 +289,8 @@ function lanes(B,S){const NT=RD.net(S),gs=[...NT.geo.values()],bk=new Map(),key=
    B.quad(Q(-.75,-.09),Q(.05,-.09),Q(.05,.09),Q(-.75,.09),lc);B.tri(Q(.05,-.32),Q(.6,0),Q(.05,.32),lc)}
   // cédez-le-passage : dents de requin en travers de la voie
   for(const ys of NT.yields.get(g.id)||[]){const P=RD.pos(g,ys),ux=Math.sin(P.ang),uz=Math.cos(P.ang),px=-uz,pz=ux;for(let k=-3;k<=3;k+=2){const l=k*.25,Q=(f,m)=>[P.x+ux*f+px*(l+m),.009,P.z+uz*f+pz*(l+m)];B.tri(Q(.25,-.2),Q(.25,.2),Q(-.2,0),lc)}}
+  // feu piéton : ligne d'arrêt avant la traversée
+  for(const L of NT.lights)for(const x of L.xs){if(x.lane!==g.id)continue;const P=RD.pos(g,x.s-1.7),ux=Math.sin(P.ang),uz=Math.cos(P.ang),px=-uz,pz=ux,Q=(f,l)=>[P.x+ux*f+px*l,.009,P.z+uz*f+pz*l];B.quad(Q(-.14,-.95),Q(.14,-.95),Q(.14,.95),Q(-.14,.95),lc)}
   // îlot central du rond-point
   if(g.ring){const l=S.lanes.find(o=>o.id===g.id);if(l&&l.ring){const {cx,cy,r}=l.ring,ri=r-1,m=32;for(let k=0;k<m;k++){const t0=2*Math.PI*k/m,t1=2*Math.PI*(k+1)/m;
      B.tri([cx,.05,cy],[cx+Math.cos(t0)*ri,.05,cy+Math.sin(t0)*ri],[cx+Math.cos(t1)*ri,.05,cy+Math.sin(t1)*ri],C.grass2);
@@ -287,6 +302,6 @@ export function buildGhost(B,S,g,v){B.reset();B.setYaw(v.yaw);if(!g)return;
  // flèche du sens unique, au-dessus du bloc
  // tracé d'une voie : axe et flèche au bout
  if(g.poly&&g.poly.length>1){const P=g.poly,h=.18,c=[.15,.45,.95];for(let i=1;i<P.length;i++){const [x0,z0]=P[i-1],[x1,z1]=P[i],l=Math.hypot(x1-x0,z1-z0)||1,px=-(z1-z0)/l*.14,pz=(x1-x0)/l*.14;B.quad([x0-px,h,z0-pz],[x0+px,h,z0+pz],[x1+px,h,z1+pz],[x1-px,h,z1-pz],c)}
-  const [x0,z0]=P[P.length-2],[x1,z1]=P[P.length-1],l=Math.hypot(x1-x0,z1-z0)||1,ux=(x1-x0)/l,uz=(z1-z0)/l;B.tri([x1-ux*.9-uz*.55,h+.01,z1-uz*.9+ux*.55],[x1+ux*.2,h+.01,z1+uz*.2],[x1-ux*.9+uz*.55,h+.01,z1-uz*.9-ux*.55],c)}
+  if(g.noArrow)return;const [x0,z0]=P[P.length-2],[x1,z1]=P[P.length-1],l=Math.hypot(x1-x0,z1-z0)||1,ux=(x1-x0)/l,uz=(z1-z0)/l;B.tri([x1-ux*.9-uz*.55,h+.01,z1-uz*.9+ux*.55],[x1+ux*.2,h+.01,z1+uz*.2],[x1-ux*.9+uz*.55,h+.01,z1-uz*.9-ux*.55],c)}
  for(const [x,y,r] of g.arrows||[]){const [dx,dy]=E.DIRS[r],px=-dy,py=dx,cx=x+.5,cz=y+.5,h=.12,P=(a,l)=>[cx+dx*a+px*l,h,cz+dy*a+py*l],c=[.15,.45,.95];
   B.quad(P(-1.1,-.2),P(.3,-.2),P(.3,.2),P(-1.1,.2),c);B.tri(P(.3,-.6),P(1.3,0),P(.3,.6),c)}}
