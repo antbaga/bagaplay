@@ -655,29 +655,24 @@ function trucksStep(S,R,dt){const NT=RD.net(S),T=D.TRAFFIC;
    else if(t.st==='exit'){const r=toExit(S,{lane:p.lane,s:p.sB});if(!r||!NT.geo.get(p.lane)){R.trucks.splice(R.trucks.indexOf(t),1);continue}t.st='out';onLane(R,t,r,'truck',T.carSpeed*1.4);RD.placeOn(NT,t)}
    continue}
   if(t.st!=='unload')continue;
-  // sans employé de rayon, le chauffeur décharge seul (lentement)
-  if(!(S.staff.rayon>0))driverUnload(S,R,t,dt);
+  // personne au quai depuis quelques secondes (pas d'employé de rayon, ou quai inaccessible) : le chauffeur décharge seul, lentement
+  const here=R.agents.some(o=>o.st==='unloadT'&&o.dock===t.dock);t.alone=here?0:(t.alone||0)+dt;if(t.alone>4)driverUnload(S,R,t,dt);
   if(t.done>=t.total||!Object.values(t.order.u).some(n=>n>0)){refundRest(S,t);ev(R,{t:'delivery',cost:t.cost||0,cat:t.cat,express:!!t.express});const sum=R.delSum||(R.delSum={n:0,cost:0});sum.n++;sum.cost+=t.cost||0;const p=t.plan;
    if(p&&p.zone&&t.lane==null){t.st='exit';t.man={pts:bez(p.Pk,[p.Pk[0]+p.f[0]*3.2,p.Pk[1]+p.f[1]*3.2],[p.B[0]-p.t[0]*3.2,p.B[1]-p.t[1]*3.2],p.B),i:0,rev:false,block:{lane:p.lane,s:p.sB,h:3.8}};continue}
    const r=t.lane!=null&&NT.geo.get(t.lane)&&toExit(S,{lane:t.lane,s:t.s});if(r){t.st='out';onLane(R,t,r,'truck',T.carSpeed*1.4)}else R.trucks.splice(R.trucks.indexOf(t),1)}}}
-// camion à vider pour un employé : le plus avancé dans sa manœuvre d'abord, s'il reste des palettes
-// (on va aussi attendre au quai un camion qui arrive ou manœuvre ; autant d'employés que de palettes à sortir)
-function truckToEmpty(S,R,a){let best=null;for(const t of R.trucks||[]){if(!(t.st==='unload'||t.st==='man1'||t.st==='man2'||t.st==='in'&&t.wait===false||t.st==='in'&&!dockBusy(R,t.dock)))continue;
-  const left=Object.values(t.order.u).reduce((x,y)=>x+y,0);if(!left)continue;const pal=Math.ceil(left/PALLET);
-  const busy=R.agents.filter(o=>o.truck===t.id&&(o.st==='toTruck'||o.st==='lift')).length;if(busy>=pal)continue;const sc=busy*10+(t.st==='unload'?0:t.st==='in'?2:1);if(!best||sc<best.sc)best={t,sc}}return best&&best.t}
-function driverUnload(S,R,t,dt){t.acc=(t.acc||0)+D.TRUCK.driverRate*dt;if(t.acc<1)return;let k=Math.floor(t.acc);t.acc-=k;const {cap,used}=capacity(S);let moved=0;
- for(const c in t.order.u){const n=t.order.u[c];if(!n||k<=0)continue;const st=D.CAT[c].store,u=Math.min(n,k,Math.max(0,cap[st]-used[st]-(R.carrying?.[st]||0)));if(u<=0)continue;
+// camion à quai qui a encore de la marchandise (le moins aidé d'abord ; au plus MAX_HANDS employés par camion)
+const handsAt=(R,dock)=>R.agents.filter(o=>o.k==='s'&&o.dock===dock&&(o.st==='toTruck'||o.st==='unloadT')).length;
+const left=t=>Object.values(t.order.u).reduce((x,y)=>x+y,0);
+const unloadingAt=(R,dock)=>(R.trucks||[]).find(t=>t.dock===dock&&t.st==='unload'&&left(t)>0);
+function truckNeedingHands(S,R){let best=null;for(const t of R.trucks||[]){if(t.st!=='unload'||!left(t))continue;const h=handsAt(R,t.dock);if(h>=D.TRUCK.maxHands)continue;if(!best||h<best.h)best={t,h}}return best&&best.t}
+// camion annoncé (en route, qui attend ou manœuvre, ou à quai) pour ce quai (ou n'importe lequel)
+const truckComing=(R,dock)=>(R.trucks||[]).find(t=>(dock==null||t.dock===dock)&&(t.st==='in'||t.st==='man1'||t.st==='man2'||t.st==='unload')&&left(t)>0);
+// sortir n articles du camion vers la réserve (dans la limite de la place ; ce qui ne rentre pas est rendu au fournisseur)
+function unloadInto(S,R,t,n,a){a.acc=(a.acc||0)+n;if(a.acc<1)return;let k=Math.floor(a.acc);a.acc-=k;const {cap,used}=capacity(S);let moved=0;
+ for(const c in t.order.u){const m=t.order.u[c];if(!m||k<=0)continue;const st=D.CAT[c].store,u=Math.min(m,k,Math.max(0,cap[st]-used[st]-(R.carrying?.[st]||0)));if(u<=0)continue;
   t.order.u[c]-=u;S.reserve[c]+=u;t.done+=u;k-=u;moved+=u}
- if(!moved){for(const c in t.order.u)if(t.order.u[c]>0)t.total-=t.order.u[c];refundRest(S,t)}}
-// l'équipe vide le camion : une palette (jusqu'à 400 articles) de son rayon, s'il reste de la place en réserve
-export const PALLET=400;
-export function truckPallet(S,R,t){if(!t||t.st!=='unload')return null;const {cap,used}=capacity(S);
- // une palette regroupe plusieurs rayons du même type de réserve (ambiant, frais ou surgelé)
- for(const st of ['ambiant','frais','surgele']){let free=cap[st]-used[st]-(R.carrying?.[st]||0),room=Math.min(PALLET,free);if(room<=0)continue;const items=[];
-  for(const c of D.CATS){if(c.store!==st||room<=0)continue;const n=t.order.u[c.id]||0;if(!n)continue;const u=Math.min(n,room);t.order.u[c.id]-=u;room-=u;items.push({cat:c.id,n:u})}
-  if(items.length)return {store:st,items,n:items.reduce((a,b)=>a+b.n,0)}}
- // plus de place pour ce qui reste : rendu au fournisseur
- for(const c in t.order.u)if(t.order.u[c]>0){t.total-=t.order.u[c]}refundRest(S,t);return null}
+ if(!moved&&k>0){for(const c in t.order.u)if(t.order.u[c]>0)t.total-=t.order.u[c];refundRest(S,t)}}
+function driverUnload(S,R,t,dt){unloadInto(S,R,t,D.TRUCK.driverRate*dt,t)}
 function spawnStaff(S,R){R.staffDay=S.d;R.agents=R.agents.filter(a=>a.k==='c');
  for(const it of S.items)it.inc=0;
  const e=entCells(S);let k=0;
@@ -825,16 +820,20 @@ function th(S,k){const t=S.dayStats.th;t[k]=(t[k]||0)+1}
 
 // ---- employé·e de rayon
 function stocker(S,R,a,dt){const sp=D.STAFF.speed;
- // décharger le camion : prendre une palette au quai, la ranger en réserve
- if(a.st==='toTruck'){const t=truckOf(R,a.truck),dock=t&&S.items.find(o=>o.id===t.dock);if(!dock||t.st==='exit'||t.st==='out'||!Object.values(t.order.u).some(n=>n>0)){a.st='idle';a.truck=null;return}const r=move(S,a,'item:'+dock.id,'s',sp,dt);if(r===null){a.st='idle';return}
-  if(r&&t.st!=='unload')return;// au quai : on attend que le camion soit en place
-  // à quai sur la zone de retournement : on prend la palette directement ; camion resté sur la route : plus long
-  if(r){a.st='lift';a.t=t.plan&&t.plan.zone?D.TRUCK.liftZone:D.TRUCK.liftRoad}return}
- if(a.st==='lift'){a.t-=dt;if(a.t>0)return;const t=truckOf(R,a.truck),p=truckPallet(S,R,t);if(!p){a.st='idle';return}a.carry={...p,pallet:true,truck:t.id};R.carrying=R.carrying||{};const st=p.store;R.carrying[st]=(R.carrying[st]||0)+p.n;
-  const res=S.items.filter(o=>def(o.t).kind==='reserve'&&def(o.t).store===st),x=a.c%W,y=a.c/W|0;const dst=res.length?res.reduce((q,o)=>Math.abs(o.x-x)+Math.abs(o.y-y)<Math.abs(q.x-x)+Math.abs(q.y-y)?o:q):null;a.goal=dst?'item:'+dst.id:'ent';a.st='toStore';return}
- if(a.st==='toStore'){const r=move(S,a,a.goal,'s',sp*.8,dt);if(r||r===null){a.st='drop';a.t=1.2}return}
- if(a.st==='drop'){a.t-=dt;if(a.t>0)return;const p=a.carry;if(p){for(const q of p.items)S.reserve[q.cat]+=q.n;R.carrying[p.store]-=p.n;const t=truckOf(R,p.truck);if(t)t.done+=p.n}a.carry=null;a.st='idle';a.t=.2;return}
- if(a.st==='idle'){const t=truckToEmpty(S,R,a);if(t){a.truck=t.id;a.st='toTruck';return}}
+ // partie d'avant la 5.3.1 : palette en main → rangée en réserve
+ if(a.carry&&a.carry.pallet){for(const q of a.carry.items)S.reserve[q.cat]+=q.n;if(R.carrying)R.carrying[a.carry.store]=Math.max(0,(R.carrying[a.carry.store]||0)-a.carry.n);a.carry=null;a.st='idle'}
+ if(a.st==='lift'||a.st==='toStore'||a.st==='drop')a.st='idle';
+ // un camion est à quai : on lâche ce qu'on fait (le carton retourne en réserve) et on va le vider
+ if(a.st!=='toTruck'&&a.st!=='unloadT'){const t=truckNeedingHands(S,R);if(t){if(a.carry){S.reserve[a.carry.cat]+=a.carry.n;a.carry=null}dropTask(S,a);a.dock=t.dock;a.st='toTruck'}}
+ if(a.st==='toTruck'){if(!S.items.some(o=>o.id===a.dock)){a.st='idle';return}
+  // personne à vider ici : un autre quai qui a besoin de bras, sinon on attend un camion annoncé, sinon on retourne au travail
+  if(!unloadingAt(R,a.dock)){const t=truckNeedingHands(S,R);if(t)a.dock=t.dock;else if(!truckComing(R,a.dock)){const c=truckComing(R);if(c)a.dock=c.dock;else{a.st='idle';return}}}
+  const r=move(S,a,'item:'+a.dock,'s',sp,dt);if(r===null){a.st='idle';return}if(r&&unloadingAt(R,a.dock))a.st='unloadT';return}
+ // au quai : on vide le camion (10 articles par seconde et par employé ; deux fois moins vite s'il est resté sur la route)
+ if(a.st==='unloadT'){const t=unloadingAt(R,a.dock);if(!t){a.st=truckComing(R,a.dock)?'toTruck':'idle';return}
+  unloadInto(S,R,t,D.TRUCK.perStaff*(t.plan&&t.plan.zone?1:D.TRUCK.roadFactor)*dt,a);return}
+ // un camion arrive : on l'attend au quai
+ if(a.st==='idle'){const c=truckComing(R);if(c){a.dock=c.dock;a.st='toTruck';return}}
  if(a.st==='idle'){a.t-=dt;if(a.t>0)return;a.t=.8;
   let best=null,bv=2;for(const it of S.items){const d=def(it.t);if(!it.cat||!S.reserve[it.cat]||!(d.kind==='sale'||(d.kind==='counter'&&manned(S,it))))continue;const v=(it.stock+(it.inc||0))/d.cap-(it.urgent?2:0);if((v<.75||it.urgent&&it.stock+(it.inc||0)<d.cap)&&v<bv){bv=v;best=it}}
   if(!best){if(R.rnd()<.3){a.st='wander';a.goal='cell:'+randomFloor(S,R,1)}return}

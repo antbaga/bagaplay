@@ -424,7 +424,7 @@ export function bagastore(c){
   for(const tk of R.trucks||[]){const wait=tk.wait&&tk.st==='in';if(!(tk.st==='unload'&&tk.total>0)&&!wait)continue;const [px,py]=project(M,cam,tk.x,4.4,tk.z),k=Math.min(1,tk.done/Math.max(1,tk.total)),w=84,cat=D.CAT[tk.cat]?D.CAT[tk.cat].name:'';
    g2.fillStyle='#fffaf1e6';g2.beginPath();g2.roundRect?g2.roundRect(px-w/2-4,py-13,w+8,22,7):g2.rect(px-w/2-4,py-13,w+8,22);g2.fill();
    if(!wait){g2.fillStyle='#e6e1d3';g2.fillRect(px-w/2,py+1,w,5);g2.fillStyle='#5aa36a';g2.fillRect(px-w/2,py+1,w*k,5)}
-   g2.fillStyle='#27453c';g2.font='bold 9px sans-serif';g2.fillText(wait?'En attente du quai':S.staff.rayon?cat+' · '+Math.round(k*100)+' %':'Le chauffeur décharge seul',px,wait?py-2:py-5)}
+   g2.fillStyle='#27453c';g2.font='bold 9px sans-serif';g2.fillText(wait?'En attente du quai':(tk.alone||0)<=4?cat+' · '+Math.round(k*100)+' %':'Le chauffeur décharge seul',px,wait?py-2:py-5)}
   for(const f of floats){f.life-=dt;f.y+=dt*.8;const [px,py]=project(M,cam,f.x,f.y,f.z);g2.globalAlpha=Math.max(0,Math.min(1,f.life));g2.font=(f.big?'bold 15px':'bold 11px')+' sans-serif';g2.fillStyle=f.col;g2.fillText(f.txt,px,py)}
   g2.globalAlpha=1;floats=floats.filter(f=>f.life>0);if(floats.length>60)floats.splice(0,floats.length-60)}
  function hudUpdate(){const n=R.agents.filter(a=>a.k==='c').length;info.textContent=`★ ${Math.round(S.rep)} · ${n} 🛒`;

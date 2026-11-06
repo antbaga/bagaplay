@@ -7,9 +7,10 @@
 export const LOT_W=160,LOT_H=152,ROAD={y:84,h:4},OFF={x:40,y:38},OLD_LOT={w:80,h:76};
 export const START={x0:60,y0:56,x1:80,y1:76,entrance:69,reserveRows:5,cash:140000,starterCash:100000,loan:420000,loanMonthly:2900,rep:50};
 export const EXTEND={perM2:900,margin:2};
-// livraisons : un camion par rayon, au plus 3 par quai (+1) sur le terrain ; écart entre deux camions (s),
-// temps pour prendre une palette (camion à quai sur une zone de retournement / resté sur la route), chauffeur seul (articles par s)
-export const TRUCK={gap:3,liftZone:2,liftRoad:5,driverRate:10};
+// livraisons : un camion par rayon, au plus 3 par quai (+1) sur le terrain ; écart entre deux camions (s) ;
+// déchargement : articles par seconde et par employé (100 articles en 10 s), ×roadFactor si le camion est resté sur la route,
+// au plus maxHands employés sur un camion ; chauffeur seul (sans employé de rayon) : articles par seconde
+export const TRUCK={gap:3,perStaff:10,roadFactor:.6,maxHands:5,driverRate:4};
 // la nuit, quand il n'y a plus ni client ni livraison, l'horloge tourne plus vite (pas de saut dans le temps)
 export const NIGHT_RATE=12;
 // pendant les livraisons de nuit, les heures passent deux fois moins vite qu'en journée (le temps de vider les camions)

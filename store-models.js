@@ -310,6 +310,9 @@ export function buildAgents(B,S,R,v,time){B.reset();B.setYaw(v.yaw);
   shadow(B,x,z);
   if(a.k==='c'){if(a.hasCart){const c=Math.cos(ang),sn=Math.sin(ang);cart(B,x+sn*.3,z+c*.3,ang,a.loaded?0:a.basket.units,a.id)}const h=a.id*2654435761>>>0;
    person(B,x,z,ang,{shirt:a.shirt,pants:a.pants,skin:a.skin,hair:a.hair||C.skinH,style:a.style,scale:a.scale,outfit:h%5===4?0:h%5,long:h%3===0},sitting?0:ph,sitting?null:a.hasCart?'push':a.basket.units&&!a.loaded&&!a.basket.paid?'basket':a.st==='load'?'carton':null,sitting?.62:1,false,sitting?0:bob,{amp:sitting?0:amp,look,reach,t:time,id:a.id})}
+  else if(a.st==='unloadT'){// au quai : on attrape les cartons dans le camion et on les pose en réserve (va-et-vient)
+   const t=(R.trucks||[]).find(o=>o.dock===a.dock&&o.st==='unload'),o=(a.id*2654435761>>>0)%5-2;x+=o*.22;z+=((a.id>>2)%3-1)*.18;
+   const base=t?Math.atan2(t.x-x,t.z-z):ang,sw=Math.sin(time*3.1+a.id);person(B,x,z,base+sw*1.3,STAFF_COL[a.role],time*6,sw<0?'carton':null,1,false,Math.abs(sw)*.02,{amp:.3,look:0,reach:.5+sw*.3,t:time,id:a.id})}
   else{const work=a.st==='clean';person(B,x,z,ang+(work?Math.sin(time*6)*.35:0),STAFF_COL[a.role],work?time*8:ph,a.role==='menage'?'mop':a.carry?.pallet?'pallet':a.carry?'carton':null,1,false,bob,{amp:work?.4:amp,look,reach:a.carry?.pallet?0:reach,t:time,id:a.id})}}
  if(gait.size>400){const ids=new Set(R.agents.map(a=>a.id));for(const k of gait.keys())if(!ids.has(k))gait.delete(k)}}
 
