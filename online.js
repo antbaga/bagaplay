@@ -95,7 +95,7 @@ export const needsMe=g=>!!(g.invite||g.my_turn||g.need_vote||g.can_ask);
 // ---- notifications push (app installée sur iPhone, Chrome/Edge…). L'APK Android a ses propres notifications.
 export const VAPID_PUBLIC='BMFD7a8rPH0H_GJ6gMdumkRzBIMOmhfMcCGnQlAyLqPHcvsg7qDht-fI_Hf_e8glcCegd11O--CKRmlyV1sXmyg';
 const fromB64u=s=>Uint8Array.from(atob(s.replace(/-/g,'+').replace(/_/g,'/')+'==='.slice((s.length+3)%4)),c=>c.charCodeAt(0));
-export const nativeNotifications=()=>!!window.BagaNative;
+export const nativeNotifications=()=>!!window.BagaNative?.requestNotifications;
 export const pushSupported=()=>!nativeNotifications()&&'serviceWorker' in navigator&&'PushManager' in window&&'Notification' in window;
 // 'on', 'off', 'denied' ou 'unsupported'
 export async function pushState(){if(nativeNotifications())return 'native';if(!pushSupported())return 'unsupported';if(Notification.permission==='denied')return 'denied';

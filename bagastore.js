@@ -228,7 +228,7 @@ export function bagastore(c){
   const NI=D.NEEDS.icon,servesTxt=d=>d.serves?Object.keys(d.serves).map(k=>NI[k]).join(' '):'';
   for(const d of D.ITEMS.filter(i=>i.tab===buildTab)){const locked=d.lic&&!E.hasLic(S,d.lic);
    const sub=locked?'Licence '+D.LICENSE[d.lic].name+' · '+eur(D.LICENSE[d.lic].price):d.kind==='shop'?`Ticket ${eur(d.ticket)} · ${E.roleFor(d.id).name}${d.serves?' · '+servesTxt(d):''}`:d.kind==='amenity'?servesTxt(d)+(d.sale?' · petite vente':'')+(d.attract?' · + attractif':''):d.boost?'Les clients achètent plus de vêtements':d.kind==='spot'?'+ clients en voiture':d.kind==='bus'?'Un bus amène des clients':d.kind==='corral'?'Caddies : paniers plus gros':d.kind==='turn'?'Derrière un quai : le camion recule à quai':d.kind==='sale'||d.kind==='counter'||d.kind==='reserve'?`${d.cap} articles`:d.attract?'+ attractif':d.security?'− vols':d.clean?'− saleté':'';
-   const b=card((locked?'🔒 ':'')+d.name,eur(d.price),sub,d.w+'×'+d.d);if(locked)b.classList.add('st-locked');b.onclick=()=>{sfx('click');if(locked)licenseDialog(d.lic);else startItem(d.id)};grid.append(b)}}
+   const b=card((locked?'🔒 ':'')+d.name,eur(d.price),sub+(E.postCosts(d.id).salary?' · Salarié inclus · '+eur(E.postCosts(d.id).salary+E.postCosts(d.id).power)+' / mois':''),d.w+'×'+d.d);if(locked)b.classList.add('st-locked');b.onclick=()=>{sfx('click');if(locked)licenseDialog(d.lic);else startItem(d.id)};grid.append(b)}}
  function licenseDialog(id){const L=D.LICENSE[id];if(E.hasLic(S,id)){const names=E.licItems(id).map(d=>d.name).join(', ');c.dialog(L.name,'Licence achetée. '+(names?'Débloque : '+names+'.':''),'OK',()=>{},null,null);return}
   const names=E.licItems(id).map(d=>d.name).join(', ');
   c.dialog('Licence '+L.name+' ?',`${eur(L.price)} · ${L.desc}${names?' Débloque : '+names+'.':''}`,'Acheter',()=>{const w=E.buyLicense(S,id);if(w){msg(w);sfx('error')}else{sfx('coin');toast('Licence '+L.name+' achetée !');save()}renderPanel()},'Annuler',()=>{})}
@@ -290,7 +290,8 @@ export function bagastore(c){
   body.append(chart(h.map(d=>d.sat),{line:true,color:'#3f7fcf',label:'Satisfaction (30 jours)'}),chart(h.map(d=>d.customers),{color:'#7cb069',label:'Clients par jour'}))}
  function pTeam(){const body=head('Équipe · '+eur(E.salaries(S))+' / mois');
   const shown=r=>{if(S.staff[r.id])return true;if(r.lic)return E.hasLic(S,r.lic);const ts=E.needsOf(r);return !ts||ts.some(t=>!D.ITEM[t].lic||E.hasLic(S,D.ITEM[t].lic))};
-  for(const r of D.ROLES.filter(shown)){const n=S.staff[r.id]||0,name=el('span','st-cn');name.append(el('b',null,r.name),el('small',null,eur(r.salary)+' / mois'));
+  for(const r of D.ROLES.filter(shown)){const n=E.staffCount(S,r.id),name=el('span','st-cn');name.append(el('b',null,r.name),el('small',null,eur(r.salary)+' / mois'));
+   if(E.automaticRole(r)){body.append(row(name,el('span','st-note',n+' · inclus avec les postes')));continue}
    const st=el('span','st-step');st.append(btn('−',()=>{E.hire(S,r.id,-1);E.syncStaff(S,R);renderPanel()}),el('b',null,String(n)),btn('+',()=>{const why=E.hire(S,r.id,1);if(why){msg(why);sfx('error')}else E.syncStaff(S,R);renderPanel()}));
    body.append(row(name,st))}
   const ck=S.items.filter(o=>o.t==='checkout').length,man=S.items.filter(o=>o.t==='checkout'&&E.manned(S,o)).length;
@@ -349,7 +350,7 @@ export function bagastore(c){
   add('line',{x1:0,x2:W,y1:y(st.avg),y2:y(st.avg),stroke:st.avg<0?'#a33':'#2f6b3a','stroke-width':1,'stroke-dasharray':'4 3'});
   const leg=el('div','st-chart-leg');leg.append(el('span',null,'jour '+st.days[0]),el('span',null,'▬ vert : rentable · ▬ rouge : à perte'),el('span',null,'jour '+st.days[st.days.length-1]));
   box.append(s,leg);return box}
- function pItem(){const it=S.items.find(o=>o.id===sel);if(!it){closePanel();return}const d=D.ITEM[it.t];const body=head(d.name);
+ function pItem(){const it=S.items.find(o=>o.id===sel);if(!it){closePanel();return}const d=D.ITEM[it.t];const body=head(d.name);const costs=E.postCosts(it.t);if(costs.salary)body.append(el('p','st-note',`Employé inclus automatiquement · Frais courants : ${eur(costs.salary+costs.power)} / mois (salaire ${eur(costs.salary)} + électricité ${eur(costs.power)}).`));
   if(d.cap&&d.kind!=='reserve'){const f=Math.min(1,it.stock/d.cap),r=el('div','st-cap');const m=el('i'),u=el('u');u.style.width=f*100+'%';m.append(u);r.append(el('span',null,'En rayon'),m,el('small',null,it.stock+' / '+d.cap));body.append(r)}
   if(d.kind==='reserve'){const cap=E.capacity(S),r=el('div','st-cap'),f=cap.cap[d.store]?cap.used[d.store]/cap.cap[d.store]:0;const m=el('i'),u=el('u');u.style.width=Math.min(1,f)*100+'%';m.append(u);r.append(el('span',null,D.STORES[d.store]),m,el('small',null,`${cap.used[d.store]} / ${cap.cap[d.store]}`));body.append(r)}
   if(it.cat&&(d.kind==='sale'||d.kind==='counter')){
@@ -369,7 +370,7 @@ export function bagastore(c){
   body.append(t);
   body.append(btn(r.over?'Nouvelle partie':'Continuer',()=>{if(r.over){clearRun(KEY);S=E.starter(E.withDirt(E.newGame()));R=E.runtime();staticKey='';isNew=true;home()}pending=null;hold=false;closePanel();if(isNew){isNew=false;openPanel('welcome');hold=true}},'primary'))}
  function pWelcome(){const body=head('Bienvenue dans ton magasin !');
-  for(const t of ['Tu as déjà des rayons d’épicerie remplis, deux caisses, une réserve et un quai. Ajoute frais, surgelés et rayons à la coupe pour attirer plus de clients.','Embauche ton équipe, règle ton budget d’achat et tes marges.','Routes : chaque ligne est une voie à sens unique. Construire › Extérieur › Route, puis trace dans le sens de circulation. Garde les entrées et les sorties de parking séparées pour éviter les bouchons.','Ouvre le magasin ! Fin de mois : salaires, électricité et crédit.'])body.append(el('p','st-step-txt',t));
+  for(const t of ['Tu as déjà des rayons d’épicerie remplis, deux caisses, une réserve et un quai. Ajoute frais, surgelés et rayons à la coupe pour attirer plus de clients.','Les postes incluent leur salarié. Embauche les employés de rayon et de ménage : ils travaillent jour et nuit. Règle ton budget d’achat et tes marges.','Routes : chaque ligne est une voie à sens unique. Construire › Extérieur › Route, puis trace dans le sens de circulation. Garde les entrées et les sorties de parking séparées pour éviter les bouchons.','Ouvre le magasin ! Fin de mois : salaires, électricité et crédit.'])body.append(el('p','st-step-txt',t));
   body.append(btn('C’est parti',()=>{hold=false;closePanel()},'primary'))}
 
  // ---- messages
