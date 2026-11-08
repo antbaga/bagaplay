@@ -233,7 +233,7 @@ export function bagastore(c){
   const names=E.licItems(id).map(d=>d.name).join(', ');
   c.dialog('Licence '+L.name+' ?',`${eur(L.price)} · ${L.desc}${names?' Débloque : '+names+'.':''}`,'Acheter',()=>{const w=E.buyLicense(S,id);if(w){msg(w);sfx('error')}else{sfx('coin');toast('Licence '+L.name+' achetée !');save()}renderPanel()},'Annuler',()=>{})}
  function card(t,p,sub,size){const b=el('button','st-card');b.append(el('b',null,t));if(size)b.append(el('i',null,size));b.append(el('span',null,p));if(sub)b.append(el('small',null,sub));return b}
- function pStock(){const body=head('Stock',[['stock','Stock'],['stats','Statistiques'],['avis','Avis']],stockTab,v=>stockTab=v);({stock:stockList,stats:stockStats,avis:opinions})[stockTab](body)}
+ function pStock(){const body=head('Stock',[['stock','Stock'],['stats','Statistiques'],['avis','Avis']],stockTab,v=>stockTab=v);if(stockTab==='stock')body.append(el('p','st-note','Les commandes sont ajustées au solde disponible. À découvert, aucun nouvel achat ; les frais, salaires et crédits restent dus, sans faillite.'));({stock:stockList,stats:stockStats,avis:opinions})[stockTab](body)}
  const cn=k=>D.CAT[k]?D.CAT[k].name.toLowerCase():k;
  const PHRASES={rupture:k=>['Il n’y a plus de '+cn(k)+' !',-2],notsold:k=>['Dommage, pas de '+cn(k)+' ici.',-1],cher:k=>['Le rayon '+cn(k)+' est trop cher.',-2],cheap:k=>['Les prix '+cn(k)+' sont intéressants.',1],
   counter:k=>['J’adore le comptoir '+cn(k)+' !',2],queue:()=>['La queue aux caisses est interminable.',-2],attente:k=>['Trop de monde au rayon '+cn(k)+', j’ai laissé tomber.',-1],dirt:()=>['C’est sale par terre…',-2],happy:()=>['Super magasin, je reviendrai !',2],decor:()=>['C’est joli et agréable ici.',1],
@@ -311,7 +311,7 @@ export function bagastore(c){
   if(moneyTab==='cash'){
    const g=el('div','st-tiles');g.append(tile('Trésorerie',eur(S.cash)),tile('Crédit restant',eur(S.loan.left)),tile('Mensualité',eur(S.loan.monthly)),tile('Réputation',Math.round(S.rep)+' / 100'));body.append(g);
    body.append(el('b','st-sub','Publicité'+(S.ads.until>=S.d?` · jusqu’au jour ${S.ads.until}`:'')));
-   const ads=el('div','st-row');for(const ad of D.ADS)ads.append(btn(`${ad.name} ${eur(ad.price)} · +${Math.round(ad.boost*100)} % ${ad.days} j`,()=>c.dialog(ad.name+' ?',eur(ad.price),'Lancer',()=>{E.advertise(S,ad.id);sfx('coin');toast(ad.name+' lancée !');renderPanel()},'Annuler',()=>{}),'st-small wide'));body.append(ads);
+   const ads=el('div','st-row');for(const ad of D.ADS)ads.append(btn(`${ad.name} ${eur(ad.price)} · +${Math.round(ad.boost*100)} % ${ad.days} j`,()=>c.dialog(ad.name+' ?',eur(ad.price),'Lancer',()=>{const why=E.advertise(S,ad.id);if(why){msg(why);sfx('error');return}sfx('coin');toast(ad.name+' lancée !');renderPanel()},'Annuler',()=>{}),'st-small wide'));body.append(ads);
    body.append(el('b','st-sub','Banque'));
    {const room=E.loanRoom(S),st=E.LOAN.step;loanAmt=Math.max(st,Math.min(loanAmt,room||st));
     const b1=el('div','st-budget');b1.append(el('span',null,'Emprunter'),btn('−',()=>{loanAmt=Math.max(st,loanAmt-st);renderPanel()}),el('b',null,eur(loanAmt)),btn('+',()=>{loanAmt=Math.min(room,loanAmt+st);renderPanel()}));body.append(b1);
@@ -365,10 +365,10 @@ export function bagastore(c){
    body.append(el('p','st-note',(d.serves?'Répond à : '+Object.keys(d.serves).map(k=>D.NEEDS.icon[k]+' '+D.NEEDS.name[k]).join(', ')+'. ':'')+'Au-dessus de 100 %, des clients renoncent ; en dessous, ils sont plus contents.'))}
   if(d.kind==='amenity'){const n=(R.queues.get(it.id)||[]).length;body.append(el('p','st-note',`${d.serves?'Répond à : '+Object.keys(d.serves).map(k=>D.NEEDS.icon[k]+' '+D.NEEDS.name[k]).join(', ')+'. ':''}${n} client${n>1?'s':''} · ${d.slots||1} place${(d.slots||1)>1?'s':''}`))}
   body.append(row(btn('✥ Déplacer',()=>startMove(it.id),'st-small wide'),btn('↻ Tourner',()=>{const why=E.rotateItem(S,it.id);if(why){msg(why);sfx('error')}renderPanel()},'st-small wide'),btn('Vendre '+eur(d.price*D.REFUND),()=>{const lost=E.reserveLoss(S,it.id),go=()=>{E.removeItem(S,it.id);sfx('erase');sel=null;closePanel()};if(lost)c.dialog('Vendre ?',lost+' articles de la réserve seront perdus.','Vendre',go,'Annuler',()=>{});else go()},'st-small wide danger')))}
- function pReport(){const r=pending;if(!r){closePanel();return}const m=r.report;const body=head(r.over?'Faillite':'Bilan du mois '+m.month);
+ function pReport(){const r=pending;if(!r){closePanel();return}const m=r.report;const body=head('Bilan du mois '+m.month);
   const t=el('div','st-lines');for(const [k,v] of [['Clients',String(m.customers)],['Satisfaction',m.avgSat==null?'—':Math.round(m.avgSat)+' / 100'],['Chiffre d’affaires',eur(m.rev)],['dont boutiques',eur(m.shop||0)],['Achats',eur(-m.buy)],['Salaires',eur(-m.salaries)],['Électricité',eur(-m.elec)],['Crédit',eur(-m.loan)],['Agios',eur(-m.interest)],['Publicité',eur(-m.ads)],['Résultat',eur(m.result)],['Travaux',eur(-m.build)],['Licences',eur(-(m.lic||0))],['Trésorerie',eur(m.cash)]]){if(v===eur(-0)||v==='−0 €')continue;const d=el('div',k==='Résultat'?'st-total '+(m.result<0?'neg':'pos'):'');d.append(el('span',null,k),el('b',null,v));t.append(d)}
   body.append(t);
-  body.append(btn(r.over?'Nouvelle partie':'Continuer',()=>{if(r.over){clearRun(KEY);S=E.starter(E.withDirt(E.newGame()));R=E.runtime();staticKey='';isNew=true;home()}pending=null;hold=false;closePanel();if(isNew){isNew=false;openPanel('welcome');hold=true}},'primary'))}
+  body.append(btn('Continuer',()=>{pending=null;hold=false;closePanel()},'primary'))}
  function pWelcome(){const body=head('Bienvenue dans ton magasin !');
   for(const t of ['Tu as déjà des rayons d’épicerie remplis, deux caisses, une réserve et un quai. Ajoute frais, surgelés et rayons à la coupe pour attirer plus de clients.','Les postes incluent leur salarié. Embauche les employés de rayon et de ménage : ils travaillent jour et nuit. Règle ton budget d’achat et tes marges.','Routes : chaque ligne est une voie à sens unique. Construire › Extérieur › Route, puis trace dans le sens de circulation. Garde les entrées et les sorties de parking séparées pour éviter les bouchons.','Ouvre le magasin ! Fin de mois : salaires, électricité et crédit.'])body.append(el('p','st-step-txt',t));
   body.append(btn('C’est parti',()=>{hold=false;closePanel()},'primary'))}
@@ -385,7 +385,7 @@ export function bagastore(c){
   if(e.t==='month'){pending=e;hold=true;openPanel('report');sfx('month');save()}}}
 
  // ---- sauvegarde
- function save(){try{if(!S.over)saveRun(KEY,E.serialize(S,R))}catch{}}
+ function save(){try{saveRun(KEY,E.serialize(S,R))}catch{}}
  // écouteurs directs : l'appli se met en pause en passant en arrière-plan, la sauvegarde doit se faire quand même
  const onHide=()=>{if(document.hidden)save()};document.addEventListener('visibilitychange',onHide);window.addEventListener('pagehide',save);
  // panneaux ouverts : les chiffres suivent la partie en temps réel (sauf pendant un appui, pour ne pas manquer le bouton)
@@ -436,7 +436,7 @@ export function bagastore(c){
  c.hint(isNew?'':E.problems(S)[0]||'');resize();hudUpdate();
  let hintT=0;
  return {
-  update(dt){if(!hold&&!S.over){const total=dt*D.SPEEDS[speedIdx],n=Math.ceil(total/.05);for(let k=0;k<n;k++)E.step(S,R,total/n);handleEvents()}
+  update(dt){if(!hold){const total=dt*D.SPEEDS[speedIdx],n=Math.ceil(total/.05);for(let k=0;k<n;k++)E.step(S,R,total/n);handleEvents()}
    draw(dt);hudUpdate();if((hintT+=dt)>2&&!mode){hintT=0;const p=E.problems(S);c.hint(p[0]||(S.open&&E.advice(S).find(x=>x.ico!=='📉')?.t)||'')}
    if(panel&&LIVE.has(panel)&&!press&&!hold&&(liveT+=dt)>.5&&performance.now()-scrolled>600){liveT=0;renderPanel()}
    if((saveT+=dt)>20){saveT=0;save()}},

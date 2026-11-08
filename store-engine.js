@@ -370,7 +370,7 @@ export function borrow(S,amount=D.EXTRA_LOAN.amount){amount=Math.min(Math.round(
  if(S.loan.left<=0)S.loan.monthly=0;S.cash+=amount;S.loan.left+=amount;S.loan.monthly+=loanMonthly(amount);S.extraLoans=(S.extraLoans||0)+1;return null}
 export function repay(S,amount){amount=Math.min(Math.round(amount),S.loan.left,Math.floor(Math.max(0,S.cash)));if(amount<=0)return S.loan.left?'Pas assez d’argent.':'Aucun crédit à rembourser.';
  const old=S.loan.left;S.cash-=amount;S.loan.left=old-amount;S.loan.monthly=S.loan.left>0?Math.max(1,Math.round(S.loan.monthly*S.loan.left/old)):0;return null}
-export function advertise(S,id){const a=D.ADS.find(x=>x.id===id);if(!a)return;pay(S,a.price,'ads');S.ads={until:S.d+a.days,boost:Math.max(a.boost,S.ads.until>S.d?S.ads.boost:0)}}
+export function advertise(S,id){const a=D.ADS.find(x=>x.id===id);if(!a)return 'Campagne inconnue.';if(S.cash<a.price)return 'Pas assez d’argent.';pay(S,a.price,'ads');S.ads={until:S.d+a.days,boost:Math.max(a.boost,S.ads.until>S.d?S.ads.boost:0)}}
 
 // postes tenus : caisses avec caissier, comptoirs avec leur artisan
 export const needsOf=r=>r.needs?[].concat(r.needs):null;
@@ -446,7 +446,7 @@ export function hourLabel(S){const h=Math.floor(S.hour),m=Math.floor((S.hour-h)*
 export const monthOf=S=>Math.floor((S.d-1)/D.DAYS_PER_MONTH)+1,dayOfMonth=S=>(S.d-1)%D.DAYS_PER_MONTH+1;
 
 // dt : secondes réelles × vitesse
-export function step(S,R,dt){if(S.over)return;layout(S);R.lt=(R.lt||0)+dt;LIGHT_R=R;R.trucks=R.trucks||[];R.deliv=R.deliv||[];
+export function step(S,R,dt){S.over=false;layout(S);R.lt=(R.lt||0)+dt;LIGHT_R=R;R.trucks=R.trucks||[];R.deliv=R.deliv||[];
  // l'équipe arrive au premier jour (ou à la reprise d'une partie) ; ensuite elle reste, de jour comme de nuit
  syncStaff(S,R);if(R.staffDay!==S.d){R.staffDay=S.d;startDay(S,R)}
  // horloge continue : la nuit passe plus vite quand il n'y a plus personne, en temps réel pendant les livraisons
@@ -627,7 +627,7 @@ export const deliveriesBusy=R=>!!((R.deliv&&R.deliv.length)||(R.trucks||[]).some
 // commande → un envoi par rayon (payé à l'arrivée au quai)
 function queueOrder(S,R,o,kind){R.deliv=R.deliv||[];for(const c in o.u)if(o.u[c]>0)R.deliv.push({u:{[c]:o.u[c]},factor:o.factor||1,kind,cat:c});syncPending(S,R)}
 // marchandise commandée pas encore rangée (pour la commande suivante et le plan de stock)
-function syncPending(S,R){const u={};let n=0;const add=o=>{for(const c in o.u)if(o.u[c]>0){u[c]=(u[c]||0)+o.u[c];n++}};for(const o of R.deliv||[])add(o);for(const t of R.trucks||[])if(t.order&&t.st!=='out')add(t.order);S.pending=n?{u,factor:1}:null}
+function syncPending(S,R){S.pendingCost=(R.deliv||[]).reduce((n,o)=>n+orderCost(o),0)+(R.trucks||[]).filter(t=>!t.paid).reduce((n,t)=>n+orderCost(t.order),0);const u={};let n=0;const add=o=>{for(const c in o.u)if(o.u[c]>0){u[c]=(u[c]||0)+o.u[c];n++}};for(const o of R.deliv||[])add(o);for(const t of R.trucks||[])if(t.order&&t.st!=='out')add(t.order);S.pending=n?{u,factor:1}:null}
 function truckSpawn(S,R,dt){R.truckGap=(R.truckGap||0)+dt;if(!R.deliv.length||R.truckGap<D.TRUCK.gap)return;
  const docks=S.items.filter(o=>o.t==='dock'&&dockReady(S,o));
  if(!docks.length){if(!R.trucks.length){ev(R,{t:'noroad'});R.deliv.length=0;syncPending(S,R)}return}
@@ -642,7 +642,7 @@ function truckAtDock(S,R,t){const dock=S.items.find(o=>o.id===t.dock),p=dock&&do
  if(dockBusy(R,t.dock)){t.wait=true;return}t.wait=false;
  if(p.zone){t.st='man1';t.plan=p;t.man={pts:bez([t.x,t.z],[t.x+p.t[0]*2.5,t.z+p.t[1]*2.5],[p.P1[0]-p.t[0]*2.5,p.P1[1]-p.t[1]*2.5],p.P1),i:0,rev:false,block:{lane:t.lane,s:t.s,h:3.8}};t.route=null;t.lane=null;t.s=null;return}
  t.plan=p;startUnload(S,R,t)}
-function startUnload(S,R,t){t.st='unload';ev(R,{t:'truck'});if(!t.paid){t.paid=true;const cost=orderCost(t.order);pay(S,cost,'buy');t.cost=cost}}
+function startUnload(S,R,t){t.st='unload';ev(R,{t:'truck'});if(!t.paid){t.order=affordableOrder(S,t.order);t.total=Object.values(t.order.u).reduce((a,b)=>a+b,0);t.paid=true;const cost=orderCost(t.order);pay(S,cost,'buy');t.cost=cost}}
 function trucksStep(S,R,dt){const NT=RD.net(S),T=D.TRAFFIC;
  for(const t of R.trucks.slice()){
   if(t.man){const m=t.man,p=t.plan;if(m.block&&t.st==='man1'&&m.i>m.pts.length*.5)m.block=null;if(!follow(t,T.carSpeed*(t.st==='man2'?.45:.6),dt))continue;t.man=null;
@@ -877,12 +877,14 @@ export function stockTargets(S){const {cap}=capacity(S),tot={},o={},fill=S.fill?
 // commande : on ne livre que ce qui manque pour revenir à l'objectif de chaque produit, dans la limite du budget. factor : surcoût (express)
 export function makeOrder(S,budget,factor,only){const {cap,used}=capacity(S),want={},byStore={ambiant:0,frais:0,surgele:0},tg=stockTargets(S),pend=S.pending?.u||{};
  let cost=0;for(const c of D.CATS){want[c.id]=only?(only[c.id]||0):Math.max(0,tg[c.id]-S.reserve[c.id]-(pend[c.id]||0));cost+=want[c.id]*c.cost*factor}
- const k=!only&&budget>=0&&cost>budget?budget/cost:1;for(const c of D.CATS){want[c.id]=Math.floor(want[c.id]*k);byStore[c.store]+=want[c.id]}
+ const limit=Math.min(Math.max(0,Math.floor(S.cash-(S.pendingCost||0))),!only&&budget>=0?budget:Infinity),k=cost>limit?limit/cost:1;for(const c of D.CATS){want[c.id]=Math.floor(want[c.id]*k);byStore[c.store]+=want[c.id]}
  const o={u:{},factor};for(const c of D.CATS){const free=Math.max(0,cap[c.store]-used[c.store]),f=byStore[c.store]>free?free/byStore[c.store]:1;const u=Math.floor(want[c.id]*f);if(u)o.u[c.id]=u}return o}
 export const orderCost=o=>o?Math.round(Object.entries(o.u).reduce((t,[c,u])=>t+u*D.CAT[c].cost*(o.factor||1),0)):0;
+// Recalcul au paiement : les frais peuvent avoir réduit le solde pendant le trajet.
+export function affordableOrder(S,o){const limit=Math.max(0,Math.floor(S.cash)),cost=orderCost(o);if(cost<=limit)return {...o,u:{...o.u}};const k=cost?limit/cost:0;return {...o,u:Object.fromEntries(Object.entries(o.u).map(([c,n])=>[c,Math.floor(n*k)]))}}
 function mergeOrder(a,b){if(!a)return b;const o={u:{...a.u},factor:Math.max(a.factor,b.factor)};for(const c in b.u)o.u[c]=(o.u[c]||0)+b.u[c];return o}
 // déchargement au quai : la marchandise entre en réserve (dans la limite de la place) et se paie
-export function applyOrder(S,o){if(!o)return 0;const {cap,used}=capacity(S);let cost=0;
+export function applyOrder(S,o){if(!o)return 0;o=affordableOrder(S,o);const {cap,used}=capacity(S);let cost=0;
  for(const c of D.CATS){const u0=o.u[c.id]||0;if(!u0)continue;const free=Math.max(0,cap[c.store]-used[c.store]),u=Math.min(u0,free);used[c.store]+=u;S.reserve[c.id]+=u;cost+=u*c.cost*(o.factor||1)}
  cost=Math.round(cost);pay(S,cost,'buy');return cost}
 export function deliver(S,budget,factor){return applyOrder(S,makeOrder(S,budget,factor))}
@@ -890,7 +892,7 @@ export const EXPRESS=1.15;
 // livraison express : le camion part tout de suite (sans R : livraison immédiate, pour les tests)
 export function express(S,budget,R,only){const dock=S.items.find(o=>o.t==='dock');if(!dock)return 'Il faut un quai de livraison.';const anyDock=()=>S.items.some(o=>o.t==='dock'&&dockReady(S,o));
  const c=capacity(S).cap;if(!c.ambiant&&!c.frais&&!c.surgele)return 'Il faut de la place en réserve.';
- const o=makeOrder(S,budget,EXPRESS,only),cost=orderCost(o);if(!cost)return 'La réserve est pleine.';if(S.cash<cost)return 'Pas assez d’argent.';
+ if(S.cash-(S.pendingCost||0)<=0)return 'Pas assez d’argent disponible pour commander.';const o=makeOrder(S,budget,EXPRESS,only),cost=orderCost(o);if(!cost)return 'Réserve pleine ou solde insuffisant pour un article.';if(S.cash<cost)return 'Pas assez d’argent.';
  if(!R)return {cost:applyOrder(S,o)};if(!anyDock())return 'Le camion ne peut pas venir au quai (voie derrière le quai ou zone de retournement).';
  queueOrder(S,R,o,'express');return {cost,truck:true}}
 // commander un rayon précis : de quoi remplir ses meubles, plus une réserve
@@ -944,7 +946,7 @@ export function monthEnd(S,R){const m=S.month;
  const rep={month:monthOf(S)-1,...m,result:Math.round(op),cash:Math.round(S.cash),avgSat:m.customers?m.sat/m.customers:null};
  S.reports=(S.reports||[]).concat([rep]).slice(-12);
  for(const r in S.staffDays)S.staffDays[r]=0;S.month=blankMonth();S.monthCat={};S.monthShop={};
- if(S.cash<D.BANKRUPTCY)S.over=true;
+ S.over=false;
  ev(R,{t:'month',report:rep,over:S.over})}
 
 // ---------------------------------------------------------------- sauvegarde
@@ -967,7 +969,7 @@ export function restore(S,o){const t=o&&o.rt;if(!t||!S)return null;const R=runti
  const byId=new Map(R.agents.map(a=>[a.id,a]));R.queues=new Map((t.queues||[]).map(([k,ids])=>[k,ids.map(i=>byId.get(i)).filter(Boolean)]));
  for(const it of S.items)it.inc=(t.inc&&t.inc[it.id])||0;
  if(t.dirt&&S.dirt)for(let k=0;k<t.dirt.length;k+=2)S.dirt[t.dirt[k]]=t.dirt[k+1]/100;
- return R}
+ syncPending(S,R);return R}
 // sauvegarde : version 2 (routes en lignes). Les parties d'avant (routes en cases) ne se reprennent pas : nouvelle partie.
 // sauvegarde d'avant la 5.1 (terrain de 80 × 76) : recopiée au milieu du nouveau terrain (décalage D.OFF), voies du bord prolongées
 // jusqu'aux nouveaux bords, trottoirs de la route principale et arbres complétés. La journée en cours repart du matin.
@@ -981,7 +983,7 @@ function migrateLot(o){const ow=D.OLD_LOT.w,oh=D.OLD_LOT.h,X=D.OFF.x,Y=D.OFF.y,s
  n.trees=(o.trees||[]).map(([x,y,s])=>[x+X,y+Y,s]);delete n.rt;delete o.rt;n.migrated=true;return n}
 export function load(o){if(o&&o.v===2&&o.lw===D.OLD_LOT.w&&o.lh===D.OLD_LOT.h&&W!==D.OLD_LOT.w)o=migrateLot(o);
  if(!o||o.v!==2||(o.lw&&o.lw!==W)||(o.lh&&o.lh!==H))return null;const S={...o,wall:[...o.wall].map(Number),zone:[...o.zone].map(Number),built:[...o.built].map(Number),ground:[...o.ground].map(Number),items:o.items.map(it=>({...it,inc:0}))};
- S.lanes=S.lanes||[];S.yields=S.yields||[];S.lights=S.lights||[];S.lic=S.lic||{};S.shopPx=S.shopPx||{};S.bars=S.bars||[];S.flows=S.flows||{};
+ S.over=false;S.lanes=S.lanes||[];S.yields=S.yields||[];S.lights=S.lights||[];S.lic=S.lic||{};S.shopPx=S.shopPx||{};S.bars=S.bars||[];S.flows=S.flows||{};
  for(const c of D.CATS){if(S.reserve[c.id]==null)S.reserve[c.id]=0;if(S.margin[c.id]==null)S.margin[c.id]=c.ref*(S.mscale||D.MARGIN_SCALE)/D.MARGIN_SCALE;if(S.alloc[c.id]==null)S.alloc[c.id]=0;if(S.sold[c.id]==null)S.sold[c.id]=0}
  for(const r of D.ROLES){if(S.staff[r.id]==null)S.staff[r.id]=0;if(S.staffDays[r.id]==null)S.staffDays[r.id]=0}
  {const m=blankMonth(),d=blankDay();for(const k in m)if(S.month[k]==null)S.month[k]=m[k];if(S.dayStats)for(const k in d)if(S.dayStats[k]==null)S.dayStats[k]=d[k]}S.monthCat=S.monthCat||{};S.catHist=S.catHist||[];bounds(S);if(!S.trees)S.trees=genTrees(S);if(!S.plog)S.plog=(S.history||[]).map(h=>[h.d,h.profit,h.cash]);
