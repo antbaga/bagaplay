@@ -1,3 +1,13 @@
+# 5.6.0 — 8 novembre 2026
+
+- Priorité à droite aux intersections, sauf cédez-le-passage explicite. Passage par zone de conflit et récupération des blocages existants.
+- Plusieurs véhicules peuvent circuler simultanément dans un rond-point si l'espace le permet. Contrôle des carrosseries dans les virages, distances de sécurité et priorité aux véhicules engagés et sortants.
+- Les employés remplissent les rayons avant de décharger les camions ; un carton déjà transporté termine son trajet.
+- Chaque dépôt possède son propre stock de caddies : 15 à l'installation, 25 maximum, avec dépassement visible au-delà de 15.
+- Les clients chargent leurs courses dans leur voiture puis rendent leur caddie au dépôt accessible le plus proche ayant de la place.
+- Les agents d'entretien transportent des groupes de caddies pour équilibrer les dépôts. Stocks et transports conservés dans les sauvegardes, migration des anciennes parties.
+- Tests de priorité, circulation simultanée, chargement, restitution, redistribution et reprise de sauvegarde, en plus des scénarios bus/camion et des tests précédents.
+
 # 5.5.0 — 8 novembre 2026
 
 - Plus de faillite, même à découvert. Les anciennes sauvegardes marquées en faillite peuvent reprendre ; les salaires, charges et échéances continuent à être débités.

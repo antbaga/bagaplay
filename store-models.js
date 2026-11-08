@@ -166,7 +166,7 @@ export function item(B,S,it,v){const F=frame(it),d=F.d,w=d.w,dd=d.d,fill=d.cap?M
  case 'spot':{L(0,0,0,.08,.012,dd,C.line);L(w-.08,0,0,w,.012,dd,C.line);L(0,0,0,w,.012,.08,C.line);L(.6,0,.35,w-.6,.1,.5,rgb('#9aa0a6'));break}
  case 'busstop':{L(.1,0,.2,.2,2.3,.3,C.metal);L(w-.2,0,.2,w-.1,2.3,.3,C.metal);L(0,2.3,0,w,2.42,1,rgb('#4c8fd1'),rgb('#6aa6e0'));L(.15,0,.15,w-.15,2.2,.22,C.glass);
   L(.4,.45,.3,w-.4,.52,.7,C.wood);for(const x of [.5,w-.6])L(x,0,.4,x+.1,.45,.6,C.dark);L(w-.05,0,.85,w+.05,2.6,.95,C.metal);L(w-.35,2.2,.82,w+.35,2.7,.98,C.yellow);L(w-.2,2.32,.98,w+.2,2.58,1,rgb('#2f6f45'));break}
- case 'corral':{L(0,0,.1,.06,1,.9,C.metal);L(w-.06,0,.1,w,1,.9,C.metal);L(0,.95,.1,w,1,.9,C.metal);for(let k=0;k<4;k++){const z=.15+k*.17;L(.25,.2,z,w-.25,.75,z+.5,mix(C.metal,[1,1,1],.2),mix(C.metal,C.dark,.1));L(.25,.9,z+.45,w-.25,.95,z+.5,C.red)}L(.2,1.05,.4,w-.2,1.4,.5,rgb('#2f6f45'));break}
+ case 'corral':{L(0,0,0,.06,.9,1,C.metal);L(w-.06,0,0,w,.9,1,C.metal);L(0,.95,0,w,1,.08,C.metal);L(.2,1.05,0,w-.2,1.4,.1,rgb('#2f6f45'));break}
  case 'plant':L(.3,0,.3,.7,.35,.7,C.pot);L(.2,.35,.2,.8,.95,.8,C.leaf);L(.32,.95,.32,.68,1.25,.68,C.leaf2);break;
  case 'lamp':L(.45,0,.45,.55,2,.55,C.dark);L(.3,2,.3,.7,2.2,.7,C.warm);L(.35,0,.35,.65,.08,.65,C.dark);break;
  case 'bin':L(.32,0,.32,.68,.75,.68,rgb('#5aa36a'));L(.3,.75,.3,.7,.82,.7,rgb('#3e7f4f'));break;
@@ -285,6 +285,8 @@ export function buildAgents(B,S,R,v,time){B.reset();B.setYaw(v.yaw);
   if(dy){const z=ez+(dy>0?.06:-.12);B.box(x0-o,0,z,x0+1-o,h,z+.06,C.glass,g);B.box(x0+1+o,0,z,x0+2+o,h,z+.06,C.glass,g)}
   else{const x=ex+(dx>0?.06:-.12);B.box(x,0,y0-o,x+.06,h,y0+1-o,C.glass,g);B.box(x,0,y0+1+o,x+.06,h,y0+2+o,C.glass,g)}});
  R.door=Math.max(0,...Object.values(R.doors));
+ // Trois files de cinq caddies ; les dix suivants dépassent de l'abri.
+ for(const it of S.items)if(it.t==='corral'){const F=frame(it);for(let k=0;k<(it.carts??15);k++){const col=k%3,row=Math.floor(k/3),[x,z]=F.m(.35+col*.64,.12+row*.15);cart(B,x,z,F.ang,0,it.id+k)}}
  // personnel à son poste (caisse, comptoir) : animé
  const paying=new Set(R.agents.filter(a=>a.st==='pay').map(a=>a.item));
  // boutiques : vendeur·se derrière le comptoir, tablier aux couleurs de l'enseigne ; clients assis à l'intérieur (restaurant, coiffeur, cinéma)
@@ -313,7 +315,7 @@ export function buildAgents(B,S,R,v,time){B.reset();B.setYaw(v.yaw);
   else if(a.st==='unloadT'){// au quai : on attrape les cartons dans le camion et on les pose en réserve (va-et-vient)
    const t=(R.trucks||[]).find(o=>o.dock===a.dock&&o.st==='unload'),o=(a.id*2654435761>>>0)%5-2;x+=o*.22;z+=((a.id>>2)%3-1)*.18;
    const base=t?Math.atan2(t.x-x,t.z-z):ang,sw=Math.sin(time*3.1+a.id);person(B,x,z,base+sw*1.3,STAFF_COL[a.role],time*6,sw<0?'carton':null,1,false,Math.abs(sw)*.02,{amp:.3,look:0,reach:.5+sw*.3,t:time,id:a.id})}
-  else{const work=a.st==='clean';person(B,x,z,ang+(work?Math.sin(time*6)*.35:0),STAFF_COL[a.role],work?time*8:ph,a.role==='menage'?'mop':a.carry?.pallet?'pallet':a.carry?'carton':null,1,false,bob,{amp:work?.4:amp,look,reach:a.carry?.pallet?0:reach,t:time,id:a.id})}}
+  else{if(a.cartLoad)for(let k=0;k<a.cartLoad;k++)cart(B,x+Math.sin(ang)*(.7+k*.2),z+Math.cos(ang)*(.7+k*.2),ang,0,a.id+k);const work=a.st==='clean';person(B,x,z,ang+(work?Math.sin(time*6)*.35:0),STAFF_COL[a.role],work?time*8:ph,a.cartLoad?'push':a.role==='menage'?'mop':a.carry?.pallet?'pallet':a.carry?'carton':null,1,false,bob,{amp:work?.4:amp,look,reach:a.carry?.pallet?0:reach,t:time,id:a.id})}}
  if(gait.size>400){const ids=new Set(R.agents.map(a=>a.id));for(const k of gait.keys())if(!ids.has(k))gait.delete(k)}}
 
 // ---------------------------------------------------------------- aperçu de placement

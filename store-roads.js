@@ -142,6 +142,7 @@ function zones(NT){const out=[],gs=[...NT.geo.values()],K=2;
    // Un entrant cède aussi aux véhicules qui quittent le même rond-point.
    const enters=(lane,ring)=>NT.trans.some(t=>t.from===lane&&t.to===ring&&t.kind==='merge'),exits=(lane,ring)=>NT.trans.some(t=>t.from===ring&&t.to===lane&&t.kind==='split');
    for(const ring of gs.filter(g=>g.ring)){if(enters(A,ring.id)&&exits(B,ring.id))z.yside='a';else if(enters(B,ring.id)&&exits(A,ring.id))z.yside='b'}
+   const signA=hasYield(NT,A,c.a0),signB=hasYield(NT,B,c.b0);if(signA!==signB)z.yside=signA?'a':'b';
    if(ga.ring!==gb.ring)z.yside=ga.ring?'b':'a';
    z.yield=z.yside==='a'?A:z.yside==='b'?B:null;
    out.push(z)}}
@@ -316,67 +317,61 @@ export function distTo(NT,v,lane,s,max=30){if(!v.route){if(v.lane!==lane)return 
   if(sg.lane===lane){let u=fwd(g,sg.from,s);const last=k===v.route.length-1,lim=last?sg.len+8:sg.len;if(g.closed&&u>lim+1e-6&&k===v.ri)u-=g.len;if(u<=lim+1e-6&&(u>=0||k===v.ri)){const d=off+u;if(d>=-14)return d}}
   off+=sg.len;if(off>max)return null}return null}
 // un pas pour tous les véhicules qui roulent ; renvoie ceux qui sont au bout de leur itinéraire
-export function drive(S,R,list,dt,agents){const NT=net(S),arrived=[],blocks=R.blocks||[],all=list.concat(blocks),gates=ringGates(NT,R,list);
+export function drive(S,R,list,dt,agents){const NT=net(S),arrived=[],blocks=R.blocks||[],all=list.concat(blocks),gates=junctionGates(NT,R,list,dt);
  for(const v of list){if(!v.route)continue;const my=half(v);let lim=v.vmax||5;v.why='';
   const gate=gates.get(v.id);
   if(gate!=null){const gap=gate-my-.9;
    // Une ancienne sauvegarde peut avoir laissé un nez de camion dans la sortie.
    // Il recule doucement jusqu'à la ligne, uniquement si l'arrière est libre.
-   if(gap<-.05&&v.u>0){const back=Math.min(-gap,.6*dt,v.u);const clear=all.every(o=>{if(o===v||o.lane!==v.lane)return true;const d=v.s-o.s;return d<=0||d>my+half(o)+back+.8});const rear=aheadPt(NT,v,-my-back);const pedestrian=rear&&(agents||[]).some(a=>Math.hypot(a.x-rear.x,a.y-rear.z)<1.3);if(clear&&!pedestrian){v.u-=back;v.sp=0;v.why='dégage le rond-point';placeOn(NT,v);continue}}
-   lim=Math.min(lim,Math.max(0,gap*2.2));if(gap<.05)v.why='entrée du rond-point';
+   if(gap<-.05&&v.u>0){const back=Math.min(-gap,.6*dt,v.u);const clear=all.every(o=>{if(o===v||o.lane!==v.lane)return true;const d=v.s-o.s;return d<=0||d>my+half(o)+back+.8});const rear=aheadPt(NT,v,-my-back);const pedestrian=rear&&(agents||[]).some(a=>Math.hypot(a.x-rear.x,a.y-rear.z)<1.3);const reverse={...v,u:v.u-back};placeOn(NT,reverse);const safe=list.every(o=>o===v||overlap(reverse,o)<=overlap(v,o)+.0001);if(clear&&!pedestrian&&safe){v.u-=back;v.sp=0;v.stopT=(v.stopT||0)+dt;v.why='dégage le rond-point';placeOn(NT,v);continue}}
+   lim=Math.min(lim,Math.max(0,gap*2.2));if(gap<.05)v.why='priorité au carrefour';
   }
   for(const o of all){if(o===v||o.lane==null)continue;const d=distTo(NT,v,o.lane,o.s,20);if(d==null||d<=0)continue;if(o.h===0&&d<my+.3)continue;const gap=d-my-half(o);if(gap<12){lim=Math.min(lim,Math.max(0,(gap-.7)*2.2));if(gap<.75){lim=0;v.why='suit '+o.id}}}
   if(NT.lights.length)for(const L of NT.lights){const ph=lightPhase(R,L.id);if(ph==='car')continue;for(const x of L.xs){const d=distTo(NT,v,x.lane,x.s,30);if(d==null||d<my+.2)continue;const g=d-my-1.6;if(ph==='amber'&&g<2.5)continue;lim=Math.min(lim,Math.max(0,g*2.2));if(g<.05){lim=0;v.why=v.why||'feu'}}}
-  const z=zoneCheck(NT,v,list,blocks);if(z!=null){const g=z-my-.4;lim=Math.min(lim,Math.max(0,g*2.2));if(g<.05){lim=0;v.why=v.why||'carrefour'}}
   if(agents&&lim>0)for(const a of agents){const q=aheadPt(NT,v,my+1);if(!q)break;if(Math.abs(a.x-q.x)<3.5&&Math.abs(a.y-q.z)<3.5&&pedBlocks(NT,v,a,my)){lim=0;v.why='piéton';break}}
   {const q0=aheadPt(NT,v,0),q=aheadPt(NT,v,3.2);if(q0&&q){let da=Math.abs(q.ang-q0.ang);while(da>Math.PI)da=Math.abs(da-2*Math.PI);if(da>.5)lim=Math.min(lim,2.6)}}
   v.sp=v.sp==null?lim:(lim<v.sp?lim:Math.min(lim,v.sp+6*dt));
+
+  let b=v.sp*dt;
+  if(b>0){const next=projectVehicle(NT,v,b),obstacle=list.find(o=>o!==v&&overlap(next,o)>.001&&overlap(next,o)>overlap(v,o)+.0001);if(obstacle){v.blockedBy=obstacle.id;v.sp=0;b=0;v.why='distance de sécurité'}else v.blockedBy=null}
   if(v.sp<.05)v.stopT=(v.stopT||0)+dt;else v.stopT=0;
-  let b=v.sp*dt;while(b>0){const sg=v.route[v.ri],rest=sg.len-v.u;if(b<rest){v.u+=b;b=0}else{b-=rest;v.u=sg.len;if(v.ri<v.route.length-1){v.ri++;v.u=0}else b=0}}
+  while(b>0){const sg=v.route[v.ri],rest=sg.len-v.u;if(b<rest){v.u+=b;b=0}else{b-=rest;v.u=sg.len;if(v.ri<v.route.length-1){v.ri++;v.u=0}else b=0}}
   placeOn(NT,v);if(v.ri===v.route.length-1&&v.u>=v.route[v.ri].len-1e-6)arrived.push(v)}
  return arrived}
-// Petits ronds-points : réserver le passage jusqu'à ce que l'arrière ait dégagé.
-// Les bus (11 m) et camions ne doivent pas s'engager face à une sortie occupée.
-function ringGates(NT,R,list){const gates=new Map();R.ringLocks=R.ringLocks||{};
- for(const ring of [...NT.geo.values()].filter(g=>g.ring)){
-  const candidates=[];for(const v of list){if(!v.route)continue;let dist=-v.u;
-   for(let k=v.ri;k<v.route.length;k++){const seg=v.route[k];if(seg.lane===ring.id){candidates.push({v,k,dist,inside:k===v.ri});break}dist+=seg.len}
-   const prev=v.route[v.ri-1];if(prev?.lane===ring.id&&v.u<half(v)+2)candidates.push({v,k:v.ri-1,dist:-1,inside:true});
+// Collision entre les rectangles orientés réellement dessinés, y compris dans les virages.
+export function overlap(a,b){if(a.x==null||b.x==null)return 0;const ad=VDIM[a.kind]||VDIM.car,bd=VDIM[b.kind]||VDIM.car,A=[[Math.sin(a.ang),Math.cos(a.ang)],[Math.cos(a.ang),-Math.sin(a.ang)]],B=[[Math.sin(b.ang),Math.cos(b.ang)],[Math.cos(b.ang),-Math.sin(b.ang)]];let penetration=Infinity;
+ for(const axis of A.concat(B)){const dot=(u,v)=>u[0]*v[0]+u[1]*v[1],r=ad[0]*Math.abs(dot(A[0],axis))+ad[1]*Math.abs(dot(A[1],axis))+bd[0]*Math.abs(dot(B[0],axis))+bd[1]*Math.abs(dot(B[1],axis)),dist=Math.abs((a.x-b.x)*axis[0]+(a.z-b.z)*axis[1]);if(dist>=r)return 0;penetration=Math.min(penetration,r-dist)}return penetration}
+function projectVehicle(NT,v,b){const next={...v};while(b>0){const seg=next.route[next.ri],rest=seg.len-next.u;if(b<rest){next.u+=b;break}b-=rest;next.u=seg.len;if(next.ri===next.route.length-1)break;next.ri++;next.u=0}placeOn(NT,next);return next}
+// Chaque zone de croisement a sa priorité ; aucune réservation du rond-point entier.
+// Une voiture déjà engagée finit de passer, les autres s'arrêtent avant sa trajectoire.
+function junctionGates(NT,R,list,dt){const gates=new Map();R.junctionTime=(R.junctionTime||0)+dt;let leader=list.find(v=>v.id===R.junctionPass&&R.junctionTime<R.junctionUntil);if(!leader){leader=list.filter(v=>(v.stopT||0)>3).sort((a,b)=>Number(!!NT.geo.get(b.lane)?.ring)-Number(!!NT.geo.get(a.lane)?.ring)||a.id-b.id)[0];if(leader){R.junctionPass=leader.id;R.junctionUntil=R.junctionTime+15}}
+ const put=(v,d)=>gates.set(v.id,Math.min(gates.get(v.id)??Infinity,d));
+ for(const z of NT.zones){if(z.type==='split')continue;const entries=[];
+  for(const v of list){if(!v.route)continue;let off=-v.u;
+   for(let k=v.ri;k<v.route.length&&off<25;k++){const seg=v.route[k],g=NT.geo.get(seg.lane);for(const side of ['a','b']){const lane=side==='a'?z.a:z.b;if(seg.lane!==lane)continue;const from=side==='a'?z.a0:z.b0,to=side==='a'?z.a1:z.b1;let u=fwd(g,seg.from,from);if(g.closed&&u>seg.len)u-=g.len;
+    const d=off+u,end=d+to-from;if(u>seg.len+.01||u+to-from<0||d>half(v)+12||end<-half(v)-.8)continue;
+    const active=k===v.ri&&d<half(v)+.15&&end>-half(v)-.8;
+    entries.push({v,side,d,end,active,priority:z.yside!==side});
+   }off+=seg.len}
+   // L'arrière reste dans le carrefour après le changement de voie.
+   if(v.ri>0&&v.u<half(v)+.8){const prev=v.route[v.ri-1];for(const side of ['a','b']){if(prev.lane!==(side==='a'?z.a:z.b))continue;const end=side==='a'?z.a1:z.b1;const d=end-(prev.from+prev.len)-v.u;if(d>-half(v)-.8)entries.push({v,side,d:d-2,end:d,active:true,priority:true})}}
   }
-  const active=candidates.filter(c=>c.inside),held=candidates.find(c=>c.v.id===R.ringLocks[ring.id]);
-  const owner=active[0]||held||candidates.filter(c=>c.dist<24).sort((a,b)=>a.dist-b.dist||a.v.id-b.v.id)[0];
-  if(!owner){delete R.ringLocks[ring.id];continue}R.ringLocks[ring.id]=owner.v.id;
-  for(const c of candidates){if(c.inside||c.v===owner.v)continue;const entry=c.v.route[c.k-1];if(!entry)continue;
-   let line=entry.from+entry.len;for(const z of NT.zones){const a=z.a===entry.lane?z.a0:z.b===entry.lane?z.b0:null;if(a!=null&&a<line&&line-a<12)line=a}
-   const distance=c.dist-(entry.from+entry.len-line);gates.set(c.v.id,Math.min(gates.get(c.v.id)??Infinity,distance));
-  }
- }return gates}
+  const first=[];for(const side of ['a','b']){const es=entries.filter(e=>e.side===side).sort((a,b)=>Number(b.active)-Number(a.active)||a.d-b.d);if(es.length)first.push(es[0])}
+  if(first.length<2||first[0].v===first[1].v||first[0].v.lane===first[1].v.lane)continue;
+  const following=(a,b)=>{const d=distTo(NT,a.v,b.v.lane,b.v.s,Infinity);return d!=null&&d>0};
+  const ringPriority=v=>(NT.geo.get(v.route?.[v.ri-1]?.lane)?.ring&&v.u<half(v)+12)?2:NT.geo.get(v.lane)?.ring?1:0;
+  first.sort((a,b)=>Number(following(a,b))-Number(following(b,a))||ringPriority(b.v)-ringPriority(a.v)||Number(b.v===leader)-Number(a.v===leader)||Number(b.active)-Number(a.active)||(a.active&&b.active?a.d-b.d:0)||Number(b.v===leader)-Number(a.v===leader)||Number(b.priority)-Number(a.priority)||a.d-b.d||a.v.id-b.v.id);
+  const owner=first[0];for(const e of entries){if(e.v===owner.v||e.side===owner.side)continue;put(e.v,e.d-Math.max(0,half(owner.v)-1.3))}
+ }
+ // L'insertion exige un intervalle libre correspondant à la longueur des véhicules.
+ for(const v of list){const seg=v.route?.[v.ri],next=v.route?.[v.ri+1],ring=next&&NT.geo.get(next.lane);if(!ring?.ring||NT.geo.get(v.lane)?.ring)continue;for(const o of list){if(o===v)continue;const leaving=o.route?.[o.ri-1]?.lane===ring.id&&o.u<half(o)+4;if(o.lane!==ring.id&&!leaving)continue;let d=leaving?0:Math.abs(o.s-next.from)%ring.len;d=Math.min(d,ring.len-d);if(d<half(v)+half(o)+2){put(v,seg.len-v.u-5);break}}}
+ // Si deux carrosseries se gênent encore, le véhicule non prioritaire dégage doucement.
+ for(const v of list){const o=list.find(o=>o.id===v.blockedBy);if(!o||(v.stopT||0)<1)continue;
+  const follows=(a,b)=>{const d=distTo(NT,a,b.lane,b.s,Infinity);return d!=null&&d>0};
+  const ring=v=>NT.geo.get(v.lane)?.ring||NT.geo.get(v.route?.[v.ri-1]?.lane)?.ring;
+  const winner=follows(v,o)&&!follows(o,v)?o:follows(o,v)&&!follows(v,o)?v:ring(v)&&!ring(o)?v:ring(o)&&!ring(v)?o:leader||[v,o].sort((a,b)=>a.id-b.id)[0];
+  const loser=winner===v?o:v;if(!NT.geo.get(loser.lane)?.ring&&loser.u>0)put(loser,half(loser)-.1);
+ }
+ return gates}
 export function aheadPt(NT,v,d0){let k=v.ri,u=v.u+d0;while(k<v.route.length&&u>v.route[k].len){u-=v.route[k].len;k++}if(k>=v.route.length)return null;const sg=v.route[k];return pos(NT.geo.get(sg.lane),sg.from+u)}
 function pedBlocks(NT,v,a,my){for(let d=my+.2;d<=my+2.2;d+=.5){const q=aheadPt(NT,v,d);if(!q)return false;if(Math.hypot(a.x-q.x,a.y-q.z)<1.05)return true}return false}
-// carrefours à venir : distance jusqu'au début de la zone où il faut s'arrêter, sinon null
-function zoneCheck(NT,v,list,blocks){let stop=null;const my=half(v);let off=-v.u;
- for(let k=v.ri;k<v.route.length&&off<16;k++){const sg=v.route[k],g=NT.geo.get(sg.lane);
-  for(const z of NT.zones)for(const side of ['a','b']){const mine=side==='a'?z.a:z.b;if(mine!==sg.lane)continue;
-   const a0=side==='a'?z.a0:z.b0,a1=side==='a'?z.a1:z.b1,other=side==='a'?z.b:z.a,o0=side==='a'?z.b0:z.a0,o1=side==='a'?z.b1:z.a1;
-   let ua=fwd(g,sg.from,a0);if(g.closed&&ua>sg.len)ua-=g.len;const ub=ua+Math.max(0,a1-a0);if(ub<-1e-6||ua>sg.len+1e-6)continue;
-   const dz=off+ua;if(dz-my<.3||dz-my>9)continue;// déjà engagé, ou encore loin
-   const nx=v.route[k+1],onPath=other===mine?!!nx:((nx&&nx.lane===other)||(k>0&&v.route[k-1]&&v.route[k-1].lane===other));
-   const iYield=z.yside===side;let wait=false;
-   if(z.type==='split'){if(!onPath||other===mine)wait=occupied(NT,v,list,blocks,other,o0,Math.min(o1,o0+4),true)}
-   else if(z.type==='merge'){if(iYield){if(onPath)wait=occupied(NT,v,list,blocks,other,o0-1,o1+1,false)||approaching(NT,v,list,other,o0)||!spaceAfter(NT,v,list,other,o1)}
-    else wait=occupied(NT,v,list,blocks,other,o0,o1,true)}
-   else{wait=occupied(NT,v,list,blocks,other,o0,o1,false)||(iYield?approaching(NT,v,list,other,o0):entering(NT,v,list,other,o0))||!spaceAfterOwn(NT,v,list,blocks,off+ub)}
-   if(wait){let line=dz;if(z.type==='merge'&&iYield&&NT.geo.get(other)?.ring){for(const q of NT.zones){const q0=q.a===mine?q.a0:q.b===mine?q.b0:null;if(q0!=null&&q0<a0&&a0-q0<8)line=Math.min(line,dz-(a0-q0))}}if(stop==null||line<stop){stop=line;v.conflict={a:z.a,b:z.b,type:z.type}}}}
-  off+=sg.len}
- return stop}
-// quelqu'un (corps) sur l'autre voie dans [s0,s1]
-function occupied(NT,me,list,blocks,lane,s0,s1,notOnMyPath){const g=NT.geo.get(lane);if(!g)return false;const L=Math.max(0,s1-s0);
- for(const o of list.concat(blocks)){if(o===me||o.lane!==lane)continue;const d=distTo(NT,{lane:o.lane,s:o.s},lane,s0,40);if(d==null)continue;const h=half(o);
-  if(d<h&&d>-L-h){if(notOnMyPath&&o.route){const dm=distTo(NT,me,o.lane,o.s,20);if(dm!=null&&dm>0)continue}return true}}return false}
-// quelqu'un arrive sur l'autre voie (atteindra s0 bientôt)
-function approaching(NT,me,list,lane,s0){for(const o of list){if(o===me||!o.route||o.lane!==lane)continue;const d=distTo(NT,o,lane,s0,24);if(d==null)continue;const h=half(o);if(d>=h&&d<h+3.5+(o.sp||0)*1.6)return true}return false}
-// quelqu'un, sur la voie qui cède, est déjà en train d'entrer (avance, à moins de 1,5 m) : la voie prioritaire le laisse finir
-function entering(NT,me,list,lane,s0){for(const o of list){if(o===me||!o.route||o.lane!==lane||(o.sp||0)<1)continue;const d=distTo(NT,o,lane,s0,6);if(d==null)continue;const h=half(o);if(d>=h&&d<h+1.5)return true}return false}
-// place libre juste après l'insertion, pour ne pas bloquer le carrefour
-function spaceAfter(NT,me,list,lane,s1){const need=half(me)*2+.8;for(const o of list){if(o===me||!o.route||o.lane!==lane)continue;const d=distTo(NT,{lane:o.lane,s:o.s},lane,s1,need+14);if(d==null)continue;const x=-d,h=half(o);if(x>-h&&x-h<need)return false}return true}
-function spaceAfterOwn(NT,me,list,blocks,end){const need=half(me)*2+.8;for(const o of list.concat(blocks)){if(o===me||o.lane==null)continue;const d=distTo(NT,me,o.lane,o.s,end+need+8);if(d==null||d<=end-.5)continue;if(d-half(o)-end<need)return false}return true}

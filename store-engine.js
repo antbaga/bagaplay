@@ -448,7 +448,7 @@ export const monthOf=S=>Math.floor((S.d-1)/D.DAYS_PER_MONTH)+1,dayOfMonth=S=>(S.
 // dt : secondes réelles × vitesse
 export function step(S,R,dt){S.over=false;layout(S);R.lt=(R.lt||0)+dt;LIGHT_R=R;R.trucks=R.trucks||[];R.deliv=R.deliv||[];
  // l'équipe arrive au premier jour (ou à la reprise d'une partie) ; ensuite elle reste, de jour comme de nuit
- syncStaff(S,R);if(R.staffDay!==S.d){R.staffDay=S.d;startDay(S,R)}
+ ensureCarts(S,R);syncStaff(S,R);if(R.staffDay!==S.d){R.staffDay=S.d;startDay(S,R)}
  // horloge continue : la nuit passe plus vite quand il n'y a plus personne, en temps réel pendant les livraisons
  const h0=Math.floor(S.hour),dh=dt*clockRate(S,R)/D.HOURS.realSecPerHour;S.hour+=dh;if(R.closing)R.closeH=(R.closeH||0)+dh;
  if(S.hour>=24){S.hour-=24;newDay(S,R)}
@@ -678,7 +678,7 @@ function spawnStaff(S,R){R.staffDay=S.d;R.agents=R.agents.filter(a=>a.k==='c');
 export function syncStaff(S,R){// après une embauche ou un licenciement en journée
  for(const role of ['rayon','menage']){const have=R.agents.filter(a=>a.role===role),want=S.staff[role]||0;
   for(let n=have.length;n<want;n++){const [x,y]=entCells(S)[n%2];R.agents.push({id:R.nid++,k:'s',role,x:x+.5,y:y-.5,c:idx(x,y-1),nx:-1,st:'idle',t:0,carry:null})}
-  for(const a of have.slice(want)){if(a.carry?.delivery)depositDelivery(S,R,a);if(a.carry){if(a.carry.pallet){for(const q of a.carry.items)S.reserve[q.cat]+=q.n;R.carrying[a.carry.store]-=a.carry.n;const t=R.trucks.find(t=>t.id===a.carry.truck);if(t)t.done+=a.carry.n}else S.reserve[a.carry.cat]+=a.carry.n}dropTask(S,a);R.agents.splice(R.agents.indexOf(a),1)}}}
+  for(const a of have.slice(want)){if(a.cartLoad){S.cartPool=(S.cartPool||0)+a.cartLoad;a.cartLoad=0}if(a.carry?.delivery)depositDelivery(S,R,a);if(a.carry){if(a.carry.pallet){for(const q of a.carry.items)S.reserve[q.cat]+=q.n;R.carrying[a.carry.store]-=a.carry.n;const t=R.trucks.find(t=>t.id===a.carry.truck);if(t)t.done+=a.carry.n}else S.reserve[a.carry.cat]+=a.carry.n}dropTask(S,a);R.agents.splice(R.agents.indexOf(a),1)}}}
 
 // déplacement d'une case à l'autre en suivant le champ de distance ; renvoie true à l'arrivée
 let LIGHT_R=null;   // runtime courant (phase des feux piétons pour les piétons qui attendent)
@@ -701,12 +701,11 @@ function move(S,a,key,mode,speed,dt){const f=field(S,key,mode);let budget=speed*
 function rescue(S,a,f){const x=a.c%W,y=a.c/W|0;for(let r=1;r<5;r++)for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++){const nx=x+dx,ny=y+dy;if(inLot(nx,ny)&&f[idx(nx,ny)]>=0)return idx(nx,ny)}return -1}
 
 function customer(S,R,a,dt){const sp=D.CUSTOMER.speed;
- if(a.st==='cart'){const co=S.items.find(o=>o.t==='corral');if(!co){a.st='in';return}const r=move(S,a,'item:'+co.id,'c',sp,dt);if(r===null){a.st='in';return}
-  if(r){if((R.cartsOut||0)<cartCap(S)){a.hasCart=true;R.cartsOut=(R.cartsOut||0)+1}else{a.want.length=Math.min(a.want.length,8);th(S,'nocart')}a.st='in'}return}
+ if(a.st==='cart'){const co=nearestCorral(S,a,it=>it.carts>0);if(!co){a.want.length=Math.min(a.want.length,8);th(S,'nocart');a.st='in';return}const r=move(S,a,'item:'+co.id,'c',sp,dt);if(r){if(co.carts>0){co.carts--;a.hasCart=true;R.cartsOut=(R.cartsOut||0)+1;a.st='in'}}return}
  // caddie : on pousse les courses jusqu'à la voiture, on charge le coffre, puis on range le caddie à l'abri avant de repartir
  if(a.st==='tocar'){const car=R.cars.find(c=>c.id===a.car);if(!car){a.st='retcart';return}const r=move(S,a,'cell:'+car.exit,'c',sp,dt);if(r||r===null){a.st='load';a.t=2.5;a.dir=Math.atan2(car.cx-a.x,car.cz-a.y)}return}
  if(a.st==='load'){a.t-=dt;if(a.t<=0){a.loaded=true;a.st='retcart'}return}
- if(a.st==='retcart'){const co=S.items.find(o=>o.t==='corral');const r=co?move(S,a,'item:'+co.id,'c',sp,dt):true;if(r||r===null){if(a.hasCart){a.hasCart=false;R.cartsOut=Math.max(0,(R.cartsOut||0)-1)}a.st='leave'}return}
+ if(a.st==='retcart'){if(!a.hasCart){a.st='leave';return}const co=nearestCorral(S,a,it=>it.carts<25);if(!co){if(!S.items.some(it=>it.t==='corral')){S.cartPool=(S.cartPool||0)+1;a.hasCart=false;R.cartsOut=Math.max(0,(R.cartsOut||0)-1);a.st='leave'}return}const r=move(S,a,'item:'+co.id,'c',sp,dt);if(r&&co.carts<25){co.carts++;a.hasCart=false;R.cartsOut=Math.max(0,(R.cartsOut||0)-1);a.st='leave'}return}
  if(a.st==='in'){const r=move(S,a,'ent','c',sp,dt);if(r===null)return leaveNow(S,R,a);if(r){a.st='shop'}return}
  if(a.st==='waitBus')return;
  if(a.need&&inside(S,a.c%W,a.c/W|0)&&a.st!=='svuse')for(const k of D.NEEDS.keys)a.need[k]+=D.NEEDS.rate[k]*dt;
@@ -803,7 +802,7 @@ function giveUpPick(S,R,a,it){bubble(R,a,'⌛');(a.skip||(a.skip=[])).push(it.id
  a.want.shift();a.skip=null;a.sat-=2;th(S,'attente:'+(w?w.cat:''));a.st='shop'}
 function returnGoods(S,a){for(const c in a.basket.cats)S.reserve[c]+=a.basket.cats[c];a.basket={units:0,value:0,cost:0,cats:{}}}
 function leaveNow(S,R,a){finishCustomer(S,R,a,false)}
-function finishCustomer(S,R,a,forced,keep){if(!a.done){a.done=true;if(forced&&a.basket.units&&!a.basket.paid){unqueue(R,a);payAt(S,R,a,null)}else unqueue(R,a);
+function finishCustomer(S,R,a,forced,keep){if(a.hasCart){a.st='retcart';return}if(!a.done){a.done=true;if(forced&&a.basket.units&&!a.basket.paid){unqueue(R,a);payAt(S,R,a,null)}else unqueue(R,a);
  const dp=Math.min(16,a.dirt/Math.max(1,a.steps)*60);S.dayStats.dirtPen+=dp;const db=decorBonus(S),sat=clamp(a.sat-dp+db,0,100);
  if(dp>8)th(S,'dirt');if(sat>=85)th(S,'happy');if(db>5&&R.rnd()<.15)th(S,'decor');
  S.dayStats.customers++;S.dayStats.sat+=sat;S.month.customers++;S.month.sat+=sat}
@@ -811,10 +810,22 @@ function finishCustomer(S,R,a,forced,keep){if(!a.done){a.done=true;if(forced&&a.
  if(!keep){const k=R.agents.indexOf(a);if(k>=0)R.agents.splice(k,1)}}
 function decorBonus(S){let d=0;for(const it of S.items)d+=def(it.t).attract||0;return Math.min(8,d/Math.max(1,salesArea(S))*60)}
 function bubble(R,a,txt){ev(R,{t:'bubble',id:a.id,txt})}
+export function ensureCarts(S,R){const depots=S.items.filter(it=>it.t==='corral');for(const it of depots)if(it.carts==null)it.carts=15;
+ if(!S.cartVersion){let out=R.agents.reduce((n,a)=>n+(a.hasCart?1:0)+(a.cartLoad||0),0);for(const it of depots){const n=Math.min(out,it.carts);it.carts-=n;out-=n}S.cartVersion=1}
+ for(const it of depots){const n=Math.min(S.cartPool||0,Math.max(0,15-it.carts));it.carts+=n;S.cartPool=(S.cartPool||0)-n}}
+export function nearestCorral(S,a,predicate=()=>true,mode='c'){let best=null,dist=Infinity;for(const it of S.items){if(it.t!=='corral'||!predicate(it))continue;const d=field(S,'item:'+it.id,mode)[a.c];if(d>=0&&d<dist){dist=d;best=it}}return best}
+export const cartTotal=(S,R)=>S.items.filter(it=>it.t==='corral').reduce((n,it)=>n+(it.carts||0),0)+R.agents.reduce((n,a)=>n+(a.hasCart?1:0)+(a.cartLoad||0),0)+(S.cartPool||0);
+function balanceCarts(S,R,a,dt){const sp=D.STAFF.speed*.75;
+ if(a.cartLoad){const target=S.items.find(it=>it.id===a.cartJob?.to&&it.carts<25&&field(S,'item:'+it.id,'s')[a.c]>=0);const dest=target||nearestCorral(S,a,it=>it.id!==a.cartJob?.from&&it.carts<15, 's')||nearestCorral(S,a,it=>it.carts<25,'s');if(!dest)return true;const r=move(S,a,'item:'+dest.id,'s',sp,dt);if(r){const n=Math.min(a.cartLoad,25-dest.carts);dest.carts+=n;a.cartLoad-=n;if(!a.cartLoad){a.cartJob=null;a.st='idle'}}return true}
+ if(a.cartJob){const src=S.items.find(it=>it.id===a.cartJob.from),dst=S.items.find(it=>it.id===a.cartJob.to);if(!src||!dst||src.carts-dst.carts<2){a.cartJob=null;a.st='idle';return false}const r=move(S,a,'item:'+src.id,'s',sp,dt);if(r===null){a.cartJob=null;a.st='idle';return false}if(r){a.cartLoad=Math.min(5,Math.floor((src.carts-dst.carts)/2),25-dst.carts);src.carts-=a.cartLoad;a.st='cartBalance'}return true}
+ if(!['idle','wander'].includes(a.st))return false;
+ const busy=new Set(R.agents.flatMap(o=>o!==a&&o.cartJob?[o.cartJob.from,o.cartJob.to]:[]));const depots=S.items.filter(it=>it.t==='corral'&&!busy.has(it.id)&&field(S,'item:'+it.id,'s')[a.c]>=0).sort((a,b)=>a.carts-b.carts);
+ if(depots.length<2)return false;const dst=depots[0],src=depots.at(-1);if(src.carts-dst.carts<2)return false;a.cartJob={from:src.id,to:dst.id};a.st='cartBalance';a.nx=-1;return true}
 export const cartCap=S=>S.items.filter(o=>o.t==='corral').length*def('corral').cap;
 function th(S,k){const t=S.dayStats.th;t[k]=(t[k]||0)+1}
 
 // ---- employé·e de rayon
+function refillTarget(S,R){let best=null,bv=Infinity;for(const it of S.items){const d=def(it.t);if(!it.cat||!S.reserve[it.cat]||!(d.kind==='sale'||(d.kind==='counter'&&manned(S,it))))continue;const reserved=R.agents.reduce((n,o)=>n+(o.task?.cat===it.cat&&!o.carry?o.task.n:0),0);if(S.reserve[it.cat]<=reserved)continue;const count=it.stock+(it.inc||0),v=count/d.cap-(it.urgent?2:0);if(count<d.cap&&v<bv){bv=v;best=it}}return best}
 function stocker(S,R,a,dt){const sp=D.STAFF.speed;
  // Un carton en livraison reste réservé jusqu'à son dépôt physique.
  if(a.st==='deliveryStore'||a.st==='deliveryDrop'){
@@ -824,8 +835,8 @@ function stocker(S,R,a,dt){const sp=D.STAFF.speed;
  // Anciennes palettes sauvegardées : préserver leurs marchandises.
  if(a.carry?.pallet){for(const q of a.carry.items)S.reserve[q.cat]+=q.n;if(R.carrying)R.carrying[a.carry.store]=Math.max(0,(R.carrying[a.carry.store]||0)-a.carry.n);a.carry=null;a.st='idle'}
  if(['lift','toStore','drop'].includes(a.st))a.st='idle';
- // un camion est à quai : on lâche ce qu'on fait (le carton retourne en réserve) et on va le vider
- if(a.st!=='toTruck'&&a.st!=='unloadT'){const t=truckNeedingHands(S,R);if(t){if(a.carry){S.reserve[a.carry.cat]+=a.carry.n;a.carry=null}dropTask(S,a);a.dock=t.dock;a.st='toTruck'}}
+ const refill=refillTarget(S,R);
+ if(refill&&['toTruck','unloadT','wander'].includes(a.st)){a.st='idle';a.dock=null;a.acc=0;a.nx=-1}
  if(a.st==='toTruck'){if(!S.items.some(o=>o.id===a.dock)){a.st='idle';return}
   // personne à vider ici : un autre quai qui a besoin de bras, sinon on attend un camion annoncé, sinon on retourne au travail
   if(!unloadingAt(R,a.dock)){const t=truckNeedingHands(S,R);if(t)a.dock=t.dock;else if(!truckComing(R,a.dock)){const c=truckComing(R);if(c)a.dock=c.dock;else{a.st='idle';return}}}
@@ -839,14 +850,12 @@ function stocker(S,R,a,dt){const sp=D.STAFF.speed;
   const n=Math.min(D.STAFF.carton,t.order.u[cat],Math.max(0,cap[store]-used[store]-(R.carrying[store]||0)));
   if(!rack||n<=0){driverUnload(S,R,t,dt);a.st='idle';return}if(a.acc<n)return;a.acc=0;
   t.order.u[cat]-=n;R.carrying[store]=(R.carrying[store]||0)+n;a.carry={delivery:true,cat,n,store,truck:t.id};a.goal='item:'+rack.id;a.st='deliveryStore';return}
- // un camion arrive : on l'attend au quai
- if(a.st==='idle'){const c=truckComing(R);if(c){a.dock=c.dock;a.st='toTruck';return}}
  if(a.st==='wander')a.st='idle';
  if(a.st==='idle'){
-  let best=null,bv=2;for(const it of S.items){const d=def(it.t);if(!it.cat||!S.reserve[it.cat]||!(d.kind==='sale'||(d.kind==='counter'&&manned(S,it))))continue;const v=(it.stock+(it.inc||0))/d.cap-(it.urgent?2:0);if((v<.75||it.urgent&&it.stock+(it.inc||0)<d.cap)&&v<bv){bv=v;best=it}}
-  if(!best){if(R.rnd()<.3){a.st='wander';a.goal='cell:'+randomFloor(S,R,1)}return}
+  const best=refill;
+  if(!best){const t=truckNeedingHands(S,R);if(t){a.dock=t.dock;a.st='toTruck'}return}
   const store=D.CAT[best.cat].store,res=S.items.filter(o=>def(o.t).kind==='reserve'&&def(o.t).store===store);
-  const n=Math.min(D.STAFF.carton,def(best.t).cap-best.stock-(best.inc||0),S.reserve[best.cat]);if(n<=0)return;
+  const n=Math.min(D.STAFF.carton,def(best.t).cap-best.stock-(best.inc||0),S.reserve[best.cat]-R.agents.reduce((n,o)=>n+(o.task?.cat===best.cat&&!o.carry?o.task.n:0),0));if(n<=0)return;
   let src=null;if(res.length){const x=a.c%W,y=a.c/W|0;src=res.reduce((p,o)=>Math.abs(o.x-x)+Math.abs(o.y-y)<Math.abs(p.x-x)+Math.abs(p.y-y)?o:p)}
   best.inc=(best.inc||0)+n;a.task={f:best.id,cat:best.cat,n};a.goal=src?'item:'+src.id:'ent';a.st='toRes';return}
  if(a.st==='wander'){const r=move(S,a,a.goal,'s',sp*.6,dt);if(r||r===null){a.st='idle';a.t=1.5}return}
@@ -862,7 +871,7 @@ function dropTask(S,a){if(!a.task)return;const f=S.items.find(o=>o.id===a.task.f
 function randomFloor(S,R,zoneOk){for(let k=0;k<60;k++){const x=S.b.x0+Math.floor(R.rnd()*(S.b.x1-S.b.x0)),y=S.b.y0+Math.floor(R.rnd()*(S.b.y1-S.b.y0)),i=idx(x,y);if(S.built[i]&&layout(S).ps[i]&&(zoneOk||!S.zone[i]))return i}return idx(S.ent,S.b.y1-1)}
 
 // ---- agent d'entretien
-function cleaner(S,R,a,dt){const sp=D.STAFF.speed*.9;if(!S.dirt)return;
+function cleaner(S,R,a,dt){if(balanceCarts(S,R,a,dt))return;const sp=D.STAFF.speed*.9;if(!S.dirt)return;
  if(a.st==='wander')a.st='idle';
  if(a.st==='idle'){let best=-1,bv=.3;
   for(let y=S.b.y0;y<S.b.y1;y++)for(let x=S.b.x0;x<S.b.x1;x++){const i=idx(x,y);if(S.dirt[i]>bv&&!R.agents.some(o=>o!==a&&['go','clean'].includes(o.st)&&o.goal==='cell:'+i)){bv=S.dirt[i];best=i}}
