@@ -1,3 +1,12 @@
+# 5.7.0 — 10 novembre 2026
+
+- Circulation refaite aux zones de conflit : priorité à droite aux croisements (sauf cédez-le-passage), priorité à l'anneau dans les ronds-points. On s'insère dès qu'il y a juste la place de sa carrosserie ; les véhicules déjà engagés finissent de passer.
+- Plus d'interblocage : on ne s'engage pas sans pouvoir ressortir du carrefour, on n'entre plus dans un rond-point plein, chaque entrée passe à son tour en cas d'attente, et les blocages en boucle sont détectés et dénoués.
+- Les voies d'entrée et de sortie d'une même branche ne se gênent plus, et les zones à cheval sur le point 0 d'un rond-point sont recollées.
+- Semi-remorques articulées (tracteur + remorque qui pivote, y compris en marche arrière vers le quai) et bus de ville plus courts (8,4 m).
+- Routes : le début et la fin d'une voie se déplacent en les tirant ; toucher une voie la coupe en deux à cet endroit.
+- Tests de circulation continue sur les ronds-points de 3, 4 et 5 m (voitures, bus, camions), croisements chargés, articulation, coupe et déplacement des bouts de voie.
+
 # 5.6.0 — 8 novembre 2026
 
 - Priorité à droite aux intersections, sauf cédez-le-passage explicite. Passage par zone de conflit et récupération des blocages existants.

@@ -95,7 +95,7 @@ export function bagastore(c){
   if(drag?.draw&&mode){const c1=cellAt(p.x,p.y);if(!mode.b||c1[0]!==mode.b[0]||c1[1]!==mode.b[1]){mode.b=c1;drag.moved=true;updatePlace()}return}
   if(drag&&(drag.moved||Math.hypot(p.x-p.x0,p.y-p.y0)>8)){drag.moved=true;const g0=ground(cam,px,py),g1=ground(cam,p.x,p.y);cam.tx+=g0[0]-g1[0];cam.tz+=g0[1]-g1[1];clampCam()}});
  const up=e=>{const p=pts.get(e.pointerId);pts.delete(e.pointerId);if(pts.size<2)pinch=null;if(!p)return;
-  if(drag?.draw){if(!pts.size){drag=null;updatePlace()}return}
+  if(drag?.draw){if(!pts.size){if(mode?.id==='lane'&&!drag.moved&&mode.cutAt&&!mode.plan&&!mode.vert){const c0=mode.cutAt,p=E.cutPlan(S,c0.id,c0.x,c0.z);mode.cut={...c0,plan:p}}drag=null;updatePlace()}return}
   if(drag&&!drag.moved&&pts.size===0&&performance.now()-p.t<500)tap(p.x,p.y);if(!pts.size)drag=null};
  c.listen(cv,'pointerup',up);c.listen(cv,'pointercancel',e=>{pts.delete(e.pointerId);drag=null;pinch=null});
  c.listen(cv,'wheel',e=>{e.preventDefault();zoom(e.deltaY>0?1.12:.89)},{passive:false});
@@ -117,7 +117,7 @@ export function bagastore(c){
   if(panel==='item'||panel==='door')closePanel()}
 
  // ---- placement : aperçu, petite bulle ✕ / ✓ au-dessus de l'objet
- const TOOL_NAMES={extend:'Agrandir',asphalt:'Goudron',lane:'Route',ring:'Rond-point',walk:'Trottoir',cross:'Passage piéton',yield:'Cédez le passage',light:'Feu piéton'},TOOL_HINT={lane:'Trace une voie dans le sens de circulation. Tire un bout pour la rallonger, un rond blanc ou un + pour la courber.',ring:'Touche le centre du rond-point. ↻ change la taille. Les voies qui le traversent sont coupées et raccordées à l’anneau.',yield:'Touche une voie juste avant un croisement : elle laisse passer l’autre. Touche-le à nouveau pour l’enlever.',light:'Glisse le doigt d’un trottoir à l’autre, en travers des voies (sur un passage piéton). Le feu alterne voitures et piétons.',cross:'Glisse le doigt en travers d’une route.',extend:'Glisse le doigt pour tracer l’extension.',asphalt:'Glisse le doigt pour goudronner une zone.',walk:'Glisse le doigt pour poser un trottoir.',road:'Glisse le doigt pour tracer une route.',wall:'Glisse le doigt pour tracer le mur.',zoneR:'Glisse le doigt sur la zone.',zoneS:'Glisse le doigt sur la zone.',erase:'Touche ce que tu veux démolir.'};
+ const TOOL_NAMES={extend:'Agrandir',asphalt:'Goudron',lane:'Route',ring:'Rond-point',walk:'Trottoir',cross:'Passage piéton',yield:'Cédez le passage',light:'Feu piéton'},TOOL_HINT={lane:'Trace une voie dans le sens de circulation. Tire le début (bleu) ou la fin (orange) pour les déplacer, un rond blanc ou un + pour courber. Touche une voie pour la couper en deux.',ring:'Touche le centre du rond-point. ↻ change la taille. Les voies qui le traversent sont coupées et raccordées à l’anneau.',yield:'Touche une voie juste avant un croisement : elle laisse passer l’autre. Touche-le à nouveau pour l’enlever.',light:'Glisse le doigt d’un trottoir à l’autre, en travers des voies (sur un passage piéton). Le feu alterne voitures et piétons.',cross:'Glisse le doigt en travers d’une route.',extend:'Glisse le doigt pour tracer l’extension.',asphalt:'Glisse le doigt pour goudronner une zone.',walk:'Glisse le doigt pour poser un trottoir.',road:'Glisse le doigt pour tracer une route.',wall:'Glisse le doigt pour tracer le mur.',zoneR:'Glisse le doigt sur la zone.',zoneS:'Glisse le doigt sur la zone.',erase:'Touche ce que tu veux démolir.'};
  function startMove(id){const it=S.items.find(o=>o.id===id);if(!it)return;mode={kind:'item',t:it.t,r:it.r,pos:[it.x,it.y],move:id};staticKey='';closePanel();bar.hidden=false;updatePlace();msg('Touche la nouvelle place.')}
  function startItem(t){mode={kind:'item',t,r:0,pos:null};closePanel();bar.hidden=false;updatePlace();msg('Touche le sol pour placer.')}
  function startTool(t){mode={kind:'tool',id:t,r:t==='ring'?ringR:0};closePanel();bar.hidden=false;updatePlace();msg(TOOL_HINT[t]||D.TOOLS.find(o=>o.id===t)?.hint||'')}
@@ -135,6 +135,7 @@ export function bagastore(c){
    if(GT[t]&&mode.a){const p=E.groundPlan(S,mode.a,b,GT[t]);g.cells=p.cells.map(i=>[i%D.LOT_W,i/D.LOT_W|0]);g.h=.04;cost=p.cost;ok=!p.why;why=p.why||'';if(p.cells.length)label=`${TOOL_NAMES[t]} : ${p.cells.length} m²`}
    if(t==='lane'&&mode.plan){const p=mode.plan;g.cells=(p.cells||[]).map(i=>[i%D.LOT_W,i/D.LOT_W|0]);g.h=.04;g.poly=mode.poly;ok=!p.why;why=p.why||'';cost=p.refund?-p.refund:(p.cost||0);
     const e=mode.vert?[Math.round(mode.vert.tx),Math.round(mode.vert.tz)]:mode.poly[mode.poly.length-1];anchor=[e[0],1,e[1]];const m=Math.round(mode.len||0);if(mode.vert)label='Modifier la voie'+(m?` : ${p.refund?'−':'+'}${m} m`:'');else if(m)label=mode.trim?`Raccourcir : ${m} m`:`Route : ${m} m`}
+   if(t==='lane'&&mode.cut&&!mode.plan){const p=mode.cut.plan;if(p.p){g.cells=[[p.p[0]-1,p.p[1]-1],[p.p[0],p.p[1]-1],[p.p[0]-1,p.p[1]],[p.p[0],p.p[1]]];g.h=.06;anchor=[p.p[0],1,p.p[1]]}else anchor=[mode.cut.x,1,mode.cut.z];ok=!p.why;why=p.why||'';cost=0;label='Couper la voie ici'}
    if(t==='ring'&&mode.pos){const p=E.ringPlan(S,mode.pos[0],mode.pos[1],RD.RING_R[mode.r]);g.cells=(p.cells||[]).concat(p.island||[]).map(i=>[i%D.LOT_W,i/D.LOT_W|0]);g.h=.04;cost=p.cost||0;ok=!p.why;why=p.why||'';anchor=[mode.pos[0],1,mode.pos[1]];label=`Rond-point · ${RD.RING_R[mode.r]*2+2} m`}
    if(t==='light'&&mode.a&&mode.b){const p=E.lightPlan(S,mode.a,mode.b),b2=p.b||mode.b;g.poly=[mode.a,b2];g.noArrow=true;cost=p.cost||RD.LIGHT.cost;ok=!p.why;why=p.why||'';if(p.lanes)label=`Feu piéton · ${p.lanes} voie${p.lanes>1?'s':''}`}
    if(t==='erase'&&mode.a){const inf=E.eraseInfo(S,...mode.a);if(inf){g.cells=inf.cells.map(k=>[k%D.LOT_W,k/D.LOT_W|0]);g.h=.3;label='Démolir : '+inf.label;cost=-inf.refund;ok=true;if(inf.lost)why=inf.lost+' articles de la réserve seront perdus.'}else why='Rien à démolir ici.'}
@@ -145,27 +146,29 @@ export function bagastore(c){
   if(mode.kind==='item'||mode.id==='ring'){const r=el('button','st-pbtn','↻');r.setAttribute('aria-label',mode.id==='ring'?'Taille':'Tourner');r.onclick=()=>{mode.r=(mode.r+1)%(mode.id==='ring'?RD.RING_R.length:4);if(mode.id==='ring')ringR=mode.r;sfx('click');updatePlace()};bar.append(r)}
   if(E.canUndo(S)){const u=el('button','st-pbtn','↶');u.setAttribute('aria-label','Annuler la dernière construction');u.onclick=()=>{const why=E.undo(S);if(why){msg(why);sfx('error')}else{sfx('erase');toast('Construction annulée, remboursée')}updatePlace()};bar.append(u)}
   const x=el('button','st-pbtn done','Fini');x.onclick=()=>{sfx('click');stopMode()};bar.append(x);
-  pop.hidden=!anchor||(mode.kind==='tool'&&!mode.b&&!mode.pos&&!mode.plan)||!!drag?.draw||(mode.id==='erase'&&!ok);popOk.disabled=!ok;pop.classList.toggle('bad',!ok);popCost.textContent=cost?(cost>0?eur(cost):'+'+eur(-cost)):'';
+  pop.hidden=!anchor||(mode.kind==='tool'&&!mode.b&&!mode.pos&&!mode.plan&&!mode.cut)||!!drag?.draw||(mode.id==='erase'&&!ok);popOk.disabled=!ok;pop.classList.toggle('bad',!ok);popCost.textContent=cost?(cost>0?eur(cost):'+'+eur(-cost)):'';
   popOk.onclick=()=>mode.kind==='item'?confirmPlace():applyTool();popNo.onclick=()=>{if(mode.kind==='item'||mode.id==='ring')mode.pos=null;else if(mode.id==='lane')laneReset();else mode.a=mode.b=null;sfx('click');updatePlace()};
   c.hint(why||'')}
  function confirmPlace(){if(!mode?.pos)return;if(mode.move){const why=E.moveItem(S,mode.move,mode.pos[0],mode.pos[1],mode.r);if(why){msg(why);sfx('error');return}sfx('place');sel=mode.move;stopMode();return}const r=E.place(S,mode.t,mode.pos[0],mode.pos[1],mode.r);
   if(typeof r==='string'){msg(r);sfx('error');return}sfx('place');mode.pos=null;updatePlace()}
  // ---- tracé d'une voie : segments droits ou à 45° entre coins de cases ; un changement de direction ajoute un virage
- function laneReset(){mode.cur=null;mode.pts=null;mode.plan=null;mode.poly=null;mode.trim=null;mode.trim0=false;mode.edit=null;mode.vert=null;mode.len=0}
+ function laneReset(){mode.cur=null;mode.pts=null;mode.plan=null;mode.poly=null;mode.trim=null;mode.trim0=false;mode.edit=null;mode.vert=null;mode.len=0;mode.cut=null;mode.cutAt=null}
  // poignées des voies : virages (sommets) et milieux des segments assez longs (pour créer un virage)
  function laneHandles(){const o=[];for(const l of S.lanes||[]){if(l.ring)continue;const p=l.pts;
-   for(let i=1;i<p.length-1;i++)o.push({id:l.id,i,ins:false,x:p[i][0],z:p[i][1]});
+   for(let i=0;i<p.length;i++)o.push({id:l.id,i,ins:false,end:i===0||i===p.length-1,x:p[i][0],z:p[i][1]});
    for(let i=1;i<p.length;i++){const a=p[i-1],b=p[i];if(Math.hypot(b[0]-a[0],b[1]-a[1])>=4)o.push({id:l.id,i,ins:true,x:(a[0]+b[0])/2,z:(a[1]+b[1])/2})}}return o}
  function handleAt(x,z){let best=null;for(const h of laneHandles()){const d=Math.hypot(h.x-x,h.z-z),lim=h.ins?.7:.9;if(d<=lim&&(!best||d<best.d))best={...h,d}}return best}
  const V=(x,z)=>[Math.round(x),Math.round(z)];
  function laneDown(x,z){laneReset();const q=RD.laneAt(S,x,z,1.15);
-  const h=!(q&&q.end)&&handleAt(x,z);if(h){mode.vert={id:h.id,i:h.i,ins:h.ins,x:h.x,z:h.z};mode.pts=[];return}
-  if(q&&q.end){const l=S.lanes.find(o=>o.id===q.id),e=q.end==='end'?l.pts[l.pts.length-1]:l.pts[0];mode.edit={id:q.id,end:q.end,p:e};mode.pts=[[e[0],e[1]]];mode.trim0=q.end==='start'}
-  else{let v=V(x,z);const r=E.snapRing?E.snapRing(S,v):v;mode.pts=[r]}
+  // poignée : virage ou bout (début / fin) de voie qu'on déplace
+  const h=handleAt(x,z);if(h){mode.vert={id:h.id,i:h.i,ins:h.ins,end:h.end,x:h.x,z:h.z};mode.pts=[];return}
+  // sur une voie : un simple toucher la coupe en deux à cet endroit ; glisser trace une nouvelle voie qui en part
+  if(q&&!q.ring)mode.cutAt={id:q.id,x,z};
+  {let v=V(x,z);const r=E.snapRing?E.snapRing(S,v):v;mode.pts=[r]}
   laneMove(x,z,true)}
  function laneMove(x,z,first){const pts=mode.pts;if(!pts)return false;const key0=JSON.stringify([mode.poly,mode.trim]);
   // virage d'une voie qu'on déplace (ou qu'on crée au milieu d'un segment)
-  if(mode.vert){const v=mode.vert;if(first||Math.hypot(x-v.x,z-v.z)<.5&&!mode.plan)return false;const p=E.vertexPlan(S,v.id,v.i,x,z,v.ins);v.tx=x;v.tz=z;mode.plan=p;
+  if(mode.vert){const v=mode.vert;if(first||Math.hypot(x-v.x,z-v.z)<.5&&!mode.plan)return false;if(v.end&&E.snapRing){const r=E.snapRing(S,[Math.round(x),Math.round(z)]);x=r[0];z=r[1]}const p=E.vertexPlan(S,v.id,v.i,x,z,v.ins);v.tx=x;v.tz=z;mode.plan=p;
    const l=S.lanes.find(o=>o.id===v.id);mode.poly=(p.pts||l.pts).map(a=>[a[0],a[1]]);mode.len=p.len||0;return JSON.stringify([mode.poly,mode.trim])!==key0}
   // bout d'une voie qu'on fait glisser le long d'elle : on la raccourcit
   if(mode.edit){const q=RD.laneAt(S,x,z,1.0);if(q&&q.id===mode.edit.id&&Math.hypot(x-mode.edit.p[0],z-mode.edit.p[1])>.6){const p=E.trimPlan(S,q.id,mode.edit.end,x,z);
@@ -188,7 +191,8 @@ export function bagastore(c){
   if(t==='erase')why=E.eraseAt(S,...mode.a);
   if(t==='extend'){why=E.extendRect(S,mode.a,mode.b);if(!why)save()}
   if(GT[t])why=E.paintGround(S,mode.a,mode.b,GT[t]);
-  if(t==='lane'&&mode.plan&&mode.vert){const v=mode.vert;why=E.moveVertex(S,v.id,v.i,v.tx,v.tz,v.ins);if(!why){laneReset();save()}}
+  if(t==='lane'&&mode.cut&&!mode.plan){why=E.cutLane(S,mode.cut.id,mode.cut.x,mode.cut.z);if(!why){laneReset();save()}}
+  else if(t==='lane'&&mode.plan&&mode.vert){const v=mode.vert;why=E.moveVertex(S,v.id,v.i,v.tx,v.tz,v.ins);if(!why){laneReset();save()}}
   else if(t==='lane'&&mode.plan){why=mode.trim?E.trimLane(S,mode.trim.id,mode.trim.end,mode.trim.x,mode.trim.y):E.buildLane(S,mode.plan.pts);if(!why){laneReset();save()}}
   if(t==='light'&&mode.a&&mode.b){why=E.buildLight(S,mode.a,mode.b);if(!why)save()}
   if(t==='ring'&&mode.pos){why=E.buildRing(S,mode.pos[0],mode.pos[1],RD.RING_R[mode.r]);if(!why){mode.pos=null;save()}}

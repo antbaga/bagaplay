@@ -327,6 +327,8 @@ export function vertexPlan(S,id,i,x,z,ins){return RD.vertexPlan(S,id,i,x,z,ins,l
 export function moveVertex(S,id,i,x,z,ins){const p=vertexPlan(S,id,i,x,z,ins);if(p.why)return p.why;if(p.cost>S.cash)return 'Pas assez d’argent.';const snap=snapRoads(S);RD.moveVertex(S,id,p);
  if(p.cost)pay(S,p.cost,'build');S.cash+=p.refund;roadsEdited(S,snap,p.cost-p.refund,p.cells);return null}
 export const trimPlan=(S,id,end,x,y)=>RD.trimPlan(S,id,end,x,y);
+export const cutPlan=(S,id,x,y)=>RD.cutPlan(S,id,x,y);
+export function cutLane(S,id,x,y){const p=RD.cutPlan(S,id,x,y);if(p.why)return p.why;const snap=snapRoads(S);RD.cutLane(S,p);roadsEdited(S,snap,0);return null}
 // bout de voie près d'un rond-point : accroché au coin de case le plus proche du cercle (même objet renvoyé sinon)
 export function snapRing(S,p){for(const l of S.lanes||[]){if(!l.ring)continue;const {cx,cy,r}=l.ring;if(Math.abs(Math.hypot(p[0]-cx,p[1]-cy)-r)>1.6)continue;let best=null;
   for(let y=Math.round(p[1])-2;y<=Math.round(p[1])+2;y++)for(let x=Math.round(p[0])-2;x<=Math.round(p[0])+2;x++){const e=Math.abs(Math.hypot(x-cx,y-cy)-r);if(e>.75)continue;const d=Math.hypot(x-p[0],y-p[1]);if(!best||d<best.d)best={d,q:[x,y]}}
@@ -529,14 +531,14 @@ function dockPlan0(S,it,zs,NT){const [w,d]=size(it),f=DIRS[(it.r+2)%4],F=[it.x+w
   const [hl,hw]=RD.VDIM.truck,L=TRUCK_LEN;let ok=true;
   for(let a=.2;a<=L+.3&&ok;a+=.5)for(const l of [-hw,0,hw]){const x=F[0]+f[0]*a+pp[0]*l,y=F[1]+f[1]*a+pp[1]*l;if(!zc.has(idx(Math.floor(x),Math.floor(y)))){ok=false;break}}
   if(ok){const N=[F[0]+f[0]*(L+1.4),F[1]+f[1]*(L+1.4)];let best=null;
-   for(const g of NT.geo.values()){const q=RD.proj(g,N[0],N[1]);if(q.d>4.6)continue;const P=RD.pos(g,q.s);if(Math.abs(Math.sin(P.ang)*f[0]+Math.cos(P.ang)*f[1])>.5)continue;if(!best||q.d<best.d)best={g,s:q.s,d:q.d}}
+   for(const g of NT.geo.values()){const q=RD.proj(g,N[0],N[1]);if(q.d>5.6)continue;const P=RD.pos(g,q.s);if(Math.abs(Math.sin(P.ang)*f[0]+Math.cos(P.ang)*f[1])>.5)continue;if(!best||q.d<best.d)best={g,s:q.s,d:q.d}}
    if(best){const g=best.g,sA=best.s-6,sB=best.s+7;
     if(g.closed||(sA>.3&&sB<g.len-.3)){const P=RD.pos(g,best.s),t=[Math.sin(P.ang),Math.cos(P.ang)],A=RD.pos(g,sA),B=RD.pos(g,sB),k=TRUCK_BACK+.1;
-     const Pk=[F[0]+f[0]*k,F[1]+f[1]*k],P1=[Pk[0]+f[0]*2.2+t[0]*4.2,Pk[1]+f[1]*2.2+t[1]*4.2];
+     const Pk=[F[0]+f[0]*k,F[1]+f[1]*k],P1=[Pk[0]+f[0]*2.4+t[0]*5.6,Pk[1]+f[1]*2.4+t[1]*5.6];
      return {zone:true,lane:g.id,sA:g.closed?(sA+g.len)%g.len:sA,sB:g.closed?sB%g.len:sB,A:[A.x,A.z],B:[B.x,B.z],t,f,Pk,P1,ang:Math.atan2(f[0],f[1])}}}}}
  const a=accessOf(S,it);return a?{zone:false,acc:a}:null}
-// camion (repère du véhicule) : arrière à 4,21 m, longueur totale 7,5 m (store-models.js)
-const TRUCK_BACK=4.21,TRUCK_LEN=7.6;
+// semi-remorque (repère = centre du tracteur) : arrière de la remorque à 5,5 m quand elle est dans l'axe, longueur totale 6,8 m
+const TRUCK_BACK=RD.SEMI.hitch+RD.SEMI.half*2-RD.SEMI.nose,TRUCK_LEN=RD.SEMI.cab+TRUCK_BACK+.1;
 export function reachable(S,key){const it=S.items.find(o=>o.id===+key.slice(key.indexOf(':')+1));if(!it)return false;return it.t==='spot'?spotReady(S,it):dockReady(S,it)}
 function spotGeo(it){const [w,d]=size(it),fc=front(it),fx=fc.reduce((a,[x])=>a+x,0)/fc.length,fy=fc.reduce((a,[,y])=>a+y,0)/fc.length;
  let exit=-1,bd=-1;for(const c of cells(it)){const dd=Math.abs(c%W-fx)+Math.abs((c/W|0)-fy);if(dd>bd){bd=dd;exit=c}}
@@ -544,8 +546,14 @@ function spotGeo(it){const [w,d]=size(it),fc=front(it),fx=fc.reduce((a,[x])=>a+x
 function bez(p0,p1,p2,p3,n=26){const o=[];for(let i=1;i<=n;i++){const t=i/n,u=1-t;o.push([u*u*u*p0[0]+3*u*u*t*p1[0]+3*u*t*t*p2[0]+t*t*t*p3[0],u*u*u*p0[1]+3*u*u*t*p1[1]+3*u*t*t*p2[1]+t*t*t*p3[1]])}return o}
 // manœuvre (entrer dans sa place / en sortir en marche arrière) : on suit la courbe
 function follow(v,speed,dt){const m=v.man;let b=speed*dt;
+ // semi-remorque en marche arrière : c'est l'essieu de la remorque qui suit la courbe, le tracteur pousse derrière la sellette
+ if(m.trailer){const A=v.tr;while(b>1e-4&&m.i<m.pts.length){const [tx,tz]=m.pts[m.i],dx=tx-A.x,dz=tz-A.z,d=Math.hypot(dx,dz);if(d<1e-4){m.i++;continue}
+   const st=Math.min(b,d);A.x+=dx/d*st;A.z+=dz/d*st;b-=st;if(st>=d)m.i++;const ux=-dx/d,uz=-dz/d,hx=A.x+ux*RD.SEMI.axle,hz=A.z+uz*RD.SEMI.axle;
+   let cx=v.x-hx,cz=v.z-hz;const L=Math.hypot(cx,cz)||1;v.x=hx+cx/L*RD.SEMI.hitch;v.z=hz+cz/L*RD.SEMI.hitch;v.ang=Math.atan2(cx,cz)}
+  v.tr={x:A.x,z:A.z};return m.i>=m.pts.length}
  while(b>1e-4&&m.i<m.pts.length){const [tx,tz]=m.pts[m.i],dx=tx-v.x,dz=tz-v.z,d=Math.hypot(dx,dz);if(d<1e-4){m.i++;continue}
   const st=Math.min(b,d);v.x+=dx/d*st;v.z+=dz/d*st;v.ang=m.rev?Math.atan2(-dx,-dz):Math.atan2(dx,dz);b-=st;if(st>=d)m.i++}
+ if(v.kind==='truck')RD.trailer(v);
  return m.i>=m.pts.length}
 const CARCOL=[[.85,.2,.2],[.2,.4,.8],[.95,.95,.95],[.2,.2,.22],[.95,.75,.2],[.35,.65,.4],[.6,.6,.65]];
 function onLane(R,v,r,kind,vmax){v.kind=kind;v.route=r;v.ri=0;v.u=0;v.sp=0;v.vmax=vmax;v.stopT=0;return v}
@@ -646,8 +654,11 @@ function startUnload(S,R,t){t.st='unload';ev(R,{t:'truck'});if(!t.paid){t.order=
 function trucksStep(S,R,dt){const NT=RD.net(S),T=D.TRAFFIC;
  for(const t of R.trucks.slice()){
   if(t.man){const m=t.man,p=t.plan;if(m.block&&t.st==='man1'&&m.i>m.pts.length*.5)m.block=null;if(!follow(t,T.carSpeed*(t.st==='man2'?.45:.6),dt))continue;t.man=null;
-   if(t.st==='man1'){t.st='man2';t.man={pts:bez(p.P1,[p.P1[0]-p.t[0]*2.6,p.P1[1]-p.t[1]*2.6],[p.Pk[0]+p.f[0]*2.6,p.Pk[1]+p.f[1]*2.6],p.Pk),i:0,rev:true}}
-   else if(t.st==='man2'){t.x=p.Pk[0];t.z=p.Pk[1];t.ang=p.ang;startUnload(S,R,t)}
+   if(t.st==='man1'){t.st='man2';if(!t.tr)RD.trailer(t);const A=t.tr,ux=Math.sin(t.ang),uz=Math.cos(t.ang),hx=t.x-ux*RD.SEMI.hitch,hz=t.z-uz*RD.SEMI.hitch;let tx=hx-A.x,tz=hz-A.z;const tl=Math.hypot(tx,tz)||1;tx/=tl;tz/=tl;
+    // marche arrière : l'essieu de la remorque recule jusqu'à sa place à quai, la remorque arrive dans l'axe du quai
+    const Ak=[p.Pk[0]-p.f[0]*(RD.SEMI.hitch+RD.SEMI.axle),p.Pk[1]-p.f[1]*(RD.SEMI.hitch+RD.SEMI.axle)];
+    t.man={pts:bez([A.x,A.z],[A.x-tx*2.8,A.z-tz*2.8],[Ak[0]+p.f[0]*3.2,Ak[1]+p.f[1]*3.2],Ak),i:0,rev:true,trailer:true}}
+   else if(t.st==='man2'){t.x=p.Pk[0];t.z=p.Pk[1];t.ang=p.ang;t.tr={x:p.Pk[0]-p.f[0]*(RD.SEMI.hitch+RD.SEMI.axle),z:p.Pk[1]-p.f[1]*(RD.SEMI.hitch+RD.SEMI.axle)};startUnload(S,R,t)}
    else if(t.st==='exit'){const r=toExit(S,{lane:p.lane,s:p.sB});if(!r||!NT.geo.get(p.lane)){R.trucks.splice(R.trucks.indexOf(t),1);continue}t.st='out';onLane(R,t,r,'truck',T.carSpeed*1.4);RD.placeOn(NT,t)}
    continue}
   if(t.st!=='unload')continue;
@@ -825,7 +836,8 @@ export const cartCap=S=>S.items.filter(o=>o.t==='corral').length*def('corral').c
 function th(S,k){const t=S.dayStats.th;t[k]=(t[k]||0)+1}
 
 // ---- employé·e de rayon
-function refillTarget(S,R){let best=null,bv=Infinity;for(const it of S.items){const d=def(it.t);if(!it.cat||!S.reserve[it.cat]||!(d.kind==='sale'||(d.kind==='counter'&&manned(S,it))))continue;const reserved=R.agents.reduce((n,o)=>n+(o.task?.cat===it.cat&&!o.carry?o.task.n:0),0);if(S.reserve[it.cat]<=reserved)continue;const count=it.stock+(it.inc||0),v=count/d.cap-(it.urgent?2:0);if(count<d.cap&&v<bv){bv=v;best=it}}return best}
+// rayon à remplir : sous le seuil th (part de la capacité), le plus vide d'abord
+function refillTarget(S,R,th=1){let best=null,bv=Infinity;for(const it of S.items){const d=def(it.t);if(!it.cat||!S.reserve[it.cat]||!(d.kind==='sale'||(d.kind==='counter'&&manned(S,it))))continue;const reserved=R.agents.reduce((n,o)=>n+(o.task?.cat===it.cat&&!o.carry?o.task.n:0),0);if(S.reserve[it.cat]<=reserved)continue;const count=it.stock+(it.inc||0),v=count/d.cap-(it.urgent?2:0);if(count<d.cap*th&&v<bv){bv=v;best=it}}return best}
 function stocker(S,R,a,dt){const sp=D.STAFF.speed;
  // Un carton en livraison reste réservé jusqu'à son dépôt physique.
  if(a.st==='deliveryStore'||a.st==='deliveryDrop'){
@@ -835,7 +847,8 @@ function stocker(S,R,a,dt){const sp=D.STAFF.speed;
  // Anciennes palettes sauvegardées : préserver leurs marchandises.
  if(a.carry?.pallet){for(const q of a.carry.items)S.reserve[q.cat]+=q.n;if(R.carrying)R.carrying[a.carry.store]=Math.max(0,(R.carrying[a.carry.store]||0)-a.carry.n);a.carry=null;a.st='idle'}
  if(['lift','toStore','drop'].includes(a.st))a.st='idle';
- const refill=refillTarget(S,R);
+ // priorité : les rayons qui en ont besoin ; un camion à quai attend qu'un employé soit disponible ; sinon on complète les rayons
+ const refill=refillTarget(S,R,D.STAFF.needAt);
  if(refill&&['toTruck','unloadT','wander'].includes(a.st)){a.st='idle';a.dock=null;a.acc=0;a.nx=-1}
  if(a.st==='toTruck'){if(!S.items.some(o=>o.id===a.dock)){a.st='idle';return}
   // personne à vider ici : un autre quai qui a besoin de bras, sinon on attend un camion annoncé, sinon on retourne au travail
@@ -852,8 +865,8 @@ function stocker(S,R,a,dt){const sp=D.STAFF.speed;
   t.order.u[cat]-=n;R.carrying[store]=(R.carrying[store]||0)+n;a.carry={delivery:true,cat,n,store,truck:t.id};a.goal='item:'+rack.id;a.st='deliveryStore';return}
  if(a.st==='wander')a.st='idle';
  if(a.st==='idle'){
-  const best=refill;
-  if(!best){const t=truckNeedingHands(S,R);if(t){a.dock=t.dock;a.st='toTruck'}return}
+  let best=refill;
+  if(!best){const t=truckNeedingHands(S,R);if(t){a.dock=t.dock;a.st='toTruck';return}best=refillTarget(S,R,1);if(!best)return}
   const store=D.CAT[best.cat].store,res=S.items.filter(o=>def(o.t).kind==='reserve'&&def(o.t).store===store);
   const n=Math.min(D.STAFF.carton,def(best.t).cap-best.stock-(best.inc||0),S.reserve[best.cat]-R.agents.reduce((n,o)=>n+(o.task?.cat===best.cat&&!o.carry?o.task.n:0),0));if(n<=0)return;
   let src=null;if(res.length){const x=a.c%W,y=a.c/W|0;src=res.reduce((p,o)=>Math.abs(o.x-x)+Math.abs(o.y-y)<Math.abs(p.x-x)+Math.abs(p.y-y)?o:p)}

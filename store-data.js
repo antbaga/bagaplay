@@ -212,4 +212,4 @@ export const EXTRA_LOAN={amount:100000,monthly:1110};
 export const HOUR_CURVE=[.5,.7,.9,1.1,1.4,1.2,.9,.8,.9,1.2,1.5,1.0];
 export const CUSTOMER={speed:2.6,pick:.7,serviceBase:.8,servicePerUnit:.1,selfFactor:1.5,theft:.02,patience:45};
 export const TRAFFIC={carShare:.85,busShare:.1,noParkLeave:.35,busEvery:.5,busMax:12,carSpeed:5,busSpeed:7,carExtra:3};
-export const STAFF={speed:2.4,carton:40,nightPerStocker:700,handle:1.2};
+export const STAFF={speed:2.4,carton:40,nightPerStocker:700,handle:1.2,needAt:1};

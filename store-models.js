@@ -259,18 +259,28 @@ function car(B,x,z,ang,col){const c=Math.cos(ang),sn=Math.sin(ang),P=(lx,lz)=>[x
  B.obox(x,.42,z,.58,.27,1.3,ang,col,mix(col,[1,1,1],.15));const [cx,cz]=P(0,-.12);B.obox(cx,.9,cz,.51,.23,.74,ang,C.glass,col);B.obox(cx,1.14,cz,.5,.02,.7,ang,col);
  for(const [lx,lz] of [[-.56,.82],[.56,.82],[-.56,-.82],[.56,-.82]]){const [wx,wz]=P(lx,lz);B.obox(wx,.3,wz,.1,.3,.3,ang,rgb('#25262a'))}
  for(const lx of [-.38,.38]){const [hx,hz]=P(lx,1.31);B.obox(hx,.5,hz,.13,.07,.02,ang,rgb('#fff6c8'));const [tx,tz]=P(lx,-1.31);B.obox(tx,.5,tz,.16,.06,.02,ang,C.red)}}
+// bus de ville (8,4 m)
 function bus(B,x,z,ang){const c=Math.cos(ang),sn=Math.sin(ang),P=(lx,lz)=>[x+lx*c+lz*sn,z-lx*sn+lz*c],body=rgb('#f2c230');
- B.obox(x,1.55,z,1,1.25,5.5,ang,body,C.white);B.obox(x,1.95,z,1.02,.4,5.3,ang,C.glass);
- for(const lz of [-3.6,3.4]){for(const lx of [-.92,.92]){const [wx,wz]=P(lx,lz);B.obox(wx,.4,wz,.12,.4,.45,ang,rgb('#25262a'))}}
- const [fx,fz]=P(0,5.51);B.obox(fx,1.9,fz,.88,.55,.02,ang,C.glass);const [sx,sz]=P(0,5.52);B.obox(sx,2.65,sz,.75,.15,.02,ang,rgb('#2f6f45'))}
-function truck(B,x,z,ang,open){const c=Math.cos(ang),sn=Math.sin(ang),P=(lx,lz)=>[x+lx*c+lz*sn,z-lx*sn+lz*c];
- const [bx,bz]=P(0,-1.2);B.obox(bx,1.75,bz,.95,1.3,3,ang,C.white,rgb('#ececec'));const [sx,sz]=P(0,-1.2);B.obox(sx,1.5,sz,.97,.18,2.9,ang,rgb('#3f7a4f'));
- const [cx,cz]=P(0,2.45);B.obox(cx,1.2,cz,.88,.8,.75,ang,rgb('#3f7a4f'),rgb('#4f8f5f'));const [wx,wz]=P(0,3.21);B.obox(wx,1.45,wz,.76,.35,.02,ang,C.glass);
- for(const lz of [-3.2,-1.2,2.4])for(const lx of [-.82,.82]){const [px,pz]=P(lx,lz);B.obox(px,.4,pz,.13,.4,.42,ang,rgb('#25262a'))}
- if(open){for(const k of [-1,1]){const [dx,dz]=P(k*1.4,-4.35);B.obox(dx,1.75,dz,.04,1.25,.55,ang+k*Math.PI/2*.0,rgb('#dcdcdc'))}const [ix,iz]=P(0,-3.9);B.obox(ix,1.75,iz,.88,1.15,.3,ang,rgb('#6b5a48'))}
- else{const [rx,rz]=P(0,-4.21);B.obox(rx,1.75,rz,1.1,1.25,.02,ang,rgb('#dcdcdc'))}}
+ B.obox(x,1.45,z,.9,1.15,4.15,ang,body,C.white);B.obox(x,1.85,z,.92,.38,3.95,ang,C.glass);
+ for(const lz of [-2.7,2.6]){for(const lx of [-.82,.82]){const [wx,wz]=P(lx,lz);B.obox(wx,.38,wz,.11,.38,.42,ang,rgb('#25262a'))}}
+ for(const lz of [1.2,-.6]){const [dx,dz]=P(.915,lz);B.obox(dx,1.2,dz,.01,.95,.45,ang,mix(C.glass,C.dark,.3))}
+ const [fx,fz]=P(0,4.16);B.obox(fx,1.8,fz,.8,.5,.02,ang,C.glass);const [sx,sz]=P(0,4.17);B.obox(sx,2.45,sz,.65,.13,.02,ang,rgb('#2f6f45'))}
+// semi-remorque : tracteur et remorque articulée (deux rectangles, voir RD.parts) ; à quai, portes arrière ouvertes
+function truck(B,t,open){const [cab,tr]=RD.parts(t);const W2=rgb('#ececec'),G=rgb('#3f7a4f'),G2=rgb('#4f8f5f'),tyre=rgb('#25262a');
+ {const c=Math.cos(cab.ang),sn=Math.sin(cab.ang),P=(lx,lz)=>[cab.x+lx*c+lz*sn,cab.z-lx*sn+lz*c],O=(lx,y,lz,hx,hy,hz,col,top)=>{const [px,pz]=P(lx,lz);B.obox(px,y,pz,hx,hy,hz,cab.ang,col,top||col)};
+  O(0,1.25,.45,.84,.85,.8,G,G2);O(0,1.55,1.26,.74,.32,.02,C.glass);O(0,2.15,.35,.8,.06,.7,G2);O(0,.55,-.55,.7,.12,.75,C.dark);
+  for(const lx of [-.47,.47])O(lx,.62,-.6,.22,.05,.22,mix(C.dark,C.metal,.5));
+  for(const lz of [.75,-.85])for(const lx of [-.72,.72])O(lx,.36,lz,.12,.36,.36,tyre);
+  for(const lx of [-.5,.5])O(lx,.6,1.27,.12,.06,.02,rgb('#fff6c8'))}
+ {const c=Math.cos(tr.ang),sn=Math.sin(tr.ang),P=(lx,lz)=>[tr.x+lx*c+lz*sn,tr.z-lx*sn+lz*c],O=(lx,y,lz,hx,hy,hz,col,top)=>{const [px,pz]=P(lx,lz);B.obox(px,y,pz,hx,hy,hz,tr.ang,col,top||col)},h=tr.hl;
+  O(0,1.75,0,.85,1.15,h,C.white,W2);O(0,1.5,0,.865,.16,h-.1,G);O(0,.6,0,.7,.08,h-.2,C.dark);
+  for(const lz of [-h+.9,-h+1.8])for(const lx of [-.72,.72])O(lx,.36,lz,.12,.36,.36,tyre);
+  for(const lx of [-.55,.55])O(lx,.18,h-1.4,.04,.18,.04,C.metal);
+  if(open){O(0,1.75,-h+.25,.75,1.05,.25,rgb('#6b5a48'));for(const k of [-1,1])O(k*1.25,1.75,-h-.02,.42,1.1,.03,rgb('#dcdcdc'))}
+  else O(0,1.75,-h-.01,.86,1.15,.02,rgb('#dcdcdc'));
+  for(const lx of [-.6,.6])O(lx,.7,-h-.03,.12,.05,.02,C.red)}}
 export function buildAgents(B,S,R,v,time){B.reset();B.setYaw(v.yaw);
- for(const t of R.trucks||[])truck(B,t.x,t.z,t.ang,t.st==='unload');
+ for(const t of R.trucks||[])truck(B,t,t.st==='unload');
  for(const c of R.cars||[])car(B,c.x,c.z,c.ang,c.col);if(R.bus)bus(B,R.bus.x,R.bus.z,R.bus.ang);
  // feux piétons : un poteau à chaque bout de la ligne ; feu voitures (rouge / orange / vert) et bonhomme piéton
  for(const L of RD.net(S).lights){const ph=RD.lightPhase(R,L.id),off=[.16,.17,.18];
