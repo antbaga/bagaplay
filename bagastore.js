@@ -41,8 +41,8 @@ export function bagastore(c){
  if(!ren){wrap.append(el('p','st-nogl','La 3D (WebGL) n’est pas disponible sur cet appareil.'));return {}}
  const cam=camera();const home=()=>{cam.tx=(S.b.x0+S.b.x1)/2;cam.tz=(S.b.y0+S.b.y1)/2+2;cam.zoom=Math.max(14,Math.min(26,(S.b.x1-S.b.x0)*.8))};home();
  const Bs=new Builder(1<<17),Ba=new Builder(1<<14),Bg=new Builder(1<<12),Bsel=new Builder(1<<11),Bac=new Builder(1<<9);
- let doorSel=null,mode=null,sel=null,panel=null,speedIdx=0,hold=false,lastStatic=-1,staticKey='',time=0,saveT=0,floats=[],pending=null,ghostTint=[0,0,0,0],anchor=null,frameDt=.016;
- const view=()=>{const s=Math.sin(cam.yawTo),k=Math.cos(cam.yawTo);return {yaw:cam.yaw,near:{S:k>.3,N:k<-.3,E:s>.3,W:s<-.3},sel:null,zones:!!mode,hide:mode?.move||null,dt:frameDt}};
+ let doorSel=null,pick=null,mode=null,sel=null,panel=null,speedIdx=0,hold=false,lastStatic=-1,staticKey='',time=0,saveT=0,floats=[],pending=null,ghostTint=[0,0,0,0],anchor=null,frameDt=.016;
+ const view=()=>{const s=Math.sin(cam.yawTo),k=Math.cos(cam.yawTo);return {yaw:cam.yaw,near:{S:k>.3,N:k<-.3,E:s>.3,W:s<-.3},sel:null,pick:panel==='ent'?pick:null,zones:!!mode,hide:mode?.move||null,dt:frameDt}};
 
  // ---- bruitages (synthétisés)
  const last={};
@@ -111,11 +111,17 @@ export function bagastore(c){
    if(t==='ring'){const vx=Math.round(gx),vz=Math.round(gz);if(mode.pos&&mode.pos[0]===vx&&mode.pos[1]===vz)return applyTool();mode.pos=[vx,vz];updatePlace();return}
    if(t==='yield'){const why=E.placeYield(S,gx,gz);if(why){msg(why);sfx('error')}else{sfx('place');save()}updatePlace();return}
    return}
-  // sans outil : sélection d'un meuble (contour) ou d'une entrée (sens entrée / sortie)
+  // sans outil : un client ou un véhicule (avant le meuble : une voiture garée est sur sa place), sinon un meuble (contour) ou une entrée (sens entrée / sortie)
+  const ent=pickAt(px,py);if(ent){pick=ent;sel=null;sfx('click');openPanel('ent');return}
   const L=E.layout(S),id=E.inLot(x,y)?L.occ[E.idx(x,y)]:0;sel=id||null;if(sel){sfx('click');openPanel('item');return}
   if(E.inLot(x,y)&&E.entranceAt(S,x,y)){doorSel=[x,y];sfx('click');openPanel('door');return}
-  if(panel==='item'||panel==='door')closePanel()}
+  if(panel==='item'||panel==='door'||panel==='ent')closePanel()}
 
+ // client ou véhicule sous le doigt : distance à l'écran au segment projeté (on touche le corps ou la carrosserie, pas le sol derrière)
+ function pickAt(px,py){const M=viewProj(cam),ppm=cam.h/(2*cam.zoom);let best=null,bd=10;
+  for(const o of E.pickables(S,R)){const [ax,ay]=project(M,cam,...o.pts[0]),[bx,by]=project(M,cam,...o.pts[1]),dx=bx-ax,dy=by-ay,L=dx*dx+dy*dy,t=L?Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/L)):0;
+   const d=Math.hypot(px-ax-dx*t,py-ay-dy*t)-o.r*ppm;if(d<bd){bd=d;best=o.e}}
+  return best}
  // ---- placement : aperçu, petite bulle ✕ / ✓ au-dessus de l'objet
  const TOOL_NAMES={extend:'Agrandir',asphalt:'Goudron',lane:'Route',ring:'Rond-point',walk:'Trottoir',cross:'Passage piéton',yield:'Cédez le passage',light:'Feu piéton'},TOOL_HINT={lane:'Trace une voie dans le sens de circulation. Tire le début (bleu) ou la fin (orange) pour les déplacer, un rond blanc ou un + pour courber. Touche une voie pour la couper en deux.',ring:'Touche le centre du rond-point. ↻ change la taille. Les voies qui le traversent sont coupées et raccordées à l’anneau.',yield:'Touche une voie juste avant un croisement : elle laisse passer l’autre. Touche-le à nouveau pour l’enlever.',light:'Glisse le doigt d’un trottoir à l’autre, en travers des voies (sur un passage piéton). Le feu alterne voitures et piétons.',cross:'Glisse le doigt en travers d’une route.',extend:'Glisse le doigt pour tracer l’extension.',asphalt:'Glisse le doigt pour goudronner une zone.',walk:'Glisse le doigt pour poser un trottoir.',road:'Glisse le doigt pour tracer une route.',wall:'Glisse le doigt pour tracer le mur.',zoneR:'Glisse le doigt sur la zone.',zoneS:'Glisse le doigt sur la zone.',erase:'Touche ce que tu veux démolir.'};
  function startMove(id){const it=S.items.find(o=>o.id===id);if(!it)return;mode={kind:'item',t:it.t,r:it.r,pos:[it.x,it.y],move:id};staticKey='';closePanel();bar.hidden=false;updatePlace();msg('Touche la nouvelle place.')}
@@ -199,7 +205,7 @@ export function bagastore(c){
   if(why){msg(why);sfx('error')}else sfx(t==='erase'?'erase':'place');mode.a=mode.b=null;updatePlace()}
 
  // ---- panneaux
- function closePanel(){panel=null;sheet.hidden=true;if(!mode)sel=null}
+ function closePanel(){panel=null;sheet.hidden=true;pick=null;if(!mode)sel=null}
  function openPanel(name){if(mode&&name!=='item')stopMode();panel=name;sheet.hidden=false;renderPanel()}
  let ringR=1,buildTab='rayons',stockTab='stock',moneyTab='tresor',cashSpan=30,loanAmt=50000,repayAmt=10000;
  function head(title,tabs,cur,set){sheet.innerHTML='';const h=el('div','st-head');h.append(el('b',null,title));
@@ -211,8 +217,8 @@ export function bagastore(c){
  const tile=(k,v,sub)=>{const d=el('div','st-tile');d.append(el('small',null,k),el('b',null,v));if(sub)d.append(el('i',null,sub));return d};
  const bars=(items,fmt=eur)=>{const box=el('div','st-hbars'),max=Math.max(1,...items.map(i=>Math.abs(i[1])));for(const [k,v,col] of items){const r=el('div','st-hbar');const m=el('i');const u=el('u');u.style.width=Math.abs(v)/max*100+'%';if(col)u.style.background=col;m.append(u);r.append(el('span',null,k),m,el('b',null,fmt(v)));box.append(r)}return box};
  let panelKey='';
- function renderPanel(){if(!panel)return;const old=sheet.querySelector('.st-body'),top=old?old.scrollTop:0,key=[panel,buildTab,stockTab,moneyTab,sel].join(),ot=sheet.querySelector('.st-tabs'),left=ot?ot.scrollLeft:0,samePanel=panelKey.split(',')[0]===panel;
-  const fn={build:pBuild,stock:pStock,team:pTeam,money:pMoney,item:pItem,door:pDoor,report:pReport,welcome:pWelcome}[panel];fn&&fn();
+ function renderPanel(){if(!panel)return;const old=sheet.querySelector('.st-body'),top=old?old.scrollTop:0,key=[panel,buildTab,stockTab,moneyTab,sel,pick&&pick.id].join(),ot=sheet.querySelector('.st-tabs'),left=ot?ot.scrollLeft:0,samePanel=panelKey.split(',')[0]===panel;
+  const fn={build:pBuild,stock:pStock,team:pTeam,money:pMoney,item:pItem,door:pDoor,ent:pEnt,report:pReport,welcome:pWelcome}[panel];fn&&fn();
   const nb=sheet.querySelector('.st-body');if(nb&&key===panelKey)nb.scrollTop=top;const nt=sheet.querySelector('.st-tabs');if(nt&&samePanel)nt.scrollLeft=left;panelKey=key}
  // entrée sélectionnée : réglage du sens (entrée, sortie, les deux)
  const DOOR_MODES=[['both','Entrée et sortie','Les clients entrent et sortent par ici.'],['in','Entrée seulement','Les clients entrent par ici, mais ressortent ailleurs.'],['out','Sortie seulement','Les clients ressortent par ici, mais entrent ailleurs.']];
@@ -369,6 +375,13 @@ export function bagastore(c){
    body.append(el('p','st-note',(d.serves?'Répond à : '+Object.keys(d.serves).map(k=>D.NEEDS.icon[k]+' '+D.NEEDS.name[k]).join(', ')+'. ':'')+'Au-dessus de 100 %, des clients renoncent ; en dessous, ils sont plus contents.'))}
   if(d.kind==='amenity'){const n=(R.queues.get(it.id)||[]).length;body.append(el('p','st-note',`${d.serves?'Répond à : '+Object.keys(d.serves).map(k=>D.NEEDS.icon[k]+' '+D.NEEDS.name[k]).join(', ')+'. ':''}${n} client${n>1?'s':''} · ${d.slots||1} place${(d.slots||1)>1?'s':''}`))}
   body.append(row(btn('✥ Déplacer',()=>startMove(it.id),'st-small wide'),btn('↻ Tourner',()=>{const why=E.rotateItem(S,it.id);if(why){msg(why);sfx('error')}renderPanel()},'st-small wide'),btn('Vendre '+eur(d.price*D.REFUND),()=>{const lost=E.reserveLoss(S,it.id),go=()=>{E.removeItem(S,it.id);sfx('erase');sel=null;closePanel()};if(lost)c.dialog('Vendre ?',lost+' articles de la réserve seront perdus.','Vendre',go,'Annuler',()=>{});else go()},'st-small wide danger')))}
+ // client ou véhicule sélectionné : infos et suppression (pour débloquer une situation)
+ const ENT_NAME={customer:'Client',car:'Voiture',truck:'Camion de livraison',bus:'Bus'},ENT_GONE={customer:'Le client disparaît : ses articles non payés retournent en réserve et son caddie revient aux abris.',car:'La voiture disparaît et libère sa place. Ses passagers repartiront à pied.',truck:'Le camion disparaît. Une commande pas encore payée revient dans la file de livraison ; sinon, ce qui reste à décharger est remboursé.',bus:'Le bus disparaît. Les clients qui attendent prendront le suivant.'};
+ function pEnt(){const info=pick&&E.entityInfo(S,R,pick);if(!info){closePanel();return}const body=head(ENT_NAME[info.kind]);
+  if(info.kind==='customer'){body.append(el('p','st-note',info.inside?'Dans le magasin':'Dehors'));if(info.units)body.append(el('p','st-note',`Panier : ${info.units} article${info.units>1?'s':''}${info.paid?' (payé)':''}`));if(info.cart)body.append(el('p','st-note','Avec un caddie'))}
+  if(info.kind==='truck'&&info.cat)body.append(el('p','st-note',`Livraison ${D.CAT[info.cat].name.toLowerCase()} · ${info.left} article${info.left>1?'s':''} à décharger`));
+  body.append(el('p','st-note',ENT_GONE[info.kind]));
+  body.append(row(btn('✕ Supprimer',()=>{if(E.removeEntity(S,R,pick)){sfx('erase');save()}closePanel()},'st-small wide danger')))}
  function pReport(){const r=pending;if(!r){closePanel();return}const m=r.report;const body=head('Bilan du mois '+m.month);
   const t=el('div','st-lines');for(const [k,v] of [['Clients',String(m.customers)],['Satisfaction',m.avgSat==null?'—':Math.round(m.avgSat)+' / 100'],['Chiffre d’affaires',eur(m.rev)],['dont boutiques',eur(m.shop||0)],['Achats',eur(-m.buy)],['Salaires',eur(-m.salaries)],['Électricité',eur(-m.elec)],['Crédit',eur(-m.loan)],['Agios',eur(-m.interest)],['Publicité',eur(-m.ads)],['Résultat',eur(m.result)],['Travaux',eur(-m.build)],['Licences',eur(-(m.lic||0))],['Trésorerie',eur(m.cash)]]){if(v===eur(-0)||v==='−0 €')continue;const d=el('div',k==='Résultat'?'st-total '+(m.result<0?'neg':'pos'):'');d.append(el('span',null,k),el('b',null,v));t.append(d)}
   body.append(t);
@@ -393,7 +406,7 @@ export function bagastore(c){
  // écouteurs directs : l'appli se met en pause en passant en arrière-plan, la sauvegarde doit se faire quand même
  const onHide=()=>{if(document.hidden)save()};document.addEventListener('visibilitychange',onHide);window.addEventListener('pagehide',save);
  // panneaux ouverts : les chiffres suivent la partie en temps réel (sauf pendant un appui, pour ne pas manquer le bouton)
- const LIVE=new Set(['stock','money','team','item','build']);let liveT=0,press=false;
+ const LIVE=new Set(['stock','money','team','item','build','ent']);let liveT=0,press=false;
  let scrolled=0;sheet.addEventListener('pointerdown',()=>{press=true});sheet.addEventListener('scroll',()=>{scrolled=performance.now()},true);const unpress=()=>{press=false};window.addEventListener('pointerup',unpress);window.addEventListener('pointercancel',unpress);
 
  // ---- rendu

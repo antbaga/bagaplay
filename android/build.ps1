@@ -26,7 +26,7 @@ Check-Exit 'Alignment'
 $keyPath=Join-Path $taskRoot 'work/bagaplay-signing/bagaplay-release.p12'
 $passPath=Join-Path $taskRoot 'work/bagaplay-signing/password.txt'
 $env:BAGAPLAY_SIGN_PASS=[IO.File]::ReadAllText($passPath)
-$out=Join-Path $taskRoot 'outputs/BagaPlay-5.7.2.apk'
+$out=Join-Path $taskRoot 'outputs/BagaPlay-5.7.3.apk'
 try {
  & "$jdk/java.exe" "-Djava.io.tmpdir=$app/build" -jar "$bt/lib/apksigner.jar" sign --ks $keyPath --ks-key-alias bagaplay --ks-pass env:BAGAPLAY_SIGN_PASS --key-pass env:BAGAPLAY_SIGN_PASS --v1-signing-enabled false --v2-signing-enabled true --v3-signing-enabled true --v4-signing-enabled false --out $out "$app/build/aligned.apk"
  Check-Exit 'APK signing'

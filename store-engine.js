@@ -718,11 +718,11 @@ function move(S,a,key,mode,speed,dt){const f=field(S,key,mode);let budget=speed*
 function rescue(S,a,f){const x=a.c%W,y=a.c/W|0;for(let r=1;r<5;r++)for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++){const nx=x+dx,ny=y+dy;if(inLot(nx,ny)&&f[idx(nx,ny)]>=0)return idx(nx,ny)}return -1}
 
 function customer(S,R,a,dt){const sp=D.CUSTOMER.speed;
- if(a.st==='cart'){const co=nearestCorral(S,a,it=>it.carts>0);if(!co){a.want.length=Math.min(a.want.length,8);th(S,'nocart');a.st='in';return}const r=move(S,a,'item:'+co.id,'c',sp,dt);if(r){if(co.carts>0){co.carts--;a.hasCart=true;R.cartsOut=(R.cartsOut||0)+1;a.st='in'}}return}
+ if(a.st==='cart'){const co=corralFor(S,a,it=>it.carts>0);if(!co){a.want.length=Math.min(a.want.length,8);th(S,'nocart');a.st='in';return}const r=move(S,a,'item:'+co.id,'c',sp,dt);if(r){if(co.carts>0){co.carts--;a.hasCart=true;a.co=null;R.cartsOut=(R.cartsOut||0)+1;a.st='in'}}return}
  // caddie : on pousse les courses jusqu'à la voiture, on charge le coffre, puis on range le caddie à l'abri avant de repartir
  if(a.st==='tocar'){const car=R.cars.find(c=>c.id===a.car);if(!car){a.st='retcart';return}const r=move(S,a,'cell:'+car.exit,'c',sp,dt);if(r||r===null){a.st='load';a.t=2.5;a.dir=Math.atan2(car.cx-a.x,car.cz-a.y)}return}
  if(a.st==='load'){a.t-=dt;if(a.t<=0){a.loaded=true;a.st='retcart'}return}
- if(a.st==='retcart'){if(!a.hasCart){a.st='leave';return}const co=nearestCorral(S,a,it=>it.carts<25);if(!co){if(!S.items.some(it=>it.t==='corral')){S.cartPool=(S.cartPool||0)+1;a.hasCart=false;R.cartsOut=Math.max(0,(R.cartsOut||0)-1);a.st='leave'}return}const r=move(S,a,'item:'+co.id,'c',sp,dt);if(r&&co.carts<25){co.carts++;a.hasCart=false;R.cartsOut=Math.max(0,(R.cartsOut||0)-1);a.st='leave'}return}
+ if(a.st==='retcart'){if(!a.hasCart){a.st='leave';return}const co=corralFor(S,a,it=>it.carts<25);if(!co){if(!S.items.some(it=>it.t==='corral')){S.cartPool=(S.cartPool||0)+1;a.hasCart=false;R.cartsOut=Math.max(0,(R.cartsOut||0)-1);a.st='leave'}return}const r=move(S,a,'item:'+co.id,'c',sp,dt);if(r&&co.carts<25){co.carts++;a.hasCart=false;R.cartsOut=Math.max(0,(R.cartsOut||0)-1);a.st='leave'}return}
  if(a.st==='in'){const r=move(S,a,'ent','c',sp,dt);if(r===null)return leaveNow(S,R,a);if(r){a.st='shop'}return}
  if(a.st==='waitBus')return;
  if(a.need&&inside(S,a.c%W,a.c/W|0)&&a.st!=='svuse')for(const k of D.NEEDS.keys)a.need[k]+=D.NEEDS.rate[k]*dt;
@@ -830,14 +830,27 @@ function bubble(R,a,txt){ev(R,{t:'bubble',id:a.id,txt})}
 export function ensureCarts(S,R){const depots=S.items.filter(it=>it.t==='corral');for(const it of depots)if(it.carts==null)it.carts=15;
  if(!S.cartVersion){let out=R.agents.reduce((n,a)=>n+(a.hasCart?1:0)+(a.cartLoad||0),0);for(const it of depots){const n=Math.min(out,it.carts);it.carts-=n;out-=n}S.cartVersion=1}
  for(const it of depots){const n=Math.min(S.cartPool||0,Math.max(0,15-it.carts));it.carts+=n;S.cartPool=(S.cartPool||0)-n}}
+// abri visé par un client : choisi une fois, gardé tant qu'il existe et reste accessible ; l'état (vide/plein) n'est revérifié qu'à l'arrivée
+function corralFor(S,a,ok){let co=a.co!=null&&S.items.find(it=>it.id===a.co&&it.t==='corral');
+ if(co&&field(S,'item:'+co.id,'c')[a.c]<0)co=null;
+ if(co&&!ok(co)&&field(S,'item:'+co.id,'c')[a.c]===0)co=null;   // arrivé·e mais vide/plein : on en cherche un autre
+ if(!co){co=nearestCorral(S,a,it=>ok(it)&&it.id!==a.co)||nearestCorral(S,a,ok);if(co&&co.id!==a.co){a.co=co.id;a.nx=-1}}
+ return co||null}
 export function nearestCorral(S,a,predicate=()=>true,mode='c'){let best=null,dist=Infinity;for(const it of S.items){if(it.t!=='corral'||!predicate(it))continue;const d=field(S,'item:'+it.id,mode)[a.c];if(d>=0&&d<dist){dist=d;best=it}}return best}
 export const cartTotal=(S,R)=>S.items.filter(it=>it.t==='corral').reduce((n,it)=>n+(it.carts||0),0)+R.agents.reduce((n,a)=>n+(a.hasCart?1:0)+(a.cartLoad||0),0)+(S.cartPool||0);
 function balanceCarts(S,R,a,dt){const sp=D.STAFF.speed*.75;
- if(a.cartLoad){const target=S.items.find(it=>it.id===a.cartJob?.to&&it.carts<25&&field(S,'item:'+it.id,'s')[a.c]>=0);const dest=target||nearestCorral(S,a,it=>it.id!==a.cartJob?.from&&it.carts<15, 's')||nearestCorral(S,a,it=>it.carts<25,'s');if(!dest)return true;const r=move(S,a,'item:'+dest.id,'s',sp,dt);if(r){const n=Math.min(a.cartLoad,25-dest.carts);dest.carts+=n;a.cartLoad-=n;if(!a.cartLoad){a.cartJob=null;a.st='idle'}}return true}
- if(a.cartJob){const src=S.items.find(it=>it.id===a.cartJob.from),dst=S.items.find(it=>it.id===a.cartJob.to);if(!src||!dst||src.carts-dst.carts<2){a.cartJob=null;a.st='idle';return false}const r=move(S,a,'item:'+src.id,'s',sp,dt);if(r===null){a.cartJob=null;a.st='idle';return false}if(r){a.cartLoad=Math.min(5,Math.floor((src.carts-dst.carts)/2),25-dst.carts);src.carts-=a.cartLoad;a.st='cartBalance'}return true}
- if(!['idle','wander'].includes(a.st))return false;
+ // une fois choisis, source et destination ne changent plus en route (sinon va-et-vient sans fin quand les clients prennent et rendent des caddies)
+ if(a.cartLoad){const reach=it=>it&&it.carts<25&&field(S,'item:'+it.id,'s')[a.c]>=0;let dest=S.items.find(it=>it.id===a.cartJob?.to);
+  if(!reach(dest)){dest=nearestCorral(S,a,it=>it.id!==a.cartJob?.from&&it.carts<15,'s')||nearestCorral(S,a,it=>it.carts<25,'s');if(!dest)return true;a.cartJob={...(a.cartJob||{}),to:dest.id};a.nx=-1}
+  const r=move(S,a,'item:'+dest.id,'s',sp,dt);if(r){const n=Math.min(a.cartLoad,25-dest.carts);dest.carts+=n;a.cartLoad-=n;if(!a.cartLoad)endCartJob(a)}return true}
+ if(a.cartJob){const src=S.items.find(it=>it.id===a.cartJob.from),dst=S.items.find(it=>it.id===a.cartJob.to);if(!src||!dst||src.carts<=dst.carts){endCartJob(a);return false}const r=move(S,a,'item:'+src.id,'s',sp,dt);if(r===null){endCartJob(a);return false}
+  if(r){const n=Math.min(5,Math.floor((src.carts-dst.carts)/2),25-dst.carts);if(n<1){endCartJob(a);return false}a.cartLoad=n;src.carts-=n;a.st='cartBalance';a.nx=-1}return true}
+ if(a.cartCd>0)a.cartCd-=dt;
+ if(!['idle','wander'].includes(a.st)||a.cartCd>0)return false;
  const busy=new Set(R.agents.flatMap(o=>o!==a&&o.cartJob?[o.cartJob.from,o.cartJob.to]:[]));const depots=S.items.filter(it=>it.t==='corral'&&!busy.has(it.id)&&field(S,'item:'+it.id,'s')[a.c]>=0).sort((a,b)=>a.carts-b.carts);
- if(depots.length<2)return false;const dst=depots[0],src=depots.at(-1);if(src.carts-dst.carts<2)return false;a.cartJob={from:src.id,to:dst.id};a.st='cartBalance';a.nx=-1;return true}
+ if(depots.length<2)return false;const dst=depots[0],src=depots.at(-1);if((dst.carts>CART_LOW&&src.carts<=15)||src.carts-dst.carts<CART_GAP)return false;a.cartJob={from:src.id,to:dst.id};a.st='cartBalance';a.nx=-1;return true}
+const CART_LOW=5,CART_GAP=6;   // on ne rééquilibre que si un abri se vide ou déborde (au-delà des 15 places normales), avec un vrai écart
+function endCartJob(a){a.cartJob=null;a.st='idle';a.cartCd=10;a.nx=-1}
 export const cartCap=S=>S.items.filter(o=>o.t==='corral').length*def('corral').cap;
 function th(S,k){const t=S.dayStats.th;t[k]=(t[k]||0)+1}
 
@@ -1100,3 +1113,39 @@ export function advice(S){const s=stats(S,7),out=[];if(!s.days)return out;
  if(s.theft>Math.max(40,cust*.25))add(58,'📹',`Les vols coûtent ${eurTxt(s.theft)} par jour : ajoute des caméras ou un portique antivol.`);
  if(cs.n>=3&&cs.avg>0&&s.wait<2&&!(S.ads.until>=S.d)&&S.cash>20000)add(30,'📣','Ça tourne bien : une campagne de pub amènera plus de clients.');
  return out.sort((a,b)=>b.p-a.p).slice(0,5).map(({ico,t})=>({ico,t}))}
+
+// ---- sélection d'un client ou d'un véhicule (toucher) et suppression à la main (client ou véhicule coincé)
+const PICK_H={customer:2.1,car:1.9,truck:4.1,bus:3.8};
+function pickObj(R,e){if(!e)return null;if(e.kind==='customer')return R.agents.find(a=>a.id===e.id&&a.k==='c')||null;
+ if(e.kind==='car')return R.cars.find(c=>c.id===e.id)||null;if(e.kind==='truck')return (R.trucks||[]).find(t=>t.id===e.id)||null;
+ if(e.kind==='bus')return R.bus&&R.bus.id===e.id?R.bus:null;return null}
+export function entityAt(S,R,x,z){let best=null,bd=Infinity;
+ for(const a of R.agents){if(a.k!=='c'||a.hidden)continue;const d=Math.hypot(a.x-x,a.y-z);if(d<.7&&d<bd){bd=d;best={kind:'customer',id:a.id}}}
+ if(best)return best;
+ const vs=[...R.cars.map(v=>['car',v]),...(R.trucks||[]).map(v=>['truck',v]),...(R.bus?[['bus',R.bus]]:[])];
+ for(const [kind,v] of vs){if(v.x==null||v.z==null)continue;for(const p of RD.parts(v)){const dx=x-p.x,dz=z-p.z,s=Math.sin(p.ang),c=Math.cos(p.ang),u=dx*s+dz*c,w=dx*c-dz*s;
+  if(Math.abs(u)<=p.hl+.3&&Math.abs(w)<=p.hw+.3){const d=Math.hypot(dx,dz);if(d<bd){bd=d;best={kind,id:v.id}}}}}
+ return best}
+// pour la sélection à l'écran : segments (en 3D) et rayon de chaque client et véhicule
+export function pickables(S,R){const o=[];
+ for(const a of R.agents)if(a.k==='c'&&!a.hidden)o.push({e:{kind:'customer',id:a.id},pts:[[a.x,.1,a.y],[a.x,1.6,a.y]],r:.35});
+ const vs=[...R.cars.map(v=>['car',v]),...(R.trucks||[]).map(v=>['truck',v]),...(R.bus?[['bus',R.bus]]:[])];
+ for(const [kind,v] of vs){if(v.x==null||v.z==null)continue;const h=PICK_H[kind]-.4;for(const p of RD.parts(v)){const s=Math.sin(p.ang),c=Math.cos(p.ang),l=Math.max(0,p.hl-p.hw);
+  o.push({e:{kind,id:v.id},pts:[[p.x-s*l,h/2,p.z-c*l],[p.x+s*l,h/2,p.z+c*l]],r:Math.max(p.hw,h/2)})}}
+ return o}
+export function entityPos(S,R,e){const o=pickObj(R,e);if(!o)return null;return e.kind==='customer'?{x:o.x,z:o.y,h:PICK_H.customer}:{x:o.x,z:o.z,h:PICK_H[e.kind]}}
+export function entityInfo(S,R,e){const o=pickObj(R,e);if(!o)return null;
+ if(e.kind==='customer')return {kind:e.kind,cart:!!o.hasCart,units:o.basket?.units||0,paid:!!o.basket?.paid,car:!!o.car,bus:!!o.bus,inside:inside(S,o.c%W,o.c/W|0)};
+ if(e.kind==='truck'){const left=o.order?Object.values(o.order.u).reduce((a,b)=>a+b,0):0;return {kind:e.kind,cat:o.cat||null,left,paid:!!o.paid,st:o.st}}
+ if(e.kind==='car')return {kind:e.kind,st:o.st,leaving:!!o.leaving};
+ return {kind:e.kind,st:o.st}}
+export function removeEntity(S,R,e){const o=pickObj(R,e);if(!o)return false;
+ if(e.kind==='customer'){const a=o;unqueue(R,a);
+  if(a.hasCart){a.hasCart=false;S.cartPool=(S.cartPool||0)+1;R.cartsOut=Math.max(0,(R.cartsOut||0)-1)}
+  if(a.basket&&a.basket.units&&!a.basket.paid)returnGoods(S,a);
+  if(a.car){const car=R.cars.find(c=>c.id===a.car);if(car&&car.st==='parked')carLeave(S,R,car)}
+  R.agents.splice(R.agents.indexOf(a),1);return true}
+ if(e.kind==='car'){R.cars.splice(R.cars.indexOf(o),1);R.spotTaken.delete(o.spot);return true}
+ if(e.kind==='truck'){if(o.st!=='out'){if(!o.paid&&o.order)R.deliv.unshift(o.order);else refundRest(S,o)}R.trucks.splice(R.trucks.indexOf(o),1);return true}
+ if(e.kind==='bus'){R.bus=null;return true}
+ return false}

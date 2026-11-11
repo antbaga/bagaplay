@@ -326,7 +326,10 @@ export function buildAgents(B,S,R,v,time){B.reset();B.setYaw(v.yaw);
    const t=(R.trucks||[]).find(o=>o.dock===a.dock&&o.st==='unload'),o=(a.id*2654435761>>>0)%5-2;x+=o*.22;z+=((a.id>>2)%3-1)*.18;
    const base=t?Math.atan2(t.x-x,t.z-z):ang,sw=Math.sin(time*3.1+a.id);person(B,x,z,base+sw*1.3,STAFF_COL[a.role],time*6,sw<0?'carton':null,1,false,Math.abs(sw)*.02,{amp:.3,look:0,reach:.5+sw*.3,t:time,id:a.id})}
   else{if(a.cartLoad)for(let k=0;k<a.cartLoad;k++)cart(B,x+Math.sin(ang)*(.7+k*.2),z+Math.cos(ang)*(.7+k*.2),ang,0,a.id+k);const work=a.st==='clean';person(B,x,z,ang+(work?Math.sin(time*6)*.35:0),STAFF_COL[a.role],work?time*8:ph,a.cartLoad?'push':a.role==='menage'?'mop':a.carry?.pallet?'pallet':a.carry?'carton':null,1,false,bob,{amp:work?.4:amp,look,reach:a.carry?.pallet?0:reach,t:time,id:a.id})}}
- if(gait.size>400){const ids=new Set(R.agents.map(a=>a.id));for(const k of gait.keys())if(!ids.has(k))gait.delete(k)}}
+ if(gait.size>400){const ids=new Set(R.agents.map(a=>a.id));for(const k of gait.keys())if(!ids.has(k))gait.delete(k)}
+ // client ou véhicule sélectionné : losange jaune qui flotte au-dessus
+ const pk=v.pick&&E.entityPos(S,R,v.pick);if(pk){const y=pk.h+.25+Math.sin(time*4)*.12,col=[1,.82,.1],dk=[.85,.6,0];
+  B.box(pk.x-.22,y,pk.z-.22,pk.x+.22,y+.44,pk.z+.22,col,dk);B.box(pk.x-.08,y-.3,pk.z-.08,pk.x+.08,y,pk.z+.08,col,dk)}}
 
 // ---------------------------------------------------------------- aperçu de placement
 export function buildAccess(B,cells,v){B.reset();B.setYaw(v.yaw);for(const [x,y] of cells||[]){B.tile(x+.06,y+.06,x+.94,y+.94,.025,rgb('#f7c948'));B.tile(x+.2,y+.2,x+.8,y+.8,.03,rgb('#fff4cf'))}}

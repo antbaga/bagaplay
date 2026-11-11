@@ -1,3 +1,10 @@
+# 5.7.3 — 11 novembre 2026
+
+- Correction des va-et-vient sans fin sur le parking : l'agent d'entretien qui rééquilibre les abris à caddies annulait son trajet dès qu'un client prenait ou rendait un caddie, puis repartait dans l'autre sens. Source et destination sont maintenant fixées au départ ; il ne rééquilibre que si un abri se vide (5 caddies ou moins) ou déborde (plus de 15), avec un vrai écart, et souffle 10 s entre deux trajets.
+- Les clients gardent l'abri à caddies choisi jusqu'à l'arrivée (ils n'en changent que s'il disparaît ou s'il est vide/plein une fois sur place).
+- Sélection d'un client ou d'un véhicule (voiture, camion, bus) en le touchant : un losange jaune le suit et un panneau permet de le supprimer pour débloquer une situation. Client : articles non payés rendus à la réserve, caddie rendu aux abris, sa voiture repart. Camion : commande non payée remise en file, sinon reste remboursé.
+- Tests : rééquilibrage des caddies sous un flux de clients, sélection et suppression d'un client, d'une voiture et d'un camion.
+
 # 5.7.2 — 11 novembre 2026
 
 - Casse-briques : la zone tactile de la raquette va du haut du plateau jusqu'en bas de l'écran (on peut guider la raquette avec le pouce sous le plateau, sans masquer le jeu).
