@@ -565,7 +565,7 @@ function spawnCar(S,R,it){const a=accessOf(S,it),list=vehicles(R);const e=fromEn
 function carLeave(S,R,car){if(car.leaving||car.st==='out')return;car.leaving=true}
 // fenêtre de voie libre pour sortir de sa place (personne dedans, personne qui arrive tout près)
 function exitFree(S,R,car,list){if(!car.acc)return false;const NT=RD.net(S),g=NT.geo.get(car.acc.lane);if(!g)return false;const s0=car.acc.s-1.8-3,L=5.5;
- for(const o of list.concat(R.blocks.filter(b=>b.id!=='w'+car.id))){if(o===car||o.lane==null)continue;const d=RD.distTo(NT,o,car.acc.lane,s0,30);if(d==null)continue;const h=RD.half(o);if(d<h+(car.exitWait>4?0:2.5+(o.sp||0)*1.2)&&d>-L-h)return false}return true}
+ for(const o of list.concat(R.blocks.filter(b=>b.id!=='w'+car.id))){if(o===car||o.lane==null)continue;const d=RD.distTo(NT,o,car.acc.lane,s0,30);if(d==null)continue;if(d<RD.front(o)+(car.exitWait>4?0:2.5+(o.sp||0)*1.2)&&d>-L-RD.back(o))return false}return true}
 function traffic(S,R,dt){const T=D.TRAFFIC,NT=RD.net(S);R.blocks=[];
  const gone=car=>{R.cars.splice(R.cars.indexOf(car),1);R.spotTaken.delete(car.spot)};
  // routes modifiées pendant que des véhicules roulent : on recalcule leur itinéraire (sinon ils disparaissent)

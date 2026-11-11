@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as E from '../store-engine.js';
 import * as RD from '../store-roads.js';
+import * as D from '../store-data.js';
 function crossroads(radius){const S={lanes:[{id:1,pts:[[0,49],[160,49]]},{id:2,pts:[[160,51],[0,51]]},{id:3,pts:[[49,152],[49,0]]},{id:4,pts:[[51,0],[51,152]]}],laneNext:4,yields:[],lights:[]};if(radius)RD.addRing(S,RD.ringPlan(S,50,50,radius));return S}
 // flux continus depuis chaque entrée, sorties au hasard
 function flow(S,secs,rate,mixed,seed=7){const NT=RD.net(S),R={blocks:[]},list=[];let id=1,acc={},arrived=0,maxStop=0,maxRing=0;const rnd=()=>{seed=(seed*16807)%2147483647;return seed/2147483647};
@@ -41,3 +42,9 @@ test('editing roads under parked cars and trucks never stops the game',()=>{
  // une voiture garée dont la place n'a plus d'accès à la route ne fait plus planter la circulation
  const S=E.starter(E.withDirt(E.newGame())),R=E.runtime(1);S.open=true;for(let k=0;k<2000&&!R.cars.some(c=>c.st==='parked');k++)E.step(S,R,.05);
  const car=R.cars.find(c=>c.st==='parked');assert.ok(car);car.acc=null;car.leaving=true;car.exitWait=5;assert.doesNotThrow(()=>{for(let k=0;k<200;k++)E.step(S,R,.05)})});
+test('a car leaving its spot never locks a semi-trailer waiting to let it out (busy day, trucks every 2 h)',()=>{
+ for(const seed of [3,4])for(const zone of [false,true]){const S=E.starter(E.withDirt(E.newGame()));S.cash=1e7;S.rep=100;for(const r of ['caissier','caissier','caissier','rayon','rayon','rayon','rayon'])E.hire(S,r,1);
+  if(zone){const X=D.OFF.x,Y=D.OFF.y,old=S.lanes.at(-1);E.eraseAt(S,Math.floor(old.pts[1][0]),Math.floor(old.pts[1][1])+3);E.buildLane(S,[[6+X,D.ROAD.y+1],[6+X,5+Y],[46+X,5+Y],[46+X,D.ROAD.y-2]]);const dock=S.items.find(o=>o.t==='dock');E.place(S,'turn',dock.x-3,dock.y-10,0)}
+  const R=E.runtime(seed);S.open=true;S.started=true;const cats=[...new Set(S.items.filter(i=>i.cat).map(i=>i.cat))];let t=0,last=-99,maxStop=0;
+  while(t<24*D.HOURS.realSecPerHour){E.step(S,R,.05);t+=.05;R.events.length=0;if(t-last>D.HOURS.realSecPerHour*2){last=t;for(const c of cats)E.expressCat(S,c,R)}for(const v of E.vehicles(R))maxStop=Math.max(maxStop,v.stopT||0)}
+  assert.ok(maxStop<90,`seed ${seed}${zone?' zone':''} : arrêt max ${maxStop.toFixed(0)} s`)}});

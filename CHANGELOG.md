@@ -1,3 +1,8 @@
+# 5.7.4 — 11 novembre 2026
+
+- Correction d'un blocage définitif des camions près du parking : une voiture qui attend pour sortir de sa place fait s'arrêter la circulation, mais elle mesurait le semi-remorque arrêté pour la laisser passer comme s'il était plus long vers l'avant (calcul resté sur l'ancien camion). Elle croyait la voie occupée et ne sortait jamais, le camion l'attendait, et toute la file derrière restait bloquée.
+- Test : journée chargée (réputation maximale, camions toutes les 2 h pour tous les rayons), avec et sans zone de retournement : aucun véhicule n'attend plus de 90 s (avant : plus de 300 s, jusqu'à la fin de la partie).
+
 # 5.7.3 — 11 novembre 2026
 
 - Correction des va-et-vient sans fin sur le parking : l'agent d'entretien qui rééquilibre les abris à caddies annulait son trajet dès qu'un client prenait ou rendait un caddie, puis repartait dans l'autre sens. Source et destination sont maintenant fixées au départ ; il ne rééquilibre que si un abri se vide (5 caddies ou moins) ou déborde (plus de 15), avec un vrai écart, et souffle 10 s entre deux trajets.
