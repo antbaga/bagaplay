@@ -374,3 +374,5 @@ body:has(.install-banner) footer{padding-bottom:120px}
 .st-small.off{opacity:.45}
 .st-door{text-align:left}.st-door.on{background:#2f8a45;border-color:#2f8a45;color:#fff}
 .st-door~.st-note{flex:1;margin:0}
+
+#play.touch-game{touch-action:none;user-select:none;-webkit-user-select:none}

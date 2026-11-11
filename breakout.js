@@ -34,7 +34,12 @@ export function breakout(c){const [canvas,g]=c.canvas(450);
  function setup(){balls=[];drops=[];fire=0;bricks=makeLevel(level);waiting=true;banner=1.6}
  function launch(){if(!waiting)return;waiting=false;balls=[{x:paddle,y:397,vx:(Math.random()<.5?-1:1)*90,vy:-speed()}]}
  function point(e){const r=canvas.getBoundingClientRect(),s=Math.min(r.width/360,r.height/450);paddle=Math.max(pw()/2,Math.min(360-pw()/2,(e.clientX-r.left-(r.width-360*s)/2)/s))}
- c.listen(canvas,'pointerdown',e=>{canvas.setPointerCapture(e.pointerId);point(e);launch()});c.listen(canvas,'pointermove',e=>{if(e.buttons||e.pointerType==='touch')point(e)});
+ // zone tactile de la raquette : tout l'écran de jeu, du haut du plateau jusqu'en bas de l'écran (sauf les boutons)
+ const zone=canvas.closest('#play')||canvas;zone.classList.add('touch-game');let held=false;
+ const inZone=e=>!e.target.closest?.('button,a,input,select,textarea')&&e.clientY>=canvas.getBoundingClientRect().top;
+ c.listen(zone,'pointerdown',e=>{if(!inZone(e))return;held=true;zone.setPointerCapture?.(e.pointerId);point(e);launch()});
+ c.listen(zone,'pointermove',e=>{if(held||(e.pointerType!=='touch'&&e.buttons&&inZone(e)))point(e)});
+ c.listen(zone,'pointerup',()=>held=false);c.listen(zone,'pointercancel',()=>held=false);
  function burst(x,y,color,n=8,power=170){for(let i=0;i<n;i++)particles.push({x,y,vx:(Math.random()-.5)*power*2,vy:-Math.random()*power,life:1,color})}
  function loseLife(reason){lives--;shake=10;c.tone(false);burst(paddle,410,'#e5574a',14,220);if(!lives){c.finish(false,score,score+' points · Niveau '+level);return true}return false}
  function breakBrick(b){score+=10*b.max;c.score(score);burst(b.x+BW/2,b.y+BH/2,b.kind==='bomber'?'#e5574a':HP_COLORS[b.max],10);

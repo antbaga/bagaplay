@@ -1,3 +1,7 @@
+# 5.7.2 — 11 novembre 2026
+
+- Casse-briques : la zone tactile de la raquette va du haut du plateau jusqu'en bas de l'écran (on peut guider la raquette avec le pouce sous le plateau, sans masquer le jeu).
+
 # 5.7.1 — 11 novembre 2026
 
 - Correction d'un plantage de la circulation : après une modification des routes, une voiture garée dont la place n'avait plus d'accès faisait planter toute la circulation à son départ (véhicules figés, puis jeu bloqué même en supprimant la route).
