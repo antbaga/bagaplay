@@ -30,3 +30,14 @@ test('lanes: tap cuts a lane in two (traffic continues), lane ends can be moved'
  assert.equal(E.moveVertex(S,b.id,b.pts.length-1,90,70,false),null);assert.deepEqual(S.lanes.find(o=>o.id===b.id).pts.at(-1),[90,70]);
  assert.equal(E.moveVertex(S,a.id,0,40,80,false),null);assert.deepEqual(S.lanes.find(o=>o.id===a.id).pts[0],[40,80]);
  assert.equal(E.undo(S),null);assert.deepEqual(S.lanes.find(o=>o.id===a.id).pts[0],[46,85])});
+test('editing roads under parked cars and trucks never stops the game',()=>{
+ for(const seed of [1,2,3]){const S=E.starter(E.withDirt(E.newGame()));S.cash=1e7;S.rep=90;for(const r of ['caissier','caissier','rayon','rayon'])E.hire(S,r,1);
+  E.paintGround(S,[45,80],[47,80],'cross');const R=E.runtime(seed);S.open=true;let sd=seed;const rnd=()=>{sd=(sd*16807)%2147483647;return sd/2147483647};
+  for(let k=0;k<24000;k++){E.step(S,R,.05);
+   if(k%400===380&&S._fz&&E.canUndo(S)){S._fz=0;E.undo(S)}
+   if(k%400===200){const vs=E.vehicles(R).filter(v=>v.lane!=null),v=vs[Math.floor(rnd()*vs.length)],l=v&&S.lanes.find(o=>o.id===v.lane&&!o.ring&&o.pts);if(!l)continue;S._fz=1;
+    const op=Math.floor(rnd()*3),i=Math.floor(rnd()*l.pts.length);if(op===0)E.eraseAt(S,Math.floor(v.x),Math.floor(v.z));else if(op===1)E.moveVertex(S,l.id,i,l.pts[i][0]+2,l.pts[i][1]-2,false);else E.cutLane(S,l.id,v.x,v.z)}}
+  assert.ok(S.d>=4,'la partie avance (jour '+S.d+')')}
+ // une voiture garée dont la place n'a plus d'accès à la route ne fait plus planter la circulation
+ const S=E.starter(E.withDirt(E.newGame())),R=E.runtime(1);S.open=true;for(let k=0;k<2000&&!R.cars.some(c=>c.st==='parked');k++)E.step(S,R,.05);
+ const car=R.cars.find(c=>c.st==='parked');assert.ok(car);car.acc=null;car.leaving=true;car.exitWait=5;assert.doesNotThrow(()=>{for(let k=0;k<200;k++)E.step(S,R,.05)})});

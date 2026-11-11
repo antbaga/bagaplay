@@ -461,7 +461,9 @@ export function step(S,R,dt){S.over=false;layout(S);R.lt=(R.lt||0)+dt;LIGHT_R=R;
  if(isOpen){const h=clamp(Math.floor(S.hour-D.HOURS.open),0,11),avg=D.HOUR_CURVE.reduce((a,b)=>a+b)/12;
   R.acc+=R.perDay/12*D.HOUR_CURVE[h]/avg/D.HOURS.realSecPerHour*dt;
   while(R.acc>=1){R.acc--;spawnCustomer(S,R)}}
- traffic(S,R,dt);syncPending(S,R);
+ // la circulation ne doit jamais figer la partie : en cas d'erreur, itinéraires recalculés ; si elle revient, les véhicules repartent de zéro
+ try{traffic(S,R,dt);R.trafficErr=0}catch(e){console.error(e);recoverTraffic(S,R)}
+ syncPending(S,R);
  for(const a of R.agents.slice())a.k==='c'?customer(S,R,a,dt):a.role==='rayon'?stocker(S,R,a,dt):cleaner(S,R,a,dt);
  // La fermeture ne supprime aucune entité. Les trajets et tâches continuent.
  if(R.closing&&!R.agents.some(a=>a.k==='c')&&!R.cars.length&&!R.bus)R.closing=false;
@@ -562,7 +564,7 @@ function spawnCar(S,R,it){const a=accessOf(S,it),list=vehicles(R);const e=fromEn
  RD.placeOn(RD.net(S),car);R.spotTaken.set(it.id,car.id);R.cars.push(car)}
 function carLeave(S,R,car){if(car.leaving||car.st==='out')return;car.leaving=true}
 // fenêtre de voie libre pour sortir de sa place (personne dedans, personne qui arrive tout près)
-function exitFree(S,R,car,list){const NT=RD.net(S),g=NT.geo.get(car.acc.lane);if(!g)return false;const s0=car.acc.s-1.8-3,L=5.5;
+function exitFree(S,R,car,list){if(!car.acc)return false;const NT=RD.net(S),g=NT.geo.get(car.acc.lane);if(!g)return false;const s0=car.acc.s-1.8-3,L=5.5;
  for(const o of list.concat(R.blocks.filter(b=>b.id!=='w'+car.id))){if(o===car||o.lane==null)continue;const d=RD.distTo(NT,o,car.acc.lane,s0,30);if(d==null)continue;const h=RD.half(o);if(d<h+(car.exitWait>4?0:2.5+(o.sp||0)*1.2)&&d>-L-h)return false}return true}
 function traffic(S,R,dt){const T=D.TRAFFIC,NT=RD.net(S);R.blocks=[];
  const gone=car=>{R.cars.splice(R.cars.indexOf(car),1);R.spotTaken.delete(car.spot)};
@@ -570,7 +572,7 @@ function traffic(S,R,dt){const T=D.TRAFFIC,NT=RD.net(S);R.blocks=[];
  if(R._net!==NT){R._net=NT;fixTraffic(S,R,NT,gone)}
  // voitures garées qui manœuvrent : obstacles sur la voie
  for(const car of R.cars){if(car.man&&car.man.block)R.blocks.push({id:'m'+car.id,lane:car.man.block.lane,s:car.man.block.s,h:car.man.block.h});
-  if(car.st==='parked'&&car.leaving&&car.exitWait>4)R.blocks.push({id:'w'+car.id,lane:car.acc.lane,s:car.acc.s-1.8-3.2,h:0})}
+  if(car.st==='parked'&&car.leaving&&car.exitWait>4&&car.acc)R.blocks.push({id:'w'+car.id,lane:car.acc.lane,s:car.acc.s-1.8-3.2,h:0})}
  for(const t of R.trucks)if(t.man&&t.man.block)R.blocks.push({id:'m'+t.id,...t.man.block});
  // camions de livraison : un par rayon, envoyés à tour de rôle vers le quai le moins chargé
  truckSpawn(S,R,dt);
@@ -609,6 +611,10 @@ function traffic(S,R,dt){const T=D.TRAFFIC,NT=RD.net(S);R.blocks=[];
   if((v.stopT||0)>120&&!v.jamReported){th(S,'jam');R.jamT=S.hour;v.jamReported=true}if((v.stopT||0)<1)v.jamReported=false}}
 
 function refundRest(S,t){if(!t.order||!t.paid)return;let v=0;for(const c in t.order.u){v+=t.order.u[c]*D.CAT[c].cost*(t.order.factor||1);t.order.u[c]=0}v=Math.round(v);if(v){S.cash+=v;S.month.buy-=v;S.dayStats.buy-=v}}
+function recoverTraffic(S,R){R.trafficErr=(R.trafficErr||0)+1;R._net=null;if(R.trafficErr<3)return;
+ for(const t of R.trucks||[]){if(!t.paid&&t.order)R.deliv.unshift(t.order);else if(t.paid&&t.st!=='out')refundRest(S,t)}
+ R.trucks=[];R.cars=[];R.spotTaken.clear();R.bus=null;R.blocks=[];R.trafficErr=0;
+ for(const a of R.agents)if(a.k==='s'&&a.dock!=null&&(a.st==='toTruck'||a.st==='unloadT')){a.st='idle';a.dock=null}}
 // ---------------------------------------------------------------- routes modifiées en cours de partie
 const routeOk=(NT,v)=>{if(!v.route)return true;for(let k=v.ri;k<v.route.length;k++){const sg=v.route[k],g=NT.geo.get(sg.lane);if(!g||(!g.closed&&sg.from+sg.len>g.len+.05))return false}return true};
 function reroute(S,R,NT,v,targets){const q=RD.laneAt(S,v.x,v.z,3);if(!q||!targets.length)return false;const r=RD.route(NT,{lane:q.id,s:q.s},targets);if(!r)return false;

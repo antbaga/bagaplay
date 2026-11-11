@@ -1,3 +1,9 @@
+# 5.7.1 — 11 novembre 2026
+
+- Correction d'un plantage de la circulation : après une modification des routes, une voiture garée dont la place n'avait plus d'accès faisait planter toute la circulation à son départ (véhicules figés, puis jeu bloqué même en supprimant la route).
+- Garde-fou : une erreur dans la circulation ne fige plus jamais la partie (itinéraires recalculés, et en dernier recours les véhicules repartent de zéro, commandes non livrées remises en file).
+- Test : modifications de routes au hasard sous les voitures et les camions pendant plusieurs jours de jeu.
+
 # 5.7.0 — 10 novembre 2026
 
 - Circulation refaite aux zones de conflit : priorité à droite aux croisements (sauf cédez-le-passage), priorité à l'anneau dans les ronds-points. On s'insère dès qu'il y a juste la place de sa carrosserie ; les véhicules déjà engagés finissent de passer.
