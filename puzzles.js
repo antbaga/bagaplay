@@ -1,15 +1,18 @@
+import {savedRun,saveRun,clearRun} from './runs.js';
 import {shuffle,move2048,add2048,can2048,makeMines,revealMines,winnerTTT,bestTTT,makeSlide,slideMove,slideSolved,makeSudoku,formatDuration} from './engines.js';
 const directions={ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down'};
 // 2048 : tuiles qui glissent (transformations CSS), fusion qui « claque », plateau qui suit le pouce pendant le geste.
+// La partie en cours est sauvegardée à chaque coup (on la retrouve même si l'app est fermée par le système).
 function game2048(c){const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;let tiles=[],score=0,nextId=1,over=false;
  const grid=c.grid(4,'grid-4 g2048');for(let i=0;i<16;i++){const s=document.createElement('div');s.className='slot';grid.append(s)}
  const layer=document.createElement('div');layer.className='tiles';grid.append(layer);
  function place(t){t.el.style.setProperty('--x',t.x);t.el.style.setProperty('--y',t.y)}
  function paint(t){t.el.textContent=t.v;t.el.dataset.v=t.v;t.el.setAttribute('aria-label',String(t.v));t.el.classList.toggle('big',t.v>=128);t.el.classList.toggle('huge',t.v>=1024)}
- function spawn(){const used=new Set(tiles.map(t=>t.y*4+t.x)),free=[...Array(16).keys()].filter(i=>!used.has(i));if(!free.length)return;const i=free[Math.floor(Math.random()*free.length)];
-  const t={id:nextId++,v:Math.random()<.9?2:4,x:i%4,y:Math.floor(i/4),el:document.createElement('div')};t.el.className='cell tile';place(t);paint(t);layer.append(t.el);tiles.push(t);
-  if(!reduced)t.el.animate([{opacity:0,scale:'.6'},{opacity:1,scale:'1'}],{duration:170,easing:'cubic-bezier(.25,.8,.25,1)',delay:110,fill:'backwards'})}
+ function addTile(v,i,anim){const t={id:nextId++,v,x:i%4,y:Math.floor(i/4),el:document.createElement('div')};t.el.className='cell tile';place(t);paint(t);layer.append(t.el);tiles.push(t);
+  if(anim&&!reduced)t.el.animate([{opacity:0,scale:'.6'},{opacity:1,scale:'1'}],{duration:170,easing:'cubic-bezier(.25,.8,.25,1)',delay:110,fill:'backwards'})}
+ function spawn(){const used=new Set(tiles.map(t=>t.y*4+t.x)),free=[...Array(16).keys()].filter(i=>!used.has(i));if(!free.length)return;addTile(Math.random()<.9?2:4,free[Math.floor(Math.random()*free.length)],true)}
  const numbers=()=>{const b=Array(16).fill(0);for(const t of tiles)b[t.y*4+t.x]=t.v;return b};
+ const save=()=>{if(!over)saveRun('2048',{level:0,board:numbers(),score})};
  function line(dir,k){const r=[0,1,2,3];if(dir==='left')return r.map(i=>[i,k]);if(dir==='right')return r.map(i=>[3-i,k]);if(dir==='up')return r.map(i=>[k,i]);return r.map(i=>[k,3-i])}
  function popup(text,t){const p=document.createElement('div');p.className='pop2048';p.textContent=text;p.style.setProperty('--x',t.x);p.style.setProperty('--y',t.y);layer.append(p);setTimeout(()=>p.remove(),900)}
  function move(dir){if(over)return;const at=new Map(tiles.map(t=>[t.y*4+t.x,t]));let moved=false,gained=0;const dying=[],merged=[];
@@ -24,8 +27,9 @@ function game2048(c){const reduced=matchMedia('(prefers-reduced-motion: reduce)'
   setTimeout(()=>{for(const t of merged){paint(t);if(!reduced)t.el.animate([{scale:'1'},{scale:'1.1'},{scale:'1'}],{duration:170,easing:'ease-in-out'});}},110);
   if(gained){score+=gained;c.score(score);c.tone(gained>=64);const top=merged.reduce((a,b)=>b.v>a.v?b:a);popup('+'+gained,top)}
   spawn();
-  if(tiles.some(t=>t.v>=2048)){over=true;setTimeout(()=>c.finish(true,score,'La tuile 2048 est à toi !\n'+score+' points de douceur.'),350)}
-  else if(!can2048(numbers())){over=true;setTimeout(()=>c.finish(false,score,'Plus de place sur le plateau.\nTon score : '+score+' points.'),350)}}
+  if(tiles.some(t=>t.v>=2048)||!can2048(numbers())){over=true;clearRun('2048')}else save();
+  if(tiles.some(t=>t.v>=2048)){setTimeout(()=>c.finish(true,score,'La tuile 2048 est à toi !\n'+score+' points de douceur.'),350)}
+  else if(over){setTimeout(()=>c.finish(false,score,'Plus de place sur le plateau.\nTon score : '+score+' points.'),350)}}
  // le plateau suit légèrement le pouce, puis le coup part dès que le geste est assez long
  let start=null;
  c.listen(c.board,'pointerdown',e=>{start=[e.clientX,e.clientY];c.board.setPointerCapture?.(e.pointerId);layer.style.transition='none'});
@@ -34,7 +38,9 @@ function game2048(c){const reduced=matchMedia('(prefers-reduced-motion: reduce)'
  function release(){layer.style.transition='transform .2s cubic-bezier(.25,.8,.25,1)';layer.style.transform=''}
  c.listen(c.board,'pointerup',e=>{if(!start)return;const dx=e.clientX-start[0],dy=e.clientY-start[1];start=null;release();if(Math.max(Math.abs(dx),Math.abs(dy))>18)move(Math.abs(dx)>Math.abs(dy)?dx>0?'right':'left':dy>0?'down':'up')});
  c.listen(c.board,'pointercancel',()=>{start=null;release()});
- spawn();spawn();c.score(0);
+ const run=c.duel?.resume?savedRun('2048'):null;
+ if(run&&Array.isArray(run.board)&&run.board.length===16&&run.board.some(v=>v>0)){run.board.forEach((v,i)=>{if(v>0)addTile(v,i,false)});score=run.score||0}else{spawn();spawn();save()}
+ c.score(score);
  return {key:k=>directions[k]&&move(directions[k])}}
 // Memory : 6, 8, 18 paires, ou 32 en Extrême (8×8). En Extrême, les symboles existent en deux couleurs.
 // 32 symboles tous différents (forme), chacun avec sa couleur ; \uFE0E force l'affichage texte (pas d'emoji)
