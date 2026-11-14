@@ -3,37 +3,45 @@ import assert from 'node:assert/strict';
 import * as B from '../bubble-engine.js';
 
 function play(n,seed,H=700){const S=B.newGame(n,seed);let g=0;
- while(!S.won&&!S.lost&&g++<500){const v=B.view(S,H);S.deadY=v.deadY;const m=B.bot(S,v.sx,v.sy);if(m.swap){const t=S.cur;S.cur=S.next;S.next=t}const ball=S.cur;B.shoot(S,ball,B.trace(S,v.sx,v.sy,m.a))}
+ while(!S.won&&!S.lost&&g++<400){const v=B.view(S,H);S.deadY=v.deadY;const m=B.bot(S,v.sx,v.sy);if(m.swap){const t=S.cur;S.cur=S.next;S.next=t}const ball=S.cur;B.shoot(S,ball,B.trace(S,v.sx,v.sy,m.a))}
  return S}
+const bub=(id,x,y,c,t='n')=>({id,x,y,c,t});
+function game(bubbles){const S=B.newGame(1,1);S.bubbles=bubbles;S.goal='clear';S.chicks=0;S.freed=0;return S}
 
-test('150 levels: valid grids, everything hangs from the ceiling, goals match the content',()=>{
- for(let n=1;n<=B.LEVELS;n++){const lv=B.makeLevel(n);assert.ok(lv.count>=20,`niveau ${n} : ${lv.count} bulles`);assert.ok(lv.shots>=10);assert.ok(lv.stars[0]<lv.stars[1]);
-  const S=B.newGame(n,1);const cells=B.cells(S);assert.equal(cells.length,lv.count);
-  for(const [r,c,v] of cells){assert.ok(c<B.rowLen(r));if(v.c!=null)assert.ok(v.c>=0&&v.c<lv.colors,`couleur hors palette au niveau ${n}`)}
-  const T=B.clone(S);const ev=B.apply(T,{t:'fire'},{hits:[]});assert.equal(ev.dropped.length,0,`bulles décrochées au départ, niveau ${n}`);
-  if(lv.goal==='chicks')assert.ok(lv.chicks>=2,`niveau ${n} sans poussin`);
-  if(lv.goal==='top')assert.ok((S.rows[0]||[]).some(Boolean))}});
+test('150 levels: everything hangs from the ceiling, palettes and goals are consistent, calibration present',()=>{
+ assert.equal(B.CALIB.length,B.LEVELS);
+ for(let n=1;n<=B.LEVELS;n++){const lv=B.makeLevel(n);assert.ok(lv.count>=28,`niveau ${n} : ${lv.count} bulles`);assert.ok(lv.every>=4);assert.ok(lv.stars[1]<lv.stars[0]);
+  for(const b of lv.bubbles)if(b.c!=null)assert.ok(b.c>=0&&b.c<lv.colors);
+  const S=B.newGame(n,1);const ev=B.apply(S,{t:'fire'},{hits:[]});assert.equal(ev.dropped.length,0,`bulles qui pendent dans le vide au niveau ${n}`);
+  if(lv.goal==='chicks')assert.ok(lv.chicks>=2)}});
 
-test('a simple bot wins a sample of levels within the shots given',()=>{
- let wins=0,tries=0;const failed=[];
- for(let n=1;n<=B.LEVELS;n+=7){if(n===78)continue;for(const seed of [11,12]){tries++;const S=play(n,seed);if(S.won)wins++;else failed.push(n+':'+S.lost)}}
- assert.ok(wins/tries>=.85,`${wins}/${tries} victoires, échecs ${failed.join(' ')}`)});
+test('no snapping: the ball freezes exactly where it first touches another bubble',()=>{
+ const S=game([bub(1,200,18,0)]);const res=B.trace(S,200,500,Math.PI/2-.06);const hit=S.bubbles[0];
+ assert.equal(res.hit,1);const d=Math.hypot(res.end[0]-hit.x,res.end[1]-hit.y);assert.ok(Math.abs(d-B.D)<.5,`distance ${d}`);
+ B.apply(S,{t:'c',c:1},res);const placed=S.bubbles.find(b=>b.id!==1);assert.ok(Math.abs(placed.x-res.end[0])<1e-9&&Math.abs(placed.y-res.end[1])<1e-9,'posée exactement au point de contact');
+ // et la position ne tombe pas sur une case de grille
+ assert.ok(Math.abs(((placed.x-20)/18)-Math.round((placed.x-20)/18))>.05)});
 
-test('three of a kind pop, what hangs below drops, chicks are freed when they fall',()=>{
- const S=B.newGame(1,1);S.rows=[[{t:'n',c:0},{t:'n',c:0},null,null,null,null,null,null,null,null,null],[{t:'chick',c:1},null,null,null,null,null,null,null,null,null]];S.goal='chicks';S.chicks=1;S.freed=0;
- const ev=B.apply(S,{t:'c',c:0},{cell:[0,2]});assert.equal(ev.popped.length,3);assert.equal(ev.dropped.length,1);assert.equal(ev.freed,1);assert.ok(B.goalDone(S))});
+test('three touching bubbles of a colour pop, what hangs from them drops, chicks are freed',()=>{
+ const S=game([bub(1,100,18,0),bub(2,136,18,0),bub(3,118,18+B.RH,2,'chick')]);S.goal='chicks';S.chicks=1;
+ const ev=B.apply(S,{t:'c',c:0},{end:[172,18]});assert.equal(ev.popped.length,3);assert.equal(ev.dropped.length,1);assert.equal(ev.freed,1);assert.ok(B.goalDone(S))});
 
-test('special bubbles: bombs and lightning chain, ice thaws, stones only fall, fire goes through',()=>{
- const S=B.newGame(1,1);const row=()=>new Array(11).fill(null),row1=()=>new Array(10).fill(null);
- S.rows=[row(),row1(),row()];S.rows[0][0]={t:'n',c:2};S.rows[0][1]={t:'n',c:2};S.rows[0][3]={t:'bomb'};S.rows[0][4]={t:'n',c:3};S.rows[0][6]={t:'ice',c:2};S.rows[1][5]={t:'stone'};
- for(let c=0;c<11;c++)S.rows[2][c]={t:'n',c:4};S.rows[1][0]={t:'bolt'};
- const ev=B.apply(S,{t:'c',c:2},{cell:[0,2]});
- assert.ok(ev.blasts.length>=2,'la bombe et l’éclair voisins se déclenchent');assert.ok(ev.popped.some(([r,c,v])=>v.t==='bomb'));
- const T=B.newGame(1,1);T.rows=[[{t:'n',c:1},{t:'ice',c:1},null,null,null,null,null,null,null,null,null],[{t:'n',c:1},null,null,null,null,null,null,null,null,null]];
- const e2=B.apply(T,{t:'c',c:1},{cell:[1,1]});assert.equal(e2.thawed.length,1);assert.equal(B.get(T,0,1).t,'n');
- const F=B.newGame(30,1);const v=B.view(F,700);const before=B.cells(F).length;const res=B.trace(F,v.sx,v.sy,Math.PI/2,true);assert.ok(res.hits.length>2);B.apply(F,{t:'fire'},res);assert.ok(B.cells(F).length<before-2)});
+test('every few shots the field comes down and a new row appears; crossing the line loses',()=>{
+ const S=B.newGame(40,3);const v=B.view(S,700);S.deadY=v.deadY;const y0=S.bubbles.map(b=>b.y),n0=S.bubbles.length,rows=S.rowsLeft;
+ const ev=B.descend(S);assert.ok(S.bubbles.slice(0,n0).every((b,i)=>Math.abs(b.y-y0[i]-B.RH)<1e-9));assert.ok(ev.spawned.length>5);assert.equal(S.rowsLeft,rows-1);
+ assert.equal(B.apply(S,{t:'fire'},{hits:[]}).dropped.length,0,'rien ne tombe à cause de la descente');
+ const T=B.newGame(40,3);T.deadY=B.view(T,700).deadY;let k=0;while(!T.lost&&!T.won&&k++<200){const vv=B.view(T,700);B.shoot(T,T.cur,B.trace(T,vv.sx,vv.sy,.25))}
+ assert.equal(T.lost,'line')});
 
-test('the ceiling comes down on the levels that say so, and crossing the line loses',()=>{
- const n=[...Array(B.LEVELS).keys()].map(i=>i+1).find(n=>B.levelInfo(n).drop);const S=B.newGame(n,3);S.deadY=B.view(S,700).deadY;
- for(let k=0;k<200&&!S.lost&&!S.won;k++){const v=B.view(S,700);B.shoot(S,S.cur,B.trace(S,v.sx,v.sy,.2))}
- assert.equal(S.lost,'line');assert.ok(S.ceil>0)});
+test('special bubbles: bombs and lightning chain, ice thaws, fire goes straight through',()=>{
+ const S=game([bub(1,100,18,0),bub(2,136,18,null,'bomb'),bub(3,208,18,3),bub(4,82,18+B.RH,null,'bolt'),bub(5,300,18+B.RH,4),bub(6,64,18,1,'ice')]);
+ const ev=B.apply(S,{t:'c',c:0},{end:[118,18+B.RH]});
+ // la bulle posée + la rouge ne font que 2, mais la bombe voisine ne part pas sans éclatement : rien ne saute
+ assert.equal(ev.popped.length,0);
+ const T=game([bub(1,100,18,0),bub(2,136,18,0),bub(3,172,18,null,'bomb'),bub(4,208,18,3),bub(5,64,18,1,'ice'),bub(6,350,18+B.RH,2,'bolt')]);
+ const e2=B.apply(T,{t:'c',c:0},{end:[118,18+B.RH]});assert.ok(e2.popped.some(b=>b.t==='bomb'),'la bombe voisine explose');assert.ok(e2.blasts.length>=1);assert.ok(e2.thawed.length===1||e2.popped.some(b=>b.id===5));
+ const F=B.newGame(30,1),v=B.view(F,700),before=F.bubbles.length,res=B.trace(F,v.sx,v.sy,Math.PI/2,true);assert.ok(res.hits.length>2);B.apply(F,{t:'fire'},res);assert.ok(F.bubbles.length<before-2)});
+
+test('a simple bot wins most sampled levels with the calibrated descent speed',()=>{
+ let wins=0,tries=0;const failed=[];for(let n=1;n<=B.LEVELS;n+=9)for(const seed of [21,22]){tries++;const S=play(n,seed);if(S.won)wins++;else failed.push(n)}
+ assert.ok(wins/tries>=.75,`${wins}/${tries} victoires, échecs ${failed.join(' ')}`)});

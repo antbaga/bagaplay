@@ -1,5 +1,6 @@
 // Éclate-Bulles : jeu de tir de bulles avec carte de 150 niveaux (6 mondes), étoiles, boosters et bulles spéciales.
 import * as B from './bubble-engine.js';
+import {setMusicTheme} from './rewards.js';
 
 const STORE='bagaplay-bubble';
 const PAL=[['#ff5d5d','#c42a35'],['#ffd23f','#d99a0b'],['#5fd068','#239a3b'],['#4cc3ff','#1a7fd0'],['#b67cff','#7339cf'],['#ff9a3c','#d4620e']];
@@ -11,12 +12,24 @@ const WORLDS=[
  {name:'Fête foraine',sky:['#3c1747','#a03f86'],hill:'#2a0f33',deco:'tents'},
  {name:'Espace',sky:['#06081c','#1d1f4f'],hill:'#0d1030',deco:'planets'}];
 const GOAL_TXT={clear:'Éclate toutes les bulles',chicks:'Libère tous les poussins',top:'Dégage la rangée du haut'};
-const BOOSTS=[['rainbow','🌈','Arc-en-ciel'],['bomb','💣','Bombe'],['fire','🔥','Boule de feu'],['plus5','+5','5 bulles de plus']];
-function load(){try{const o=JSON.parse(localStorage.getItem(STORE)||'{}');return {stars:o.stars||{},best:o.best||{},boost:Object.assign({rainbow:3,bomb:3,fire:3,plus5:2},o.boost||{})}}catch{return {stars:{},best:{},boost:{rainbow:3,bomb:3,fire:3,plus5:2}}}}
+const BOOSTS=[['rainbow','🌈','Arc-en-ciel'],['bomb','💣','Bombe'],['fire','🔥','Boule de feu'],['slow','⏳','Retarder la descente (+5 tirs)']];
+function load(){try{const o=JSON.parse(localStorage.getItem(STORE)||'{}');return {stars:o.stars||{},best:o.best||{},boost:migrate(Object.assign({rainbow:3,bomb:3,fire:3,slow:2},o.boost||{}))}}catch{return {stars:{},best:{},boost:{rainbow:3,bomb:3,fire:3,slow:2}}}}
+function migrate(b){if(b.plus5!=null){b.slow=(b.slow||0)+b.plus5;delete b.plus5}return b}
 function save(p){try{localStorage.setItem(STORE,JSON.stringify(p))}catch{}}
 export const totalStars=p=>Object.values(p.stars).reduce((a,b)=>a+b,0);
 const unlocked=p=>{let n=1;while(n<B.LEVELS&&p.stars[n])n++;return n};
 
+const CHORDS=[[57,60,64,69],[53,57,60,65],[48,55,60,64],[55,59,62,67]],ARP=[0,2,1,3,2,1,3,2,0,3,1,2,3,1,2,3];
+const galaxy={period:150,play(A,step,vol){const t=A.currentTime,bar=Math.floor(step/16)%4,k=step%16,ch=CHORDS[bar];
+ if(!A._gx){const d=A.createDelay(1),fb=A.createGain(),f=A.createBiquadFilter();d.delayTime.value=.45;fb.gain.value=.42;f.type='lowpass';f.frequency.value=2400;d.connect(f);f.connect(fb);fb.connect(d);f.connect(A.destination);A._gx=d}
+ const out=A._gx,hz=m=>440*2**((m-69)/12);
+ const voice=(m,dur,type,g,att=.01,send=.6,det=0)=>{const o=A.createOscillator(),gn=A.createGain();o.type=type;o.frequency.value=hz(m);o.detune.value=det;gn.gain.setValueAtTime(0,t);gn.gain.linearRampToValueAtTime(g*vol,t+att);gn.gain.exponentialRampToValueAtTime(.0001,t+dur);o.connect(gn);gn.connect(A.destination);if(send){const sg=A.createGain();sg.gain.value=send;gn.connect(sg);sg.connect(out)}o.start(t);o.stop(t+dur+.05)};
+ if(k===0){for(const m of ch.slice(0,3))for(const det of [-9,9]){const o=A.createOscillator(),f=A.createBiquadFilter(),gn=A.createGain();o.type='sawtooth';o.frequency.value=hz(m);o.detune.value=det;f.type='lowpass';f.frequency.setValueAtTime(500,t);f.frequency.linearRampToValueAtTime(1300,t+1.2);f.frequency.linearRampToValueAtTime(600,t+2.4);
+   gn.gain.setValueAtTime(0,t);gn.gain.linearRampToValueAtTime(.012*vol,t+.7);gn.gain.linearRampToValueAtTime(.009*vol,t+1.8);gn.gain.exponentialRampToValueAtTime(.0001,t+2.5);o.connect(f);f.connect(gn);gn.connect(A.destination);const sg=A.createGain();sg.gain.value=.5;gn.connect(sg);sg.connect(out);o.start(t);o.stop(t+2.6)}}
+ voice(ch[ARP[k]]+12+(k%8===7?12:0),.32,'sine',.028,.008,.7);
+ if(k===0||k===8||k===11)voice(ch[0]-24,.5,'sine',.06,.01,0);
+ if(k===4||k===12){const b=A.createBufferSource(),f=A.createBiquadFilter(),g=A.createGain();if(!A._gn){A._gn=A.createBuffer(1,A.sampleRate*.1,A.sampleRate);const d=A._gn.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1}b.buffer=A._gn;f.type='highpass';f.frequency.value=6000;g.gain.setValueAtTime(.02*vol,t);g.gain.exponentialRampToValueAtTime(.0001,t+.08);b.connect(f);f.connect(g);g.connect(A.destination);b.start(t);b.stop(t+.1)}
+ if(k===14&&bar%2===1)voice(ch[3]+24,.9,'triangle',.018,.02,.9)}};
 export function bubble(c){
  const P=load();const wrap=document.createElement('div');wrap.className='bb-wrap';c.board.append(wrap);
  const opts=c.duel||{};let level=opts.level&&opts.level<=unlocked(P)?opts.level:null;
@@ -28,8 +41,10 @@ export function bubble(c){
  const SFX={shoot:()=>{tone(260,520,.12,'triangle',.05);noise(.1,.04,2000)},wall:()=>tone(900,700,.04,'square',.02),stick:()=>tone(180,120,.07,'sine',.07),
   pop:i=>{const f=520*Math.pow(1.07,Math.min(16,i));tone(f,f*1.8,.07,'sine',.05)},drop:()=>tone(700,200,.35,'triangle',.04),chick:()=>[1400,1800,1500].forEach((f,i)=>tone(f,f*1.2,.06,'sine',.04,i*.07)),
   boom:()=>{noise(.45,.2,300);tone(140,50,.4,'square',.05)},zap:()=>{noise(.25,.1,4000);tone(1200,300,.25,'sawtooth',.03)},arm:()=>tone(600,900,.1,'triangle',.05),
-  win:()=>[523,659,784,1046,1318].forEach((f,i)=>tone(f,f,.2,'triangle',.06,i*.11)),lose:()=>[392,330,262].forEach((f,i)=>tone(f,f*.97,.3,'triangle',.06,i*.18)),star:i=>tone(880+i*220,1200+i*300,.2,'sine',.06),bonus:()=>tone(700,1400,.08,'square',.03)};
+  win:()=>[523,659,784,1046,1318].forEach((f,i)=>tone(f,f,.2,'triangle',.06,i*.11)),lose:()=>[392,330,262].forEach((f,i)=>tone(f,f*.97,.3,'triangle',.06,i*.18)),star:i=>tone(880+i*220,1200+i*300,.2,'sine',.06),descend:()=>{tone(220,110,.45,'sawtooth',.04);noise(.4,.08,400)},bonus:()=>tone(700,1400,.08,'square',.03)};
 
+ // ---- musique sur mesure : ambiance galaxie (nappes, arpèges qui scintillent, écho spatial), 100 BPM
+ setMusicTheme(galaxy);
  // ---- carte des niveaux
  function showMap(){wrap.innerHTML='';G=null;run=null;const n0=unlocked(P);
   const map=document.createElement('div');map.className='bb-map';
@@ -44,7 +59,7 @@ export function bubble(c){
   requestAnimationFrame(()=>{const cur=map.querySelector('.bb-node.cur')||map.querySelector('.bb-node:not(.lock)');if(cur)map.scrollTop+=cur.getBoundingClientRect().top-map.getBoundingClientRect().top-map.clientHeight/2})}
  function intro(n){const lv=B.makeLevel(n),W=WORLDS[lv.ep],m=document.createElement('div');m.className='bb-modal';
   m.innerHTML=`<div class="bb-card"><small>${W.name}</small><h2>Niveau ${n}</h2><p class="bb-goal">${goalIcon(lv.goal)} ${GOAL_TXT[lv.goal]}${lv.goal==='chicks'?` (${lv.chicks})`:''}</p>
-   <p class="bb-info">${lv.shots} bulles · ${lv.colors} couleurs${lv.drop?` · le plafond descend tous les ${lv.drop} tirs`:''}</p><p class="bb-stars">${'★'.repeat(P.stars[n]||0)}${'☆'.repeat(3-(P.stars[n]||0))}</p>
+   <p class="bb-info">${lv.colors} couleurs · ça descend tous les ${lv.every} tirs · ${lv.extra} rangées en réserve</p><p class="bb-info">★★★ en ${lv.stars[1]} tirs max · ★★ en ${lv.stars[0]}</p><p class="bb-stars">${'★'.repeat(P.stars[n]||0)}${'☆'.repeat(3-(P.stars[n]||0))}</p>
    <button class="bb-play">Jouer</button><button class="bb-back">Carte</button></div>`;wrap.append(m);
   c.listen(m.querySelector('.bb-play'),'click',()=>{m.remove();start(n)});c.listen(m.querySelector('.bb-back'),'click',()=>{m.remove();if(!wrap.querySelector('.bb-map'))showMap()})}
  const goalIcon=g=>g==='chicks'?'🐥':g==='top'?'⬆️':'🫧';
@@ -52,12 +67,11 @@ export function bubble(c){
  // ---- partie
  function start(n){wrap.innerHTML='';level=n;G=B.newGame(n,(Math.random()*2**31)|0);
   const cv=document.createElement('canvas');cv.className='bb-canvas';cv.setAttribute('aria-label',`Éclate-Bulles, niveau ${n}`);
-  const hud=document.createElement('div');hud.className='bb-hud';hud.innerHTML=`<div class="bb-top"><div class="bb-lvl">Niv. ${n}</div><div class="bb-score"><b>0</b><i><u></u><s style="left:${0}%"></s><s></s><s></s></i></div><div class="bb-goalc"></div></div>
+  const hud=document.createElement('div');hud.className='bb-hud';hud.innerHTML=`<div class="bb-top"><div class="bb-lvl">Niv. ${n}</div><div class="bb-score"><b>0</b><i></i></div><div class="bb-goalc"></div></div>
    <div class="bb-banner"></div><div class="bb-boosts">${BOOSTS.map(([k,i,t])=>`<button data-k="${k}" aria-label="${t}"><span>${i}</span><em></em></button>`).join('')}</div>`;
   wrap.append(cv,hud);const g=cv.getContext('2d');
-  run={cv,g,hud,n,lw:400,lh:700,k:1,dpr:1,scroll:null,aim:null,fly:null,parts:[],falls:[],texts:[],chicks:[],armed:null,state:'aim',t:0,bonus:0,bonusT:0,sprites:null,bg:null,shake:0};
-  const lv=G.lv,[s2,s3]=lv.stars;run.s3=s3;run.s2=s2;
-  hud.querySelector('.bb-score i').innerHTML=`<u></u><s style="left:${Math.round(s2/s3*100)}%"></s><s style="left:99%"></s>`;
+  run={cv,g,hud,n,lw:400,lh:700,k:1,dpr:1,scroll:null,aim:null,fly:null,parts:[],falls:[],texts:[],chicks:[],armed:null,state:'aim',t:0,sprites:null,bg:null,shake:0};
+
   for(const b of hud.querySelectorAll('.bb-boosts button'))c.listen(b,'click',e=>{e.stopPropagation();boost(b.dataset.k)});
   c.listen(cv,'pointerdown',e=>{if(run.state!=='aim')return;cv.setPointerCapture?.(e.pointerId);point(e,true)});
   c.listen(cv,'pointermove',e=>{if(run.state!=='aim'||!run.down)return;point(e,false)});
@@ -71,7 +85,7 @@ export function bubble(c){
   if(y>shooterY()-22){run.aim=null;return}const a=Math.atan2(shooterY()-y,x-B.W/2);run.aim=Math.max(.12,Math.min(Math.PI-.12,a))}
  function swap(){if(run.armed)return;const t=G.cur;G.cur=G.next;G.next=t;SFX.arm();run.swapT=.25}
  function boost(k){if(run.state!=='aim'||!P.boost[k])return;
-  if(k==='plus5'){P.boost.plus5--;save(P);G.shots+=5;banner('+5 bulles !',1.4);SFX.arm();boosts();return}
+  if(k==='slow'){P.boost.slow--;save(P);G.since-=5;banner('La descente attendra 5 tirs de plus',1.4);SFX.arm();boosts();return}
   run.armed=run.armed===k?null:k;SFX.arm();boosts()}
  function boosts(){for(const b of run.hud.querySelectorAll('.bb-boosts button')){const k=b.dataset.k;b.querySelector('em').textContent=P.boost[k];b.classList.toggle('on',run.armed===k);b.disabled=!P.boost[k]}}
  function goalHud(){const el=run.hud.querySelector('.bb-goalc');el.textContent=`${goalIcon(G.goal)} ${Math.max(0,B.goalLeft(G))}`}
@@ -83,16 +97,16 @@ export function bubble(c){
  // ---- résultat d'un tir : animations, score, fin de niveau
  function land(){const {b,res}=run.fly;run.fly=null;const before=G.score;const ev=B.shoot(G,b,res);
   if(ev.placed)SFX.stick();
-  ev.popped.forEach(([r,cc,cell],i)=>{const x=B.cx(r,cc),y=B.cy(G,r);setTimeout(()=>SFX.pop(i),i*28);burst(x,y,cell,8);if(cell.t==='chick')freeChick(x,y)});
-  if(ev.blasts.length){SFX.boom();run.shake=1;for(const [r,cc] of ev.blasts)if(cc>=0)burst(B.cx(r,cc),B.cy(G,r),{t:'n',c:5},22);else{SFX.zap();for(let x=20;x<400;x+=24)burst(x,B.cy(G,r),{t:'n',c:1},2)}}
+  ev.popped.forEach((b,i)=>{setTimeout(()=>SFX.pop(i),i*28);burst(b.x,b.y,b,8);if(b.t==='chick')freeChick(b.x,b.y)});
+  if(ev.blasts.length){SFX.boom();run.shake=1;for(const bl of ev.blasts)if(bl.x>=0)burst(bl.x,bl.y,{t:'n',c:5},22);else{SFX.zap();for(let x=20;x<400;x+=24)burst(x,bl.y,{t:'n',c:1},2)}}
   if(ev.star){SFX.zap();banner('Étoile ! Toutes les bulles de cette couleur éclatent',1.6)}
-  for(const [r,cc,cell] of ev.dropped){run.falls.push({x:B.cx(r,cc),y:B.cy(G,r),vx:(Math.random()-.5)*90,vy:-Math.random()*120,cell,life:1.6});if(cell.t==='chick')freeChick(B.cx(r,cc),B.cy(G,r))}
+  for(const b of ev.dropped){run.falls.push({x:b.x,y:b.y,vx:(Math.random()-.5)*90,vy:-Math.random()*120,cell:b,life:1.6});if(b.t==='chick')freeChick(b.x,b.y)}
   if(ev.dropped.length){setTimeout(SFX.drop,120);if(ev.dropped.length>=8)banner(`Avalanche ! +${ev.dropped.length*40}`,1.3)}
-  const gain=G.score-before;if(gain>0&&res.cell){run.texts.push({x:B.cx(...res.cell),y:B.cy(G,res.cell[0]),t:'+'+gain,life:1})}
-  if(ev.ceil){banner('Le plafond descend !',1.2);run.shake=.6}
+  const gain=G.score-before;if(gain>0&&res.end){run.texts.push({x:res.end[0],y:res.end[1],t:'+'+gain,life:1})}
+  if(ev.descend){SFX.descend();run.shake=.5;banner(ev.descend.rows?'Ça descend ! Nouvelle rangée':'Ça descend !',1.1);for(const b of ev.descend.spawned)b.born=run.t}
   goalHud();
-  if(G.won){run.state='bonus';run.bonus=G.shots;run.bonusT=.6;banner(G.shots?`Bravo ! Bonus : ${G.shots} bulles restantes`:'Bravo !',1.8);SFX.win();return}
-  if(G.lost){run.state='lost';run.lostT=.9;SFX.lose();banner(G.lost==='line'?'Les bulles ont atteint la ligne !':'Plus de bulles !',2);return}
+  if(G.won){run.state='bonus';run.bonusT=1.1;banner('Bravo !',1.4);SFX.win();return}
+  if(G.lost){run.state='lost';run.lostT=.9;SFX.lose();banner('Les bulles ont atteint la ligne !',2);return}
   run.state='aim'}
  function freeChick(x,y){SFX.chick();run.chicks.push({x,y,t:0})}
  function burst(x,y,cell,n){const col=cell.c!=null&&cell.c>=0?PAL[cell.c][0]:cell.t==='stone'?'#8a8f99':cell.t==='bomb'?'#ff9a3c':'#ffffff';for(let i=0;i<n;i++){const a=Math.random()*6.28,s=60+Math.random()*180;run.parts.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:.6+Math.random()*.4,col,r:2+Math.random()*3})}}
@@ -100,11 +114,9 @@ export function bubble(c){
   if(win){P.stars[n]=Math.max(prev,stars);P.best[n]=Math.max(P.best[n]||0,G.score);let gift=null;
    if(stars===3&&prev<3||Math.random()<.25){gift=BOOSTS[Math.floor(Math.random()*BOOSTS.length)][0];P.boost[gift]++}save(P);
    const reward=40+40*Math.max(0,stars-prev)+(prev?0:40);
-   const txt=`Niveau ${n} réussi : ${'★'.repeat(stars)}${'☆'.repeat(3-stars)}\n${G.score} points${gift?` · booster offert : ${BOOSTS.find(b=>b[0]===gift)[1]}`:''}`;
+   const txt=`Niveau ${n} réussi : ${'★'.repeat(stars)}${'☆'.repeat(3-stars)}\n${G.shotsUsed} tirs · ${G.score} points${gift?` · booster offert : ${BOOSTS.find(b=>b[0]===gift)[1]}`:''}`;
    c.finish(true,totalStars(P),txt,{reward,title:stars===3?'Parfait !':'Niveau réussi !',actions:n<B.LEVELS?[['Niveau suivant',()=>c.relaunch({level:n+1})],['Carte',()=>c.relaunch({map:1})]]:[['Carte',()=>c.relaunch({map:1})],['Tous les jeux',null]]})}
   else{save(P);c.finish(false,totalStars(P),`Niveau ${n} raté. ${GOAL_TXT[G.goal]} : il en restait ${Math.max(0,B.goalLeft(G))}.`,{reward:15,title:'Raté !',actions:[['Réessayer',()=>c.relaunch({level:n})],['Carte',()=>c.relaunch({map:1})]]})}}
- function offerMore(){const m=document.createElement('div');m.className='bb-modal';m.innerHTML=`<div class="bb-card"><h2>Plus de bulles !</h2><p class="bb-info">Utiliser un booster « +5 bulles » ? (il t’en reste ${P.boost.plus5})</p><button class="bb-play">+5 bulles</button><button class="bb-back">Abandonner</button></div>`;wrap.append(m);
-  c.listen(m.querySelector('.bb-play'),'click',()=>{m.remove();P.boost.plus5--;save(P);G.shots=5;G.lost=null;boosts();run.state='aim';banner('+5 bulles !',1.2)});c.listen(m.querySelector('.bb-back'),'click',()=>{m.remove();endLevel(false)})}
 
  // ---- dessin
  function sprites(){const s=Math.ceil((B.R*2+6)*run.k*run.dpr),mk=fn=>{const o=document.createElement('canvas');o.width=o.height=s;const x=o.getContext('2d');x.scale(s/(B.R*2+6),s/(B.R*2+6));x.translate(B.R+3,B.R+3);fn(x);return o};
@@ -138,18 +150,17 @@ export function bubble(c){
   g.setTransform(1,0,0,1,0,0);g.drawImage(r.bg,0,0);g.setTransform(k*dpr,0,0,k*dpr,0,0);
   let sx=0,sy=0;if(r.shake>0){sx=(Math.random()-.5)*8*r.shake;sy=(Math.random()-.5)*8*r.shake}g.translate(sx,sy);
   const Y=wy=>B.HUD+wy-r.scroll;
-  // plafond
-  const top=Y(G.ceil*B.RH);g.fillStyle='rgba(0,0,0,.25)';g.fillRect(0,0,400,Math.max(B.HUD,top));g.fillStyle='rgba(255,255,255,.18)';g.fillRect(0,top-3,400,3);
-  // ligne à ne pas franchir (plafond qui descend)
-  if(G.dropEvery){const dy=Y(v.deadY);g.strokeStyle='rgba(255,90,90,.75)';g.setLineDash([8,6]);g.lineWidth=2;g.beginPath();g.moveTo(0,dy);g.lineTo(400,dy);g.stroke();g.setLineDash([]);
-   const left=G.dropEvery-G.since;g.fillStyle='rgba(255,255,255,.8)';g.font='700 11px system-ui';g.textAlign='right';g.fillText(`⬇ dans ${left} tir${left>1?'s':''}`,394,dy-6)}
-  // bulles
-  G.rows.forEach((row,rr)=>{const y=Y(B.cy(G,rr));if(y<-B.R||y>r.lh)return;row.forEach((cell,cc)=>{if(cell)drawCell(B.cx(rr,cc),y,cell)})});
+  // plafond et ligne à ne pas franchir
+  g.fillStyle='rgba(0,0,0,.25)';g.fillRect(0,0,400,B.HUD);g.fillStyle='rgba(255,255,255,.18)';g.fillRect(0,B.HUD-3,400,3);
+  {const dy=Y(v.deadY),left=G.every-G.since,danger=left<=1;g.strokeStyle=danger?'rgba(255,90,90,.95)':'rgba(255,120,120,.6)';g.setLineDash([8,6]);g.lineWidth=2;g.beginPath();g.moveTo(0,dy);g.lineTo(400,dy);g.stroke();g.setLineDash([]);
+   g.fillStyle=danger?'#ffb3a8':'rgba(255,255,255,.8)';g.font='700 11px system-ui';g.textAlign='right';g.fillText(`⬇ dans ${left} tir${left>1?'s':''}`,394,dy-6);g.textAlign='left';if(G.rowsLeft>0)g.fillText(`+${G.rowsLeft} rangée${G.rowsLeft>1?'s':''} en réserve`,6,dy-6)}
+  // bulles (les nouvelles arrivent en grossissant)
+  for(const bb of G.bubbles){const y=Y(bb.y);if(y<-B.R||y>r.lh)continue;const age=bb.born?Math.min(1,(r.t-bb.born)/.35):1;drawCell(bb.x,y,bb,.3+.7*age)}
   // visée : pointillés qui rebondissent, bulle fantôme à l'arrivée
   const b=ball(),shY=shooterY();
-  if(r.state==='aim'&&r.aim!=null){const res=B.trace(G,v.sx,v.sy,r.aim,b.t==='fire');const pts=res.pts;let acc=0,spacing=15,phase=(r.t*40)%spacing;g.fillStyle=b.t==='fire'?'#ffb02e':b.t==='c'?PAL[b.c][0]:'#ffffff';
-   for(let i=0;i<pts.length-1;i++){const [x0,y0]=pts[i],[x1,y1]=pts[i+1],L=Math.hypot(x1-x0,y1-y0);for(let d=spacing-((acc+phase)%spacing);d<L;d+=spacing){const t=d/L,px=x0+(x1-x0)*t,py=Y(y0+(y1-y0)*t);const fade=Math.max(.25,1-(acc+d)/700);g.globalAlpha=fade;g.beginPath();g.arc(px,py,3.2,0,7);g.fill()}acc+=L}g.globalAlpha=1;
-   if(res.cell){const [cr,cc]=res.cell;g.strokeStyle='rgba(255,255,255,.7)';g.lineWidth=2;g.setLineDash([4,4]);g.beginPath();g.arc(B.cx(cr,cc),Y(B.cy(G,cr)),B.R-2,0,7);g.stroke();g.setLineDash([])}}
+  if(r.state==='aim'&&r.aim!=null){const res=B.trace(G,v.sx,v.sy,r.aim,b.t==='fire');const pts=res.pts;let acc=0;const spacing=15,phase=(r.t*40)%spacing,MAX=210;g.fillStyle=b.t==='fire'?'#ffb02e':b.t==='c'?PAL[b.c][0]:'#ffffff';
+   // juste une amorce de visée : pas de point d'arrivée
+   for(let i=0;i<pts.length-1&&acc<MAX;i++){const [x0,y0]=pts[i],[x1,y1]=pts[i+1],L=Math.hypot(x1-x0,y1-y0);for(let d=spacing-((acc+phase)%spacing);d<L&&acc+d<MAX;d+=spacing){const t=d/L,px=x0+(x1-x0)*t,py=Y(y0+(y1-y0)*t);g.globalAlpha=Math.max(0,1-(acc+d)/MAX);g.beginPath();g.arc(px,py,3.2,0,7);g.fill()}acc+=L}g.globalAlpha=1}
   // bulle en vol
   if(r.fly){drawBall(r.fly.b,r.fly.x,Y(r.fly.y));if(r.fly.b.t==='fire'){for(let i=0;i<3;i++){r.parts.push({x:r.fly.x+(Math.random()-.5)*10,y:r.fly.y+(Math.random()-.5)*10,vx:0,vy:30,life:.35,col:'#ffb02e',r:3})}}}
   // chutes, particules, textes, poussins libérés
@@ -161,7 +172,7 @@ export function bubble(c){
   g.translate(-sx,-sy);
   g.fillStyle='rgba(0,0,0,.28)';g.beginPath();g.arc(200,shY,30,0,7);g.fill();g.strokeStyle='rgba(255,255,255,.55)';g.lineWidth=3;g.beginPath();g.arc(200,shY,30,Math.PI*.15,Math.PI*.85,true);g.stroke();
   if(r.state!=='fly'&&r.state!=='bonus'){const sw=r.swapT>0?1-r.swapT*2:1;drawBall(b,200,shY,Math.max(.4,sw))}
-  g.fillStyle='#fff';g.font='800 15px system-ui';g.textAlign='center';g.fillText(G.shots,200,shY+48);
+  g.fillStyle='#fff';g.font='800 13px system-ui';g.textAlign='center';g.fillText(`${G.shotsUsed} tir${G.shotsUsed>1?'s':''}`,200,shY+48);
   if(!r.armed&&G.next){g.fillStyle='rgba(0,0,0,.25)';g.beginPath();g.arc(126,shY+22,20,0,7);g.fill();drawBall(G.next,126,shY+22,.7);g.fillStyle='rgba(255,255,255,.7)';g.font='700 11px system-ui';g.fillText('⇄',148,shY+40)}
   // aide : glisser pour viser
   if(r.state==='aim'&&r.aim==null&&G.shotsUsed===0&&run.n<=3){g.fillStyle='rgba(255,255,255,.85)';g.font='700 14px system-ui';g.fillText('Glisse vers le haut pour viser, relâche pour tirer',200,shY-60)}}
@@ -174,16 +185,16 @@ export function bubble(c){
   for(const f of r.falls){f.vy+=900*dt;f.x+=f.vx*dt;f.y+=f.vy*dt;f.life-=dt;const by=B.view(G,r.lh).sy+r.scroll*0+30;if(f.y>by&&f.vy>0){f.vy*=-.35;f.y=by;if(!f.bounced){f.bounced=1;burst(f.x,f.y,f.cell,3)}}}r.falls=r.falls.filter(f=>f.life>0);
   for(const t of r.texts){t.y-=40*dt;t.life-=dt}r.texts=r.texts.filter(t=>t.life>0);
   for(const ch of r.chicks)ch.t+=dt;r.chicks=r.chicks.filter(ch=>ch.t<.95);
-  if(r.state==='bonus'){r.bonusT-=dt;if(r.bonusT<=0){if(G.shots>0){G.shots--;G.score+=B.LEFT_BONUS;const x=60+Math.random()*280,y=B.view(G,r.lh).sy-120-Math.random()*200;burst(x,y,{t:'n',c:Math.floor(Math.random()*6)},14);r.texts.push({x,y,t:'+'+B.LEFT_BONUS,life:.9});SFX.bonus();r.bonusT=.14}
-    else if(!r.falls.length&&!r.parts.length){r.state='done';stars()}}}
-  if(r.state==='lost'){r.lostT-=dt;if(r.lostT<=0){r.state='done';if(G.lost==='shots'&&P.boost.plus5>0)offerMore();else endLevel(false)}}
-  const sc=r.hud.querySelector('.bb-score b');if(sc.textContent!==String(G.score)){sc.textContent=G.score;r.hud.querySelector('.bb-score u').style.width=Math.min(100,G.score/r.s3*100)+'%'}
+  if(r.state==='bonus'){r.bonusT-=dt;if(r.bonusT<=0&&!r.falls.length){r.state='done';stars()}}
+  if(r.state==='lost'){r.lostT-=dt;if(r.lostT<=0){r.state='done';endLevel(false)}}
+  const sc=r.hud.querySelector('.bb-score b');if(sc.textContent!==String(G.score))sc.textContent=G.score;
+  {const st=G.shotsUsed<=G.lv.stars[1]?3:G.shotsUsed<=G.lv.stars[0]?2:1,el=r.hud.querySelector('.bb-score i');if(el.dataset.s!==String(st)){el.dataset.s=st;el.textContent='★'.repeat(st)+'☆'.repeat(3-st)}}
   draw()}
  function stars(){const n=B.starsFor(G),m=document.createElement('div');m.className='bb-starshow';m.innerHTML=`<div>${[0,1,2].map(i=>`<b class="${i<n?'on':''}" style="animation-delay:${.15+i*.3}s">★</b>`).join('')}</div><p>${G.score} points</p>`;wrap.append(m);for(let i=0;i<n;i++)setTimeout(()=>SFX.star(i),150+i*300);setTimeout(()=>endLevel(true),1500)}
 
  // accroche pour les tests automatiques
  if(window.__bbTest)window.__bb={get G(){return G},get run(){return run},B,P,shootAt:a=>{if(run&&run.state==='aim'){run.aim=a;fire()}},tick:dt=>{if(run&&G)tick(dt)}};
  showMap();if(level)intro(level);
- return {update(dt){if(run&&G)tick(dt)},
+ return {update(dt){if(run&&G)tick(dt)},destroy(){setMusicTheme(null)},
   key(k){if(!run||run.state!=='aim')return;if(k==='ArrowLeft'){run.aim=Math.min(Math.PI-.12,(run.aim??Math.PI/2)+.04)}else if(k==='ArrowRight'){run.aim=Math.max(.12,(run.aim??Math.PI/2)-.04)}else if((k===' '||k==='ArrowUp')&&run.aim!=null)fire();else if(k==='s'||k==='S')swap()}};
 }

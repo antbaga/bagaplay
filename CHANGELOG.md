@@ -1,3 +1,14 @@
+# 5.11.0 — 14 novembre 2026
+
+- Éclate-Bulles, refonte du tir et de la difficulté :
+  - Plus de calage automatique ni de bulle fantôme : la bulle se fige exactement là où elle touche une autre bulle (ou le plafond). Deux bulles qui se touchent comptent pour les groupes de 3.
+  - La visée n’est plus qu’une amorce de pointillés (environ 200 px), sans point d’arrivée.
+  - Tous les X tirs, tout descend d’un cran et une nouvelle rangée arrive en haut, tant qu’il en reste en réserve ; si les bulles franchissent la ligne rouge, c’est perdu. Le compte à rebours est affiché sur la ligne.
+  - Plus de limite de tirs : les étoiles dépendent du nombre de tirs utilisés. Grappes de couleurs plus petites, 4 couleurs dès le niveau 4, bulles spéciales plus tôt.
+  - Le booster « +5 bulles » devient « Retarder la descente » (+5 tirs avant la prochaine descente) ; les boosters déjà gagnés sont conservés.
+  - Vitesse de descente et seuils d’étoiles recalibrés niveau par niveau avec le robot.
+  - Musique sur mesure, ambiance galaxie : nappes, arpèges qui scintillent, écho spatial.
+
 # 5.10.0 — 14 novembre 2026
 
 - Nouveau jeu : **Massilia Biz**, un jeu de plateau immobilier à Marseille, plein de clichés et d’autodérision.
