@@ -3,4 +3,9 @@ export function celebrate(amount,total){const el=document.createElement('div');e
 let context,interval,step=0,musicVolume=.5;
 // volume de 0 à 1 ; 0,5 = volume d'origine, 1 = deux fois plus fort
 export function setMusicVolume(v){musicVolume=Math.max(0,Math.min(1,v))}
-export function music(on){clearInterval(interval);if(!on||!musicVolume){context?.suspend();return}context??=new AudioContext();context.resume();const notes=[60,64,67,72,67,64,62,67,71,74,71,67,57,60,64,69,64,60,55,59,62,67,62,59];interval=setInterval(()=>{if(document.hidden)return;const t=context.currentTime,o=context.createOscillator(),gain=context.createGain();o.type='sine';o.frequency.value=440*2**((notes[step++%notes.length]-69)/12);gain.gain.setValueAtTime(0,t);gain.gain.linearRampToValueAtTime(.05*musicVolume,t+.02);gain.gain.exponentialRampToValueAtTime(.0001,t+.65);o.connect(gain);gain.connect(context.destination);o.start(t);o.stop(t+.7)},330)}
+// un jeu peut remplacer la musique de fond par la sienne : {period (ms), play(context, step, volume)} ; null = musique d'origine
+let theme=null,playing=false;
+export function setMusicTheme(t){theme=t;step=0;if(playing)music(true)}
+export function music(on){clearInterval(interval);playing=!!(on&&musicVolume);if(!on||!musicVolume){context?.suspend();return}context??=new AudioContext();context.resume();
+ if(theme){interval=setInterval(()=>{if(!document.hidden)theme.play(context,step++,musicVolume)},theme.period);return}
+ const notes=[60,64,67,72,67,64,62,67,71,74,71,67,57,60,64,69,64,60,55,59,62,67,62,59];interval=setInterval(()=>{if(document.hidden)return;const t=context.currentTime,o=context.createOscillator(),gain=context.createGain();o.type='sine';o.frequency.value=440*2**((notes[step++%notes.length]-69)/12);gain.gain.setValueAtTime(0,t);gain.gain.linearRampToValueAtTime(.05*musicVolume,t+.02);gain.gain.exponentialRampToValueAtTime(.0001,t+.65);o.connect(gain);gain.connect(context.destination);o.start(t);o.stop(t+.7)},330)}

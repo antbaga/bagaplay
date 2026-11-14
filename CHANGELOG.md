@@ -1,3 +1,16 @@
+# 5.10.0 — 14 novembre 2026
+
+- Nouveau jeu : **Massilia Biz**, un jeu de plateau immobilier à Marseille, plein de clichés et d’autodérision.
+  - Plateau de 40 cases en 3D (Noailles, Le Panier, la Canebière, le Vélodrome, la Corniche, les Goudes, Sormiou, le Vieux-Port, la Bonne Mère…), gares (Saint-Charles, métro ligne 2, Ferry-Boat, navette de Marignane), la Savonnerie et le Mistral, Pause pastis, Garde à vue et les Baumettes.
+  - Caméra qui suit les pions et tourne le plateau vers le joueur, vue d’ensemble à la demande ; pions (sardine, pastis, boule, scooter, pointu, savon) qui sautent de case en case ; dés en 3D ; cabanons et villas en 3D.
+  - Cartes « Coup de Mistral » et « Tchatche » (32 cartes), fiches de propriété, constructions à égalité, hypothèques, prison, faillite, échanges entre joueurs.
+  - Contre l’ordinateur (1 à 5 adversaires avec chacun son caractère et ses répliques : Momo du Panier, Tatie Josette, Kevin le Minot, Fanny la poissonnière, le Grand Robert) ou à plusieurs sur le même téléphone (2 à 6 joueurs, humains et ordinateurs mélangés). L’ordinateur propose aussi des échanges.
+  - Partie rapide (20 tours, le plus riche gagne) ou classique (jusqu’à la faillite). Partie sauvegardée à chaque tour et reprise à la réouverture.
+  - Bruitages (dés, caisse enregistreuse, pièces, mistral, prison…) et musique de fête provençale (galoubet et tambourin) pendant la partie.
+  - Textes du jeu en français et en anglais.
+- Les jeux peuvent désormais avoir leur propre musique de fond (elle reprend la musique habituelle en quittant le jeu).
+- Tests : plateau et cartes complets, parties entre ordinateurs qui se terminent toujours (rapides et classiques), loyers, doubles et prison, constructions, dettes et faillite, échanges.
+
 # 5.9.0 — 14 novembre 2026
 
 - Nouveau jeu : **Éclate-Bulles**, un jeu de tir de bulles avec 150 niveaux.
