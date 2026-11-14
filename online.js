@@ -85,6 +85,14 @@ export const hideParty=id=>rpc('party_hide',{p_player:me(),p_id:id});
 // Le créateur lance sans attendre ceux qui n'ont pas répondu ; quitter une partie en cours la fait perdre à son équipe.
 export const partyGo=id=>rpc('party_go',{p_player:me(),p_id:id});
 export const partyLeave=id=>rpc('party_leave',{p_player:me(),p_id:id});
+// ---- BagaGuesser (photos à localiser)
+export const geoGallery=()=>rpc('geo_gallery',{p_player:me()});
+export const geoPost=(lat,lng,hint,image,thumb)=>rpc('geo_post',{p_player:me(),p_name:named(),p_lat:lat,p_lng:lng,p_hint:hint||'',p_image:image,p_thumb:thumb});
+export const geoTake=id=>rpc('geo_take',{p_player:me(),p_name:named(),p_id:id});
+export const geoGuess=(id,lat,lng)=>rpc('geo_guess',{p_player:me(),p_id:id,p_lat:lat,p_lng:lng});
+export const geoRelease=id=>rpc('geo_release',{p_player:me(),p_id:id});
+export const geoReport=id=>rpc('geo_report',{p_player:me(),p_id:id});
+export const geoDelete=id=>rpc('geo_delete',{p_player:me(),p_id:id});
 // Toutes mes parties (duels + pétanque). Les parties à plusieurs restent facultatives si le serveur n'est pas à jour.
 // Seules les parties en attente ou en cours sont listées : une partie finie, refusée ou annulée n'apparaît plus nulle part.
 export const isOpen=g=>g.status==='pending'||g.status==='active';

@@ -1,7 +1,7 @@
 // Éclate-Bulles : moteur (sans DOM), testable sous Node.
 // Placement libre : la bulle tirée se fige exactement là où elle touche une autre bulle (ou le plafond), sans se caler
 // sur une grille. Deux bulles se touchent quand leurs centres sont à une distance D (à TOL près). Groupes de 3 de la même
-// couleur, chute de ce qui ne tient plus au plafond, et tous les X tirs tout descend d'un cran et une rangée arrive en haut.
+// couleur, chute de ce qui ne tient plus au plafond, et tous les X tirs le plafond descend d'un cran (aucune bulle n'apparaît).
 export const W=400,R=18,D=36,RH=R*Math.sqrt(3),COLS=11,X0=2,LEVELS=150,TOL=1.6;
 export function rng(seed){let a=seed>>>0||1;return()=>{a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
 export const rowLen=r=>r%2?COLS-1:COLS;
@@ -13,7 +13,7 @@ export function neighborsOf(S,b){return S.bubbles.filter(o=>o!==b&&touching(o,b)
 export function present(S){const s=new Set();for(const b of S.bubbles)if(b.c!=null&&b.c>=0&&(b.t==='n'||b.t==='chick'||b.t==='ice'))s.add(b.c);return [...s]}
 export const lowestY=S=>S.bubbles.reduce((m,b)=>Math.max(m,b.y),-Infinity);
 
-// ---- niveaux : une grille de départ (formes variées) puis des rangées en réserve qui descendront
+// ---- niveaux : une grille de départ (formes variées) accrochée au plafond
 const SHAPES=[
  ()=>true,
  (r,c,H)=>{const x=(hx(r,c)-W/2)/(W/2),y=r/(H-1)*2-1;const a=x*1.15,b=-y*1.2+.25;return (a*a+b*b-1)**3-a*a*b*b*b<=0},
@@ -25,15 +25,14 @@ const SHAPES=[
  (r,c,H)=>Math.hypot((hx(r,c)-W/2)/(W/2),(r-(H-1)/2)/((H-1)/2+.5))<=1.02,
  (r,c)=>((r+Math.floor(c/2))%4)<3,
  (r,c)=>c%4!==3||r<2];
-// [descente tous les N tirs, tirs max pour 2 étoiles, tirs max pour 3 étoiles] : calibré avec le robot
-export const CALIB=[[11,30,20],[11,27,18],[11,20,13],[11,26,17],[11,24,16],[11,40,27],[11,64,44],[11,40,27],[11,61,42],[11,66,46],[10,31,21],[10,82,57],[10,35,23],[10,59,41],[10,88,61],[10,117,81],[10,51,35],[10,83,58],[10,83,58],[9,74,51],[9,81,56],[9,104,72],[9,33,22],[11,131,91],[9,100,70],[9,30,20],[9,18,12],[9,50,34],[9,60,41],[9,10,6],[9,86,59],[9,71,49],[9,27,18],[9,62,43],[9,64,44],[9,36,24],[9,57,39],[12,146,102],[9,81,56],[8,75,52],[8,54,37],[8,50,34],[8,58,40],[12,135,94],[8,31,21],[8,83,57],[8,70,48],[11,94,65],[8,78,54],[8,99,69],[8,48,33],[8,35,24],[8,69,48],[10,69,48],[8,7,4],[8,52,35],[8,98,68],[8,7,4],[8,128,89],[10,110,76],[7,45,31],[7,31,21],[13,160,112],[7,64,44],[13,92,64],[7,23,15],[7,9,5],[8,83,58],[11,120,84],[8,141,99],[9,89,62],[9,92,64],[7,45,31],[8,73,51],[13,132,92],[8,79,55],[7,26,17],[9,124,87],[8,84,58],[6,51,35],[9,60,41],[6,20,13],[6,43,29],[7,34,23],[7,33,22],[6,14,9],[12,168,117],[6,37,25],[6,94,65],[6,49,33],[9,57,39],[6,19,13],[11,168,118],[9,111,78],[6,52,35],[6,57,39],[7,36,25],[6,59,41],[12,143,100],[9,96,67],[6,70,48],[5,39,27],[5,20,13],[6,49,33],[5,71,49],[8,84,58],[8,56,39],[6,63,43],[7,41,28],[8,83,58],[5,34,23],[8,85,59],[6,54,37],[5,27,18],[7,72,50],[5,29,19],[5,31,21],[7,54,37],[9,73,51],[5,54,37],[6,33,22],[12,113,79],[5,49,33],[9,47,32],[8,104,72],[9,108,75],[5,53,37],[9,74,51],[11,142,99],[6,61,42],[7,47,32],[7,57,39],[5,18,11],[5,32,21],[8,57,39],[5,6,3],[7,51,35],[8,60,41],[5,64,44],[10,102,71],[10,94,65],[5,11,7],[12,128,90],[8,76,53],[6,80,55],[8,58,40],[11,105,73],[5,57,39],[10,100,70],[8,73,51]];
+// [descente du plafond tous les N tirs, tirs max pour 2 étoiles, tirs max pour 3 étoiles] : calibré avec le robot (marge x2 pour un humain)
+export const CALIB=[[6,22,15],[6,26,17],[6,23,15],[6,29,19],[6,16,10],[6,31,21],[8,54,37],[8,44,30],[6,34,23],[8,55,38],[5,24,16],[7,66,45],[7,39,27],[9,56,39],[7,63,43],[13,71,49],[7,49,33],[7,53,36],[11,80,55],[11,45,31],[7,47,32],[14,111,78],[7,40,27],[7,61,42],[7,56,39],[5,37,25],[5,12,7],[5,37,25],[5,30,20],[5,27,18],[7,51,35],[11,66,45],[7,49,33],[5,30,20],[7,50,34],[7,37,25],[5,39,27],[9,59,40],[5,31,21],[7,43,30],[12,94,65],[4,47,32],[4,30,20],[8,65,45],[12,122,85],[4,39,27],[6,53,36],[4,30,20],[6,53,36],[4,45,31],[4,40,27],[4,24,16],[6,57,39],[6,51,35],[4,5,3],[4,39,26],[6,54,37],[4,24,16],[6,45,31],[4,32,22],[4,30,20],[4,33,22],[8,66,46],[4,34,23],[4,43,29],[4,30,20],[14,94,66],[4,31,21],[8,56,39],[6,49,34],[10,75,52],[6,61,42],[6,45,31],[6,56,38],[8,65,45],[4,13,8],[6,58,40],[6,61,42],[6,44,30],[6,43,30],[14,115,80],[4,34,23],[6,40,27],[6,69,48],[4,40,27],[4,7,4],[6,61,42],[4,26,17],[10,87,61],[4,37,25],[8,62,43],[6,46,31],[6,40,27],[4,43,30],[6,50,34],[10,87,61],[4,32,22],[6,37,25],[6,46,31],[6,38,26],[6,48,33],[4,24,16],[6,43,29],[4,37,25],[4,30,20],[4,22,15],[4,42,29],[4,32,21],[4,33,22],[4,30,20],[4,19,12],[4,36,25],[4,40,27],[4,17,11],[8,63,43],[4,37,25],[8,69,48],[4,45,31],[6,51,35],[4,34,23],[8,54,37],[4,26,17],[6,37,25],[4,28,19],[10,76,52],[6,62,43],[4,5,3],[6,41,28],[6,49,34],[4,30,20],[4,19,13],[4,39,26],[10,69,47],[4,22,14],[4,47,32],[4,16,10],[4,49,33],[6,30,20],[4,30,20],[8,51,35],[8,66,45],[6,17,11],[8,70,48],[10,70,48],[8,72,50],[6,54,37],[10,86,60],[4,29,19],[14,108,75],[8,73,51]];
 export function levelInfo(n){const i=(n-1)%25,ep=Math.floor((n-1)/25);
  const colors=n<=3?3:n<=15?4:n<=60?5:6;
- const rows=Math.min(9,5+Math.floor(i/6)+(ep>2?1:0));
- const extra=Math.min(14,2+Math.floor(n/8));
+ const rows=Math.min(10,6+Math.floor(i/6)+(ep>2?1:0));
  const every=Math.max(4,9-Math.floor(n/20));
  const goal=n>3&&i%3===1?'chicks':'clear';
- return {n,i,ep,colors,rows,extra,every,goal}}
+ return {n,i,ep,colors,rows,every,goal}}
 function clusterColor(r,around,colors,keep){const free=Array.from({length:colors},(_,i)=>i).filter(i=>!around.has(i));return free.length&&r()<keep?free[Math.floor(r()*free.length)]:Math.floor(r()*colors)}
 export function makeLevel(n,full=false){const L=levelInfo(n),r=rng(n*7919+17),H=L.rows;
  const shape=n<=2||full?SHAPES[0]:SHAPES[(n*5+L.ep)%SHAPES.length];
@@ -60,11 +59,11 @@ export function makeLevel(n,full=false){const L=levelInfo(n),r=rng(n*7919+17),H=
  if(n>=34&&n%3===1)put('star',1,a=>a>1);
  let chicks=0;if(L.goal==='chicks'){put('chick',Math.min(7,2+Math.floor(L.i/5)+Math.floor(L.ep/2)),a=>a<=Math.max(2,H*.6));for(const row of grid)for(const v of row)if(v&&v.t==='chick')chicks++}
  const bubbles=[];let id=1;for(let row=0;row<H;row++)for(let c=0;c<rowLen(row);c++){const v=grid[row][c];if(v)bubbles.push({id:id++,x:hx(row,c),y:R+row*RH,...v})}
- const cal=CALIB[n-1];return {...L,bubbles,chicks,count:bubbles.length,every:cal?cal[0]:L.every,stars:cal?[cal[1],cal[2]]:[Math.round(bubbles.length/2.2+L.extra*3),Math.round(bubbles.length/3+L.extra*2)],seedRows:n*131+7}}
+ const cal=CALIB[n-1];return {...L,bubbles,chicks,count:bubbles.length,every:cal?cal[0]:L.every,stars:cal?[cal[1],cal[2]]:[Math.round(bubbles.length/1.6),Math.round(bubbles.length/2.4)]}}
 
 export function newGame(n,seed=Date.now()){const lv=makeLevel(n);
  const S={n,lv,bubbles:lv.bubbles.map(b=>({...b})),nextId:1000,score:0,colors:lv.colors,goal:lv.goal,chicks:lv.chicks,freed:0,
-  rnd:rng(seed),rowRnd:rng(lv.seedRows),every:lv.every,since:0,rowsLeft:lv.extra,parity:0,won:false,lost:null,deadY:Infinity,shotsUsed:0};
+  rnd:rng(seed),every:lv.every,since:0,top:0,won:false,lost:null,deadY:Infinity,shotsUsed:0};
  S.cur=nextBall(S);S.next=nextBall(S);return S}
 export function nextBall(S){const pr=present(S);const pool=pr.length?pr:Array.from({length:S.colors},(_,i)=>i);return {t:'c',c:pool[Math.floor(S.rnd()*pool.length)]}}
 
@@ -72,12 +71,12 @@ export function nextBall(S){const pr=present(S);const pool=pr.length?pr:Array.fr
 export function trace(S,sx,sy,angle,fire=false){let x=sx,y=sy,dx=Math.cos(angle);const dy=-Math.sin(angle),pts=[[x,y]],hits=[],seen=new Set(),STEP=3;
  for(let k=0;k<4000;k++){let px=x,py=y;x+=dx*STEP;y+=dy*STEP;
   if(x<R||x>W-R){const wall=x<R?R:W-R,u=(wall-px)/(x-px),wy=py+(y-py)*u;pts.push([wall,wy]);x=2*wall-x;dx=-dx;px=wall;py=wy}
-  if(fire){for(const b of S.bubbles)if(!seen.has(b.id)&&d2(b,{x,y})<(D-3)**2){seen.add(b.id);hits.push(b.id)}if(y-R<=0){pts.push([x,y]);return {pts,hits,end:[x,y],fire:true}}continue}
+  if(fire){for(const b of S.bubbles)if(!seen.has(b.id)&&d2(b,{x,y})<(D-3)**2){seen.add(b.id);hits.push(b.id)}if(y-R<=S.top){pts.push([x,y]);return {pts,hits,end:[x,y],fire:true}}continue}
   // premier contact le long du petit segment
   let best=null;const vx=x-px,vy=y-py,a=vx*vx+vy*vy||1e-9;
   for(const b of S.bubbles){const ox=px-b.x,oy=py-b.y;const c=ox*ox+oy*oy-D*D;if(c<=0){best={u:0,b};break}const bb=2*(vx*ox+vy*oy),disc=bb*bb-4*a*c;if(disc<0)continue;const u=(-bb-Math.sqrt(disc))/(2*a);if(u>=0&&u<=1&&(!best||u<best.u))best={u,b}}
   if(best){const ex=px+vx*best.u,ey=py+vy*best.u;pts.push([ex,ey]);return {pts,end:[ex,ey],hit:best.b.id,hits}}
-  if(y-R<=0){const u=(py-R)/Math.max(1e-6,py-y),ex=px+vx*u;pts.push([ex,R]);return {pts,end:[ex,R],hits,ceiling:true}}}
+  const cy=S.top+R;if(y<=cy){const u=(py-cy)/Math.max(1e-6,py-y),ex=px+vx*u;pts.push([ex,cy]);return {pts,end:[ex,cy],hits,ceiling:true}}}
  pts.push([x,y]);return {pts,end:[x,y],hits}}
 
 // ---- résolution d'un tir
@@ -104,19 +103,11 @@ export function apply(S,ball,res){const ev={popped:[],dropped:[],freed:0,thawed:
  // chute de tout ce qui ne tient plus au plafond
  for(const b of dropLoose(S)){ev.dropped.push(b);if(b.t==='chick')ev.freed++}
  const p=ev.popped.length,d=ev.dropped.length;ev.pts=p*10+Math.max(0,p-3)*5+d*20*(d>=8?2:1)+ev.freed*100;S.score+=ev.pts;S.freed+=ev.freed;return ev}
-function dropLoose(S){const anch=new Set(),st=[];for(const b of S.bubbles)if(b.y-R<=TOL||b.hang){anch.add(b.id);st.push(b)}
+function dropLoose(S){const anch=new Set(),st=[];for(const b of S.bubbles)if(b.y-R<=S.top+TOL){anch.add(b.id);st.push(b)}
  while(st.length){const b=st.pop();for(const o of S.bubbles)if(!anch.has(o.id)&&touching(o,b)){anch.add(o.id);st.push(o)}}
  const out=S.bubbles.filter(b=>!anch.has(b.id));S.bubbles=S.bubbles.filter(b=>anch.has(b.id));return out}
-// tout descend d'un cran ; une nouvelle rangée arrive en haut tant qu'il en reste en réserve
-export function descend(S){const ev={rows:0,spawned:[]};for(const b of S.bubbles)b.y+=RH;
- if(S.rowsLeft>0){S.rowsLeft--;S.parity^=1;const pr=present(S),pool=pr.length?pr:Array.from({length:S.colors},(_,i)=>i);let prev=null,run=0;
-  for(let c=0;c<rowLen(S.parity);c++){const x=hx(0,c,S.parity),y=R;if(S.bubbles.some(o=>d2(o,{x,y})<(D-1)**2))continue;
-   const col=run<2&&prev!=null&&S.rowRnd()<.45?prev:pool[Math.floor(S.rowRnd()*pool.length)];run=col===prev?run+1:0;prev=col;
-   const b={id:S.nextId++,x,y,t:'n',c:col};S.bubbles.push(b);ev.spawned.push(b)}
-  ev.rows=1}
- // ce qui touchait le plafond reste accroché (suspendu à la rangée du dessus)
- for(const b of S.bubbles)if(Math.abs(b.y-(R+RH))<TOL+1)b.hang=true;
- return ev}
+// le plafond descend d'un cran et pousse toutes les bulles vers le bas
+export function descend(S){S.top+=RH;for(const b of S.bubbles)b.y+=RH;return {top:S.top}}
 
 export function goalDone(S){if(S.goal==='chicks')return S.freed>=S.chicks;return S.bubbles.length===0}
 export const goalLeft=S=>S.goal==='chicks'?S.chicks-S.freed:S.bubbles.length;
@@ -133,7 +124,7 @@ export const HUD=64,FOOT=118;
 export function view(S,H){const playH=H-HUD-FOOT;return {scroll:0,sx:W/2,sy:playH,playH,deadY:playH-48}}
 
 // ---- robot (tests, calibrage)
-export function clone(S){return {...S,bubbles:S.bubbles.map(b=>({...b})),rnd:()=>.5,rowRnd:()=>.5}}
+export function clone(S){return {...S,bubbles:S.bubbles.map(b=>({...b})),rnd:()=>.5}}
 export function bot(S,sx,sy){let best=null;
  for(const swap of [false,true]){const ball=swap?S.next:S.cur;if(!ball)continue;
   for(let a=.16;a<Math.PI-.15;a+=.045){const res=trace(S,sx,sy,a,ball.t==='fire');const T=clone(S);const ev=apply(T,ball,res);let sc=ev.popped.length+ev.dropped.length*1.4+ev.freed*6;

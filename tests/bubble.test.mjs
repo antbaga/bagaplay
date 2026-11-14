@@ -26,10 +26,13 @@ test('three touching bubbles of a colour pop, what hangs from them drops, chicks
  const S=game([bub(1,100,18,0),bub(2,136,18,0),bub(3,118,18+B.RH,2,'chick')]);S.goal='chicks';S.chicks=1;
  const ev=B.apply(S,{t:'c',c:0},{end:[172,18]});assert.equal(ev.popped.length,3);assert.equal(ev.dropped.length,1);assert.equal(ev.freed,1);assert.ok(B.goalDone(S))});
 
-test('every few shots the field comes down and a new row appears; crossing the line loses',()=>{
- const S=B.newGame(40,3);const v=B.view(S,700);S.deadY=v.deadY;const y0=S.bubbles.map(b=>b.y),n0=S.bubbles.length,rows=S.rowsLeft;
- const ev=B.descend(S);assert.ok(S.bubbles.slice(0,n0).every((b,i)=>Math.abs(b.y-y0[i]-B.RH)<1e-9));assert.ok(ev.spawned.length>5);assert.equal(S.rowsLeft,rows-1);
+test('every few shots the ceiling comes down with everything hanging from it, no new bubbles; crossing the line loses',()=>{
+ const S=B.newGame(40,3);const v=B.view(S,700);S.deadY=v.deadY;const y0=S.bubbles.map(b=>b.y),n0=S.bubbles.length;
+ const ev=B.descend(S);assert.equal(S.bubbles.length,n0,'aucune bulle ne doit apparaître');assert.ok(S.bubbles.every((b,i)=>Math.abs(b.y-y0[i]-B.RH)<1e-9));assert.ok(Math.abs(ev.top-B.RH)<1e-9);
  assert.equal(B.apply(S,{t:'fire'},{hits:[]}).dropped.length,0,'rien ne tombe à cause de la descente');
+ // un tir vers le haut s'arrête contre le plafond descendu, et la bulle y reste accrochée
+ const C=game([]);C.top=B.RH*2;const r=B.trace(C,200,600,Math.PI/2);assert.ok(r.ceiling);assert.ok(Math.abs(r.end[1]-(C.top+B.R))<1e-6);
+ const e2=B.apply(C,{t:'c',c:0},r);assert.equal(e2.dropped.length,0);assert.equal(C.bubbles.length,1);
  const T=B.newGame(40,3);T.deadY=B.view(T,700).deadY;let k=0;while(!T.lost&&!T.won&&k++<200){const vv=B.view(T,700);B.shoot(T,T.cur,B.trace(T,vv.sx,vv.sy,.25))}
  assert.equal(T.lost,'line')});
 

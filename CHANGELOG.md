@@ -1,3 +1,17 @@
+# 5.12.0 — 15 novembre 2026
+
+- Nouveau jeu : **BagaGuesser**, dans l’esprit de GeoGuessr, ouvert en permanence (pas de parties à lancer).
+  - Ajouter une photo : elle se prend avec la caméra de l’app (impossible d’envoyer une photo déjà dans le téléphone), la position GPS est enregistrée au moment de la photo, indice facultatif (60 caractères).
+  - Localiser une photo : on choisit une photo dans la galerie publique, une carte du monde (OpenStreetMap) s’ouvre, on pose son point et on valide. Le trait entre sa réponse et la vraie position se dessine, avec la distance et les points (5 000 au mieux).
+  - Une photo devinée sort de la galerie ; son auteur reçoit une notification et voit sur une carte la réponse du joueur. Les photos de plus de 48 h sont supprimées.
+  - La vraie position n’est jamais envoyée avant la réponse, et elle est arrondie à environ 1 km. Une photo ouverte est réservée au joueur ; abandonner la remet dans la galerie (mais plus pour lui) ; une photo signalée deux fois est retirée. 10 photos par jour au maximum.
+- Massilia Biz en ligne, comme la pétanque : on invite 2 à 5 autres joueurs depuis le salon, chacun joue son tour sur son téléphone et voit les dés, les pions et les loyers des autres en direct. Notification quand c’est son tour. Quitter une partie en cours l’arrête pour tout le monde. Les échanges entre joueurs ne sont pas encore disponibles en ligne.
+- Éclate-Bulles :
+  - Plus de nouvelles rangées : tous les X tirs, c’est le plafond qui descend d’un cran en poussant toutes les bulles (animation, bruitage, vibration). Les grilles de départ sont un peu plus hautes ; descente et étoiles recalibrées niveau par niveau.
+  - Pointillés de visée deux fois plus longs.
+  - Plus d’impact : vibrations quand une bulle se colle, quand des bulles éclatent (plus fortes avec la taille du groupe), pour les bombes, les avalanches, la descente, la victoire et la défaite ; ondes de choc, plus de particules, flash et secousse de l’écran, bulles voisines bousculées.
+- Android : autorisations caméra et localisation (demandées seulement à l’ouverture de la caméra de BagaGuesser). Il faut réinstaller l’APK.
+
 # 5.11.0 — 14 novembre 2026
 
 - Éclate-Bulles, refonte du tir et de la difficulté :

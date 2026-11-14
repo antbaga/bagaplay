@@ -1,10 +1,13 @@
-// Massilia Biz : jeu de plateau immobilier à Marseille, contre l'ordinateur ou à plusieurs sur le même téléphone.
+// Massilia Biz : jeu de plateau immobilier à Marseille, contre l'ordinateur, à plusieurs sur le même téléphone ou en ligne.
+// En ligne : chaque joueur joue son tour sur son téléphone ; après chaque action, l'état complet de la partie part au serveur
+// (party_throw) avec les derniers événements, que les autres rejouent (dés, pions, loyers) en relevant la partie toutes les 2 s.
 // Plateau en 3D (CSS) avec caméra qui suit les pions, dés 3D, cartes « Coup de Mistral » et « Tchatche », musique provençale.
 import * as M from './massilia-engine.js';
 import {SQUARES,GROUPS,DECKS,TOKENS,CHARACTERS,QUIPS,HUMAN_LINES,JAIL,JAIL_FINE,GO_SALARY} from './massilia-data.js';
 import {savedRun,saveRun,clearRun} from './runs.js';
 import {setMusicTheme} from './rewards.js';
-import {player as onlinePlayer} from './online.js';
+import * as online from './online.js';
+const onlinePlayer=online.player;
 
 const SIZE=1220,CORNER=160,CELL=100,DEPTH=160;
 const TOKEN_SVG={
@@ -24,6 +27,10 @@ export function massilia(c){
  const el=(tag,cls,html)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(html!=null)e.innerHTML=html;return e};
  let S=null,G=null,tasks=[],fast=false,over=false,lastAsk={},camMode='follow',focus=null,busyModal=false,thinkT=0;
  const SPEED=()=>fast?2.4:1;
+ // ---- en ligne
+ const opts=c.duel||{},ON=!!opts.party;let view=opts.party||null,knownPly=view?.ply??0,inflight=0,polling=false,left=false,sending=Promise.resolve();
+ const myId=view?.my_id,mine=P=>!ON||(P&&P.pid===myId),local=P=>!!(P&&P.human&&mine(P));
+ const buzz=p=>{try{navigator.vibrate?.(p)}catch{}};
 
  // ---- sons
  const au=()=>{const v=c.volume('sfx');if(!v)return null;const A=c.audio();return A?{A,v}:null};
@@ -48,7 +55,7 @@ export function massilia(c){
 
  // ---- écran de départ
  function setup(){wrap.innerHTML='';const me=(onlinePlayer().name||T('Toi','You')).slice(0,14);
-  const cfg={mode:'ai',quick:true,opp:3,token:'sardine',name:me,local:[{name:me,token:'sardine',human:true},{name:T('Joueur 2','Player 2'),token:'pastis',human:true}]};
+  const cfg={mode:opts.mode==='local'?'local':'ai',quick:true,opp:3,token:'sardine',name:me,local:[{name:me,token:'sardine',human:true},{name:T('Joueur 2','Player 2'),token:'pastis',human:true}]};
   const box=el('div','mb-setup');wrap.append(box);
   const draw=()=>{box.innerHTML=`<div class="mb-logo">${BONNE_MERE}<h1><span>MASSILIA</span><b>BIZ</b></h1><p>${T('Le jeu de l’immobilier où tout le monde connaît quelqu’un.','The property game where everybody knows a guy.')}</p></div>
    <div class="mb-tabs"><button data-m="ai" class="${cfg.mode==='ai'?'on':''}">${T('Contre l’ordinateur','Against the computer')}</button><button data-m="local" class="${cfg.mode==='local'?'on':''}">${T('À plusieurs','Pass and play')}</button></div>
@@ -95,7 +102,7 @@ export function massilia(c){
   G.root.innerHTML=`<div class="mb-view"><div class="mb-board"><div class="mb-center"><div class="mb-sea"></div>${BONNE_MERE}<h2><span>MASSILIA</span><b>BIZ</b></h2>
     <div class="mb-deck mistral"><i>🌬️</i><b>${X(SQUARES[7].name)}</b></div><div class="mb-deck tchatche"><i>💬</i><b>${X(SQUARES[2].name)}</b></div></div>${SQUARES.map((_,i)=>squareHTML(i)).join('')}<div class="mb-tokens"></div></div></div>
    <div class="mb-players"></div><div class="mb-toast"></div><div class="mb-dice"><div class="mb-die"></div><div class="mb-die"></div></div>
-   <div class="mb-tools"><button class="mb-cam" aria-label="${T('Vue d’ensemble','Overview')}">🗺️</button><button class="mb-fast" aria-label="${T('Accélérer','Speed up')}">⏩</button></div>
+   <div class="mb-tools"><button class="mb-cam" aria-label="${T('Vue d’ensemble','Overview')}">🗺️</button><button class="mb-fast" aria-label="${T('Accélérer','Speed up')}">⏩</button>${ON?`<button class="mb-quit" aria-label="${T('Quitter la partie','Leave the game')}">🏳️</button>`:''}</div>
    <div class="mb-panel"></div><div class="mb-modal" hidden></div>`;
   G.view=G.root.querySelector('.mb-view');G.board=G.root.querySelector('.mb-board');G.tokens=G.root.querySelector('.mb-tokens');G.dice=[...G.root.querySelectorAll('.mb-die')];G.panel=G.root.querySelector('.mb-panel');G.modal=G.root.querySelector('.mb-modal');
   G.dice.forEach(d=>{d.innerHTML=[1,2,3,4,5,6].map(f=>`<div class="mb-face f${f}">${[1,2,3,4,5,6,7,8,9].map(k=>`<i class="${DICE_PIPS[f].includes(k)?'on':''}"></i>`).join('')}</div>`).join('');d.dataset.v='1'});
@@ -103,6 +110,7 @@ export function massilia(c){
   G.cam={x:SIZE/2,y:SIZE/2,rz:0,tilt:42,z:.3};G.money=S.players.map(p=>p.money);
   c.listen(G.root.querySelector('.mb-cam'),'click',()=>{camMode=camMode==='follow'?'overview':'follow';SFX.click();G.root.querySelector('.mb-cam').classList.toggle('on',camMode==='overview')});
   c.listen(G.root.querySelector('.mb-fast'),'click',()=>{fast=!fast;SFX.click();G.root.querySelector('.mb-fast').classList.toggle('on',fast)});
+  if(ON)c.listen(G.root.querySelector('.mb-quit'),'click',leaveParty);
   G.board.querySelectorAll('.mb-sq').forEach(sq=>c.listen(sq,'click',()=>{if(!busyModal&&!tasks.length)propCard(+sq.dataset.i)}));
   players();refreshBoard();placeTokens(true);
   if(isNew){run(introSeq())}else{run(function*(){toast(T('Reprise de la partie','Game resumed'));yield .8}())}
@@ -159,12 +167,12 @@ export function massilia(c){
    <p class="mb-ownl">${o==null?`${T('À vendre','For sale')} : <b>${fmt(s.price)}</b>`:`${T('Propriétaire','Owner')} : <b>${esc(S.players[o].name)}</b>${S.mort[i]?` · ${T('hypothéquée','mortgaged')}`:''}`}</p>`;
   let btns='';
   if(mode==='buy')btns=`<button class="mb-b primary" data-a="buy" ${p.money<s.price?'disabled':''}>${T('Acheter','Buy')} · ${fmt(s.price)}</button><button class="mb-b" data-a="decline">${T('Non merci','No thanks')}</button>`;
-  else{if(p.human&&o===p.id&&S.phase!=='over'){if(M.canBuild(S,i))btns+=`<button class="mb-b primary" data-a="build">🏠 ${T('Construire','Build')} · ${fmt(M.houseCost(i))}</button>`;if(M.canSell(S,i))btns+=`<button class="mb-b" data-a="sell">${T('Vendre un cabanon','Sell a hut')} · +${fmt(M.houseCost(i)/2)}</button>`;
+  else{if(local(p)&&o===p.id&&S.phase!=='over'){if(M.canBuild(S,i))btns+=`<button class="mb-b primary" data-a="build">🏠 ${T('Construire','Build')} · ${fmt(M.houseCost(i))}</button>`;if(M.canSell(S,i))btns+=`<button class="mb-b" data-a="sell">${T('Vendre un cabanon','Sell a hut')} · +${fmt(M.houseCost(i)/2)}</button>`;
     if(M.canMortgage(S,i))btns+=`<button class="mb-b" data-a="mortgage">${T('Hypothéquer','Mortgage')} · +${fmt(M.mortgageValue(i))}</button>`;if(M.canUnmortgage(S,i))btns+=`<button class="mb-b" data-a="unmortgage">${T('Lever l’hypothèque','Pay off mortgage')} · ${fmt(M.unmortgageCost(i))}</button>`}
    btns+=`<button class="mb-b" data-a="close">${T('Fermer','Close')}</button>`}
   const card=modal(head+body+`<div class="mb-btns">${btns}</div>`,'prop');
   card.querySelectorAll('[data-a]').forEach(b=>c.listen(b,'click',()=>{const a=b.dataset.a;closeModal();if(a==='close')return panel();human({a,i})}))}
- function assets(pi,readOnly=false){const p=S.players[pi],mine=M.propsOf(S,pi),me=!readOnly&&p.human&&pi===S.turn;
+ function assets(pi,readOnly=false){const p=S.players[pi],mine=M.propsOf(S,pi),me=!readOnly&&local(p)&&pi===S.turn;
   const groups=[...new Set(mine.map(i=>SQUARES[i].g||SQUARES[i].t))];
   const rows=groups.map(g=>`<div class="mb-ag">${mine.filter(i=>(SQUARES[i].g||SQUARES[i].t)===g).map(i=>{const s=SQUARES[i],h=S.houses[i]||0;return `<div class="mb-ar${S.mort[i]?' mort':''}"><span class="mb-dot" style="background:${s.g?GROUPS[s.g].color:'#c9c2b0'}"></span><b>${X(s.name)}</b><em>${h===5?'🏰':'🏠'.repeat(h)}${S.mort[i]?'⛔':''}</em>
    ${me?`${M.canBuild(S,i)?`<button data-a="build" data-i="${i}" aria-label="${T('Construire','Build')}">＋🏠</button>`:''}${M.canSell(S,i)?`<button data-a="sell" data-i="${i}" aria-label="${T('Vendre','Sell')}">－🏠</button>`:''}${M.canMortgage(S,i)?`<button data-a="mortgage" data-i="${i}">${T('Hypo','Mortg.')}</button>`:''}${M.canUnmortgage(S,i)?`<button data-a="unmortgage" data-i="${i}">${T('Lever','Repay')}</button>`:''}`:''}</div>`}).join('')}</div>`).join('');
@@ -172,7 +180,7 @@ export function massilia(c){
   card.querySelectorAll('[data-a]').forEach(b=>c.listen(b,'click',()=>{if(M.act(S,{a:b.dataset.a,i:+b.dataset.i})){const evs=S.ev.splice(0);quickEvents(evs);assets(pi)}}));
   c.listen(card.querySelector('[data-x]'),'click',()=>{closeModal();panel()})}
  // effets immédiats (construction depuis la fiche) sans bloquer
- function quickEvents(evs){for(const e of evs){if(e.t==='build'){SFX.build()}if(e.t==='sell'||e.t==='mortgage')SFX.coins();if(e.t==='unmortgage')SFX.pay()}refreshBoard();syncMoney();panel();save()}
+ function quickEvents(evs){push(evs);for(const e of evs){if(e.t==='build'){SFX.build()}if(e.t==='sell'||e.t==='mortgage')SFX.coins();if(e.t==='unmortgage')SFX.pay()}refreshBoard();syncMoney();panel();save()}
 
  // ---- échanges
  function tradeDialog(){const p=cur(),others=M.active(S).filter(o=>o!==p);let to=others[0].id,give=new Set(),get=new Set(),money=0;
@@ -201,15 +209,15 @@ export function massilia(c){
  // ---- panneau d'actions du joueur humain
  function panel(){if(!G)return;const p=cur(),pn=G.panel;players();
   if(over||S.phase==='over'){pn.innerHTML='';return}
-  if(!p.human||tasks.length||busyModal){pn.innerHTML=`<div class="mb-status"><span class="mb-ptok">${TOKEN_SVG[p.token]}</span><b>${esc(p.name)}</b> ${p.human?'':T('réfléchit…','is thinking…')}</div>`;return}
+  if(!local(p)||tasks.length||busyModal){pn.innerHTML=`<div class="mb-status"><span class="mb-ptok">${TOKEN_SVG[p.token]}</span><b>${esc(p.name)}</b> ${!p.human?T('réfléchit…','is thinking…'):!mine(p)?T('joue…','is playing…'):''}</div>`;return}
   const btn=(a,label,cls='',dis=false)=>`<button class="mb-b ${cls}" data-a="${a}" ${dis?'disabled':''}>${label}</button>`;let main='',side='';
-  const pass=S.players.filter(q=>q.human&&!q.out).length>1;
+  const pass=ON||S.players.filter(q=>q.human&&!q.out).length>1;
   if(S.phase==='roll')main=btn('roll',`🎲 ${T('Lancer les dés','Roll the dice')}`,'primary big');
   else if(S.phase==='jail')main=`${p.cards.length?btn('jailCard',`🎟️ ${T('Utiliser la carte','Use the card')}`,'primary'):''}${btn('jailPay',`${T('Payer','Pay')} ${fmt(JAIL_FINE)}`,'',p.money<JAIL_FINE)}${btn('jailRoll',`🎲 ${T('Tenter un double','Try for doubles')}`,p.cards.length?'':'primary')}`;
   else if(S.phase==='end')main=btn('endTurn',`${T('Fin du tour','End turn')} ›`,'primary big');
   else if(S.phase==='buy'){propCard(S.pending.i,'buy');return}
   else if(S.phase==='debt'){debt();return}
-  side=`${btn('assets',`🏠 ${T('Mes biens','My properties')}`)}${M.active(S).length>1?btn('trade',`🤝 ${T('Échanger','Trade')}`):''}`;
+  side=`${btn('assets',`🏠 ${T('Mes biens','My properties')}`)}${!ON&&M.active(S).length>1?btn('trade',`🤝 ${T('Échanger','Trade')}`):''}`;
   pn.innerHTML=`<div class="mb-status"><span class="mb-ptok">${TOKEN_SVG[p.token]}</span><b>${esc(p.name)}</b>${pass?` · ${T('à toi !','your turn!')}`:''}${p.jail?` · 🚔 ${T('aux Baumettes','in Les Baumettes')}`:''}</div><div class="mb-acts">${main}</div><div class="mb-side">${side}</div>`;
   pn.querySelectorAll('[data-a]').forEach(b=>c.listen(b,'click',()=>{const a=b.dataset.a;SFX.click();if(a==='assets')return assets(S.turn);if(a==='trade')return tradeDialog();human({a})}))}
  function debt(){const p=cur(),d=S.pending,to=typeof d.to==='number'?S.players[d.to].name:T('la banque','the bank');const can=p.money>=d.amount,liq=M.liquidity(S,p.id);
@@ -217,7 +225,7 @@ export function massilia(c){
    <p class="mb-small">${can?T('Tu as assez, tu peux payer.','You have enough, you can pay.'):liq+p.money>=d.amount?T('Vends des cabanons ou hypothèque des propriétés pour réunir la somme.','Sell huts or mortgage properties to raise the money.'):T('Même en vendant tout, ça ne suffira pas…','Even selling everything won’t be enough…')}</p>
    <div class="mb-btns"><button class="mb-b primary" data-a="payDebt" ${can?'':'disabled'}>${T('Payer','Pay')} ${fmt(d.amount)}</button>${!can&&liq?`<button class="mb-b" data-a="assets">🏠 ${T('Vendre / hypothéquer','Sell / mortgage')}</button>`:''}${can?'':`<button class="mb-b danger" data-a="bankrupt">${T('Faire faillite','Declare bankruptcy')}</button>`}</div>`,'debt');
   card.querySelectorAll('[data-a]').forEach(b=>c.listen(b,'click',()=>{closeModal();const a=b.dataset.a;if(a==='assets'){assets(S.turn);const x=G.modal.querySelector('[data-x]');if(x){x.onclick=null;c.listen(x,'click',()=>{closeModal();debt()})}return}human({a})}))}
- function human(x){if(tasks.length)return;const ok=M.act(S,x);if(!ok){panel();return}play(S.ev.splice(0))}
+ function human(x){if(tasks.length||left)return;const ok=M.act(S,x);if(!ok){panel();return}const evs=S.ev.splice(0);push(evs);play(evs)}
 
  // ---- lecture des événements (animations dans l'ordre)
  function run(gen){tasks.push({gen,wait:0});panel()}
@@ -225,39 +233,39 @@ export function massilia(c){
  function* seq(evs){for(const e of evs)yield* show(e)}
  function* show(e){const P=e.p!=null?S.players[e.p]:null;
   switch(e.t){
-   case 'turn':cameraTo(G.toks[e.p].pos);players();if(S.players.filter(q=>q.human).length>1||!P.human)toast(P.human?T(`À toi, ${P.name} !`,`Your turn, ${P.name}!`):T(`Au tour de ${P.name}`,`${P.name}’s turn`));yield .7;break;
+   case 'turn':cameraTo(G.toks[e.p].pos);players();if(ON){if(mine(P)){toast(T('À toi de jouer !','Your turn!'),'good');buzz([30,60,30])}else toast(T(`Au tour de ${P.name}`,`${P.name}’s turn`))}else if(S.players.filter(q=>q.human).length>1||!P.human)toast(P.human?T(`À toi, ${P.name} !`,`Your turn, ${P.name}!`):T(`Au tour de ${P.name}`,`${P.name}’s turn`));yield .7;break;
    case 'dice':cameraTo(G.toks[e.p].pos);rollDice(e.d);yield 1.05;if(e.d[0]===e.d[1]&&!e.jail){SFX.double();say(e.p,'double');toast(T('Double !','Doubles!'),'good')}yield .25;break;
    case 'move':{hideDice();const n=Math.abs(e.steps),dir=Math.sign(e.steps)||1;if(n>12&&e.steps<0){hop(e.p,e.to,.6,90);SFX.hop();yield .6;break}
     for(let k=1;k<=n;k++){const to=((e.from+dir*k)%40+40)%40;hop(e.p,to,.2);cameraTo(to);SFX.hop();yield .2}placeTokens();yield .15;break}
    case 'go':floatMoney(e.p,e.amount);SFX.go();syncMoney();toast(X(QUIPS.go[0]),'good');say(e.p,'go');yield .5;break;
    case 'land':pulse(e.i);yield .25;break;
-   case 'buy':SFX.cash();refreshBoard();floatMoney(e.p,-e.price);syncMoney();say(e.p,'buy');if(!P.human)toast(T(`${P.name} achète ${X(SQUARES[e.i].name)}`,`${P.name} buys ${X(SQUARES[e.i].name)}`));yield .9;break;
-   case 'pass':if(!P.human)toast(T(`${P.name} passe son tour sur ${X(SQUARES[e.i].name)}`,`${P.name} skips ${X(SQUARES[e.i].name)}`));yield .4;break;
+   case 'buy':SFX.cash();refreshBoard();floatMoney(e.p,-e.price);syncMoney();say(e.p,'buy');if(!local(P))toast(T(`${P.name} achète ${X(SQUARES[e.i].name)}`,`${P.name} buys ${X(SQUARES[e.i].name)}`));yield .9;break;
+   case 'pass':if(!local(P))toast(T(`${P.name} passe son tour sur ${X(SQUARES[e.i].name)}`,`${P.name} skips ${X(SQUARES[e.i].name)}`));yield .4;break;
    case 'pay':{if(e.from!=null)floatMoney(e.from,-e.amount);if(e.to!=null)floatMoney(e.to,e.amount);syncMoney();
     if(e.reason==='rent'){SFX.coins();say(e.from,'pay');setTimeout(()=>say(e.to,'rent'),700/SPEED());toast(T(`Loyer : ${fmt(e.amount)} pour ${S.players[e.to].name}`,`Rent: ${fmt(e.amount)} to ${S.players[e.to].name}`))}
     else if(e.reason==='tax'){SFX.pay();toast(`${X(SQUARES[e.i].name)} : −${fmt(e.amount)}`,'bad')}else SFX.coins();yield .8;break}
    case 'debt':yield .2;break;
-   case 'card':{const card=DECKS[e.deck][e.idx];(e.deck==='mistral'?SFX.mistral:SFX.gossip)();SFX.card();showCard(e.deck,card,P);const until=performance.now();yield P.human?'modal':2.6;if(!P.human)closeModal();yield .2;break}
+   case 'card':{const card=DECKS[e.deck][e.idx];(e.deck==='mistral'?SFX.mistral:SFX.gossip)();SFX.card();showCard(e.deck,card,P);yield local(P)?'modal':2.6;if(!local(P))closeModal();yield .2;break}
    case 'jail':SFX.jail();say(e.p,'jail');if(e.why==='three')toast(X(QUIPS.three[0]),'bad');else toast(T(`${P.name} part en garde à vue !`,`${P.name} is off to Les Baumettes!`),'bad');hop(e.p,JAIL,.7,140);cameraTo(JAIL);yield .8;placeTokens();players();yield .3;break;
    case 'free':if(e.how==='double')toast(T('Double : libéré !','Doubles: free!'),'good');else if(e.how==='card')toast(T('« Je connais quelqu’un » : libéré !','“I know someone”: free!'),'good');else toast(T('Amende payée : libéré.','Fine paid: free.'));SFX.pay();syncMoney();placeTokens();yield .5;break;
-   case 'build':SFX.build();refreshBoard();syncMoney();if(!P.human)toast(T(`${P.name} construit sur ${X(SQUARES[e.i].name)}`,`${P.name} builds on ${X(SQUARES[e.i].name)}`));pulse(e.i);yield .6;break;
+   case 'build':SFX.build();refreshBoard();syncMoney();if(!local(P))toast(T(`${P.name} construit sur ${X(SQUARES[e.i].name)}`,`${P.name} builds on ${X(SQUARES[e.i].name)}`));pulse(e.i);yield .6;break;
    case 'sell':case 'mortgage':case 'unmortgage':SFX.coins();refreshBoard();syncMoney();yield .4;break;
    case 'broke':SFX.broke();say(e.p,'broke');toast(T(`${P.name} fait faillite. Peuchère…`,`${P.name} goes bankrupt. Oh dear…`),'bad');refreshBoard();syncMoney();placeTokens();yield 1.8;break;
    case 'trade':SFX.cash();refreshBoard();syncMoney();yield .5;break;
    case 'quip':toast(X(QUIPS[e.k][0]));yield .6;break;
    case 'over':over=true;yield* ending();break}}
  function pulse(i){const sq=G.board.querySelector(`.mb-sq[data-i="${i}"]`);if(!sq)return;sq.classList.remove('pulse');void sq.offsetWidth;sq.classList.add('pulse')}
- function showCard(deck,card,P){const card2=modal(`<div class="mb-flip ${deck}"><div class="mb-cardin"><div class="mb-cfront"><i>${deck==='mistral'?'🌬️':'💬'}</i><b>${X(SQUARES[deck==='mistral'?7:2].name)}</b></div><div class="mb-cback"><small>${X(SQUARES[deck==='mistral'?7:2].name)}</small><p>${X(card.text)}</p>${P.human?`<button class="mb-b primary">OK</button>`:`<span class="mb-small">${esc(P.name)}</span>`}</div></div></div>`,'cardm');
+ function showCard(deck,card,P){const card2=modal(`<div class="mb-flip ${deck}"><div class="mb-cardin"><div class="mb-cfront"><i>${deck==='mistral'?'🌬️':'💬'}</i><b>${X(SQUARES[deck==='mistral'?7:2].name)}</b></div><div class="mb-cback"><small>${X(SQUARES[deck==='mistral'?7:2].name)}</small><p>${X(card.text)}</p>${local(P)?`<button class="mb-b primary">OK</button>`:`<span class="mb-small">${esc(P.name)}</span>`}</div></div></div>`,'cardm');
   requestAnimationFrame(()=>card2.querySelector('.mb-flip').classList.add('turn'));const ok=card2.querySelector('button');if(ok)c.listen(ok,'click',()=>closeModal())}
- function* ending(){clearRun('massilia');const w=S.winner!=null?S.players[S.winner]:null;SFX.win();
+ function* ending(){if(!ON)clearRun('massilia');const w=S.winner!=null?S.players[S.winner]:null;SFX.win();
   const rank=[...S.players].sort((a,b)=>(a.out?-1:0)-(b.out?-1:0)||M.netWorth(S,b)-M.netWorth(S,a));
-  modal(`<div class="mb-win"><div class="mb-confetti">${'🎉🥖🐟⚽🌞🥃'.repeat(4).match(/./gu).map((e,i)=>`<i style="left:${(i*37)%100}%;animation-delay:${(i%7)*.2}s">${e}</i>`).join('')}</div><h3>${w?`${TOKEN_SVG[w.token]} ${esc(w.name)}`:''}</h3><p>${w?(w.human?T('Tu es le roi du Vieux-Port !','You are the king of the Old Port!'):T('remporte la partie. On dira que tu as laissé gagner.','wins the game. Let’s say you let them win.')):''}</p>
+  modal(`<div class="mb-win"><div class="mb-confetti">${'🎉🥖🐟⚽🌞🥃'.repeat(4).match(/./gu).map((e,i)=>`<i style="left:${(i*37)%100}%;animation-delay:${(i%7)*.2}s">${e}</i>`).join('')}</div><h3>${w?`${TOKEN_SVG[w.token]} ${esc(w.name)}`:''}</h3><p>${w?(local(w)?T('Tu es le roi du Vieux-Port !','You are the king of the Old Port!'):ON?T('remporte la partie. Le Vieux-Port a un nouveau patron.','wins the game. The Old Port has a new boss.'):T('remporte la partie. On dira que tu as laissé gagner.','wins the game. Let’s say you let them win.')):''}</p>
    <ol>${rank.map(p=>`<li>${esc(p.name)} <b>${p.out?T('faillite','bankrupt'):fmt(M.netWorth(S,p))}</b></li>`).join('')}</ol></div>`,'win');yield 3.2;closeModal();
-  const humans=S.players.filter(p=>p.human),best=humans.sort((a,b)=>M.netWorth(S,b)-M.netWorth(S,a))[0],won=!!(w&&w.human);
+  const humans=S.players.filter(local),best=humans.sort((a,b)=>M.netWorth(S,b)-M.netWorth(S,a))[0],won=!!(w&&local(w));
   const text=w?T(`${w.name} gagne la partie !`,`${w.name} wins the game!`)+(best?`\n${T('Ta fortune','Your fortune')} : ${fmt(best.out?0:M.netWorth(S,best))}`:''):'';
   c.finish(won,best&&!best.out?Math.round(M.netWorth(S,best)):0,text,{reward:won?450:150,title:won?T('Bravo, roi du Vieux-Port !','Well done, king of the Old Port!'):T('Partie terminée','Game over'),actions:[[T('Nouvelle partie','New game'),()=>c.relaunch(null)],[T('Tous les jeux','All games'),null]]})}
  function* introSeq(){camMode='overview';toast(T('Bienvenue à Marseille ! Ici, tout le monde a un cousin dans l’immobilier.','Welcome to Marseille! Here, everyone has a cousin in real estate.'));yield 2.4;camMode='follow';yield .4}
- function save(){if(!S||over||S.phase==='over')return;saveRun('massilia',{level:0,round:S.round,state:M.snapshot(S)})}
+ function save(){if(ON||!S||over||S.phase==='over')return;saveRun('massilia',{level:0,round:S.round,state:M.snapshot(S)})}
 
  // ---- boucle : animations, puis tour de l'ordinateur
  function aiStep(){const p=cur();if(p.human||S.phase==='over')return;
@@ -265,12 +273,40 @@ export function massilia(c){
    if(B.human){if((lastAsk[B.id]||-9)<S.turnCount-6){lastAsk[B.id]=S.turnCount;S.ev.length=0;askHuman(t,()=>{panel()});return}}
    else if(M.aiAccepts(S,t)){M.doTrade(S,t);toast(T(`${p.name} et ${B.name} font affaire`,`${p.name} and ${B.name} make a deal`));play(S.ev.splice(0));return}}}
   const a=M.aiAction(S);if(!a)return;M.act(S,a);play(S.ev.splice(0))}
- if(c.duel?.resume&&savedRun('massilia')?.state)start(savedRun('massilia').state,false);else setup();
+ // ---- en ligne : envoi après chaque action, relevé régulier, départ d'un joueur
+ // tous les téléphones partent du même tirage (graine + ordre des joueurs donnés par le serveur)
+ function engineFrom(st){if(st.engine){const E=JSON.parse(JSON.stringify(st.engine));E.ev=[];return E}
+  const E=M.newGame({players:st.players.map((p,i)=>({name:String(p.name||'?').slice(0,14),token:TOKENS[i%TOKENS.length].id,human:true})),quick:st.quick!==false,seed:st.seed|0});
+  E.players.forEach((p,i)=>p.pid=st.players[i].id);E.ev=[];return E}
+ const trimHist=h=>{h=h.slice(-8);while(h.length>1&&JSON.stringify(h).length>14000)h.shift();return h};
+ function push(evs){if(!ON||left)return;const snap=M.snapshot(S),end=S.phase==='over',next=end?null:cur().pid;inflight++;
+  sending=sending.then(async()=>{const st={kind:'massilia',v:1,players:view.state.players,seed:view.state.seed,quick:view.state.quick,engine:snap,nextThrower:next,hist:trimHist([...(view.state.hist||[]),{n:knownPly+1,ev:evs}])};
+   try{view=await online.partyThrow(view.id,knownPly,st,end?{winner:null}:null);knownPly=view.ply}
+   catch(e){toast(T('Action non envoyée : ','Move not sent: ')+e.message,'bad');await resync()}
+   finally{inflight--}})}
+ async function resync(){let v;try{v=await online.getParty(view.id)}catch{return}view=v;knownPly=v.ply;if(v.status!=='active'&&v.state?.engine?.phase!=='over')return abandoned(v.state?.msg);tasks=[];closeModal();start(engineFrom(v.state),false)}
+ async function poll(){if(!ON||polling||inflight||left||over&&S?.phase==='over')return;polling=true;let v;try{v=await online.getParty(view.id)}catch{polling=false;return}polling=false;
+  if(inflight||tasks.length||left)return;
+  if(v.status!=='active'&&v.state?.engine?.phase!=='over'&&!over){view=v;return abandoned(v.state?.msg)}
+  if(v.ply<=knownPly)return;
+  const batches=(v.state?.hist||[]).filter(h=>h.n>knownPly),gap=!batches.length||batches[0].n!==knownPly+1;view=v;knownPly=v.ply;
+  closeModal();S=engineFrom(v.state);
+  if(gap){refreshBoard();syncMoney();placeTokens(true);players();panel();if(S.phase==='over')run(ending());return}
+  play(batches.flatMap(h=>h.ev))}
+ if(ON)c.every(poll,2000);
+ function abandoned(msg){if(over)return;over=true;closeModal();tasks=[];if(G)panel();
+  c.finish(false,0,msg||T('La partie a été arrêtée.','The game was stopped.'),{reward:50,noRecord:true,title:T('Partie terminée','Game over'),actions:[[T('Tous les jeux','All games'),null],[T('Tous les jeux','All games'),null]]})}
+ function leaveParty(){c.dialog(T('Quitter la partie ?','Leave the game?'),T('La partie s’arrête pour tout le monde.','The game ends for everyone.'),T('Quitter','Leave'),async()=>{left=true;try{await sending;await online.partyLeave(view.id)}catch(e){left=false;toast(e.message,'bad');return}
+   over=true;c.finish(false,0,T('Tu as quitté la partie.','You left the game.'),{reward:0,noRecord:true,title:T('Partie quittée','Game left')})},T('Rester','Stay'),()=>{})}
+
+ if(window.__mbTest)window.__mb={get S(){return S},get tasks(){return tasks.length},get ply(){return knownPly},M};
+ if(ON){const st=view.state||{};if(view.status!=='active'&&st.engine?.phase!=='over'){S=null;setTimeout(()=>abandoned(st.msg),0)}else{start(engineFrom(st),!st.engine);if(S.phase==='over'){tasks=[];run(ending())}}}
+ else if(c.duel?.resume&&savedRun('massilia')?.state)start(savedRun('massilia').state,false);else setup();
  return {update(dt){if(!G)return;dt=Math.min(dt,.05);applyCam(dt);drawTokens(dt);
    const t=tasks[0];if(t){if(t.wait==='modal'){if(!busyModal)t.wait=0}else if(t.wait>0)t.wait-=dt*SPEED();
     if(t.wait!=='modal'&&t.wait<=0){const r=t.gen.next();if(r.done){tasks.shift();if(!tasks.length){placeTokens();save();panel()}}else t.wait=r.value}return}
    if(over||busyModal||S.phase==='over')return;
    if(!cur().human){thinkT+=dt*SPEED();if(thinkT>.55){thinkT=0;aiStep()}}},
-  destroy(){setMusicTheme(null)},
+  destroy(){setMusicTheme(null);if(ON&&(over||S?.phase==='over'))online.hideParty(view.id).catch(()=>{})},
   key(k){if(k===' '||k==='Enter'){const b=G?.panel.querySelector('.mb-b.primary:not([disabled])');if(b&&!busyModal)b.click()}}};
 }
