@@ -76,7 +76,7 @@ export function breakout(c){const [canvas,g]=c.canvas(450);
   for(const b of bricks)if(b.kind==='bomber'&&b.hp>0){b.timer-=dt;if(b.timer<=0){b.timer=Math.max(1.6,6-level*.18)+Math.random()*2.5;drops.push({x:b.x+BW/2,y:b.y+BH,type:'spike'})}}
   for(const d of drops){d.y+=(d.type==='spike'?150+level*4:125)*dt;if(d.y>400&&d.y<428&&Math.abs(d.x-paddle)<pw()/2+10){d.y=999;
    if(d.type==='spike'){if(loseLife())return}
-   else{c.tone(true);burst(d.x,405,'#f2b62c',6,120);if(d.type==='coin')c.collect(10);if(d.type==='life')lives=Math.min(5,lives+1);if(d.type==='fire')fire=1.5;if(d.type==='multi'){const o=balls[0];if(o)for(const vx of [-140,140])if(balls.length<9)balls.push({x:o.x,y:o.y,vx,vy:-speed()})}}}}
+   else{c.tone(true);burst(d.x,405,'#f2b62c',6,120);if(d.type==='coin')c.collect(10);if(d.type==='life')lives=Math.min(5,lives+1);if(d.type==='fire')fire=3;if(d.type==='multi'){const o=balls[0];if(o)for(const vx of [-140,140])if(balls.length<9)balls.push({x:o.x,y:o.y,vx,vy:-speed()})}}}}
   drops=drops.filter(d=>d.y<470);
   const steps=Math.ceil(dt/.004),step=dt/steps;
   for(let k=0;k<steps;k++){for(const b of balls){const oldX=b.x,oldY=b.y;b.x+=b.vx*step;b.y+=b.vy*step;

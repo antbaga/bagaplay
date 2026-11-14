@@ -1,3 +1,16 @@
+# 5.9.0 — 14 novembre 2026
+
+- Nouveau jeu : **Éclate-Bulles**, un jeu de tir de bulles avec 150 niveaux.
+  - Carte des niveaux en 6 mondes de 25 niveaux (Forêt de nuit, Lagon, Cimes enneigées, Désert doré, Fête foraine, Espace), jusqu’à 3 étoiles par niveau, progression sauvegardée.
+  - On glisse pour viser (pointillés qui rebondissent sur les murs et bulle fantôme à l’arrivée), on relâche pour tirer ; toucher la bulle suivante l’échange.
+  - Trois objectifs : éclater toutes les bulles, libérer les poussins, dégager la rangée du haut. Certains niveaux font descendre le plafond tous les quelques tirs.
+  - Bulles spéciales introduites au fil des niveaux : pierre (ne tombe que décrochée), glace (fond quand on éclate à côté), bombe, éclair (vide la rangée), étoile (éclate toute une couleur).
+  - Boosters : arc-en-ciel, bombe, boule de feu (traverse tout), +5 bulles ; on en gagne en finissant les niveaux.
+  - Bulles restantes en fin de niveau transformées en bonus de points. En fin de niveau : « Niveau suivant » ou « Réessayer », et retour à la carte.
+  - Nombre de tirs et seuils d’étoiles calibrés niveau par niveau avec un robot de test.
+- Casse-briques : la balle de feu dure 3 secondes (au lieu de 1,5).
+- Tests : 150 niveaux valides, robot qui gagne un échantillon de niveaux avec les tirs donnés, éclatement et chute, bulles spéciales, plafond qui descend.
+
 # 5.8.1 — 14 novembre 2026
 
 - Fuis l’URSSAF : le virage part dès qu’on entre dans le carrefour (avant, il attendait d’en atteindre le centre, d’où une petite latence) et la caméra suit plus vite.
