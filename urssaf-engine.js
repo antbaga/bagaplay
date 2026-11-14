@@ -2,7 +2,7 @@
 // Une piste de ramettes de papier posées sur un bureau, 3 couloirs, des virages à 90° (on ne repart jamais
 // vers l'arrière, donc la piste ne se recoupe pas), des fournitures de bureau en obstacles, des agents qui suivent.
 // Unités : 1 = la taille du petit personnage. s = distance le long du segment, x = décalage latéral (droite > 0).
-export const LW=1.25,TW=4.2,REAM=2.4,JUMP_V=7.6,GRAV=25,SLIDE_T=.8,HERO_H=1,SLIDE_H=.45,START_LIVES=3,MAX_LIVES=5;
+export const LW=1.25,TW=4.2,REAM=2.4,JUMP_V=8.2,GRAV=22,SLIDE_T=.8,HERO_H=1,SLIDE_H=.45,START_LIVES=3,MAX_LIVES=5;
 export const DIRS=[[0,-1],[1,0],[0,1],[-1,0]];
 export const rightOf=d=>[-DIRS[d][1],DIRS[d][0]];
 export function rng(seed){let a=seed>>>0||1;return()=>{a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
@@ -147,8 +147,9 @@ export function step(G,dt,input=[]){G.t+=dt;const p=G.p,ev=G.events;
  p.state=p.y>.001?'air':'run';p.slide=Math.max(0,p.slide-dt);
  // virages : le geste est retenu en approche, le virage se fait au centre du carrefour
  const J=junction(seg);
- if(G.power.jet>0&&p.s>=J-.3&&!G.turnQ)G.turnQ=seg.turn==='T'?(G.rnd()<.5?'L':'R'):seg.turn;
- if(G.turnQ&&p.s>=J-.3){doTurn(G,G.turnQ);return}
+ if(G.power.jet>0&&p.s>=J-TW/2&&!G.turnQ)G.turnQ=seg.turn==='T'?(G.rnd()<.5?'L':'R'):seg.turn;
+ // le virage part dès qu'on entre dans le carrefour (pas d'attente jusqu'au centre)
+ if(G.turnQ&&p.s>=J-TW/2+.15){doTurn(G,G.turnQ);return}
  if(p.s>seg.L-.05){p.vy=Math.min(p.vy,0);loseLife(G,'fall');return}
  if(G.turnQ&&p.s<J-9)G.turnQ=null;
  collide(G,seg);

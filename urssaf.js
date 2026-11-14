@@ -59,12 +59,12 @@ export function urssaf(c){
  function hint(id,text){if(!tuto||S.hint[id])return;S.hint[id]=1;const h=$('.ur-tuto');h.textContent=text;h.hidden=false;h.classList.remove('show');void h.offsetWidth;h.classList.add('show');S.hintT=2.2}
  lives();stats();
 
- // ---- entrées : glisser (plusieurs gestes possibles sans lever le doigt), flèches du clavier
+ // ---- entrées : un geste par appui (on relève le doigt pour enchaîner), flèches du clavier
  const queue=[];let start=null,moved=false;
  c.listen(wrap,'pointerdown',e=>{if(e.target.closest('button'))return;start=[e.clientX,e.clientY];moved=false;wrap.setPointerCapture?.(e.pointerId)});
- c.listen(wrap,'pointermove',e=>{if(!start)return;const dx=e.clientX-start[0],dy=e.clientY-start[1];if(Math.max(Math.abs(dx),Math.abs(dy))<26)return;moved=true;
-  queue.push(Math.abs(dx)>Math.abs(dy)?dx>0?'right':'left':dy>0?'down':'up');start=[e.clientX,e.clientY]});
- c.listen(wrap,'pointerup',()=>{if(start&&!moved&&S.introOn)skip();start=null});c.listen(wrap,'pointercancel',()=>start=null);
+ c.listen(wrap,'pointermove',e=>{if(!start||moved)return;const dx=e.clientX-start[0],dy=e.clientY-start[1];if(Math.max(Math.abs(dx),Math.abs(dy))<36)return;moved=true;
+  queue.push(Math.abs(dx)>Math.abs(dy)?dx>0?'right':'left':dy>0?'down':'up')});
+ c.listen(wrap,'pointerup',()=>{if(start&&!moved&&S.introOn)skip();start=null;moved=false});c.listen(wrap,'pointercancel',()=>start=null);
  c.listen($('.ur-skip'),'click',skip);
  function skip(){if(S.introOn&&S.intro<5.35){S.intro=5.35}}
  function begin(){S.introOn=false;hud.classList.remove('intro');S.started=true;U.start(G);$('.ur-title').classList.add('gone');$('.ur-skip').hidden=true;SFX.whoosh();
@@ -95,7 +95,7 @@ export function urssaf(c){
  function camera(){
   const p=G.p,seg=G.segs[0],hw=U.heroWorld(G),hy=Math.max(-U.REAM,p.y),HW=[hw[0],hy,hw[1]];
   // caméra
-  const segYaw=yawOf(seg.d);S.camYaw=angLerp(S.camYaw,segYaw,Math.min(1,S.dt*5));const f=fwdOf(S.camYaw),r=rightOfYaw(S.camYaw);
+  const segYaw=yawOf(seg.d);S.camYaw=angLerp(S.camYaw,segYaw,Math.min(1,S.dt*8));const f=fwdOf(S.camYaw),r=rightOfYaw(S.camYaw);
   let eye,tgt,k=Math.min(1,S.dt*7);
   if(S.introOn){const H0=U.worldOf(G.segs[0],3,0),t=S.intro;
    if(t<2.6){const a=-1.15+t*.28,rr=6.4;eye=[H0[0]-f[0]*Math.cos(a)*rr+r[0]*Math.sin(a)*rr,3.2-t*.15,H0[1]-f[1]*Math.cos(a)*rr+r[1]*Math.sin(a)*rr];tgt=[H0[0],.55,H0[1]];k=S.camEye?Math.min(1,S.dt*2.5):1}

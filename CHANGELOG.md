@@ -1,3 +1,9 @@
+# 5.8.1 — 14 novembre 2026
+
+- Fuis l’URSSAF : le virage part dès qu’on entre dans le carrefour (avant, il attendait d’en atteindre le centre, d’où une petite latence) et la caméra suit plus vite.
+- Sauts plus hauts (+30 %) et plus longs (+20 % de temps en l’air).
+- Un seul geste par appui : il faut relever le doigt pour enchaîner un deuxième déplacement, et le geste doit être un peu plus long (36 px au lieu de 26). Fini les décalages de deux couloirs d’un coup quand on veut se recentrer.
+
 # 5.8.0 — 14 novembre 2026
 
 - Nouveau jeu : **Fuis l’URSSAF**, une course sans fin façon Temple Run, en 3D voxel et en miniature sur un bureau.
