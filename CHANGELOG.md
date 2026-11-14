@@ -1,3 +1,14 @@
+# 5.8.0 — 14 novembre 2026
+
+- Nouveau jeu : **Fuis l’URSSAF**, une course sans fin façon Temple Run, en 3D voxel et en miniature sur un bureau.
+  - Intro animée (les agents de l’URSSAF arrivent pour un contrôle, on prend la fuite), passable d’un toucher ; plus courte quand on rejoue dans la même session.
+  - On court sur des ramettes de papier (feuille Seyès, marge rouge) : 3 couloirs, virages au bout des feuilles, trous entre les ramettes et trous de perforatrice.
+  - Obstacles : crayon et trombones (sauter), agrafeuse posée sur deux piles de post-it (glisser dessous), règle sur des gommes (sauter ou glisser), agrafeuse, paquet de chewing-gum, taille-crayon, pile de post-it, calculatrice, tasse de café (esquiver), tampon « REFUSÉ » qui tape, post-it, chewing-gum mâché et tache d’encre (on trébuche : au deuxième faux pas rapproché, les agents nous attrapent).
+  - Bonus « paradis fiscal » : Îles Caïmans (aimant à pièces), lingot suisse (points ×2), société écran (encaisse un choc), jet privé (on survole tout), valise de billets (+25 pièces). Les vies sont des subventions de l’État : 3 au départ, 5 au maximum.
+  - Contrôles : glisser ← → (couloir ou virage), ↑ (sauter), ↓ (glisser) ; flèches et espace au clavier. Conseils affichés pendant les 3 premières parties.
+  - La vitesse augmente avec la distance ; la définition baisse toute seule si l’appareil peine.
+- Tests : génération de la piste (jamais de croisement, abords des virages dégagés, trous toujours franchissables), un robot qui court 3 km sur plusieurs graines, virage raté, fin de partie, bonus.
+
 # 5.7.5 — 13 novembre 2026
 
 - 2048 : la partie en cours est sauvegardée à chaque coup. Si on quitte le jeu (retour aux jeux, bouton d'accueil du téléphone, app fermée par le système), on la retrouve en revenant : reprise automatique à la réouverture de l'app, sinon la carte du jeu propose « Reprendre » ou « Nouvelle partie ». La sauvegarde est effacée en fin de partie (2048 atteint ou plateau bloqué) ; « Recommencer » repart d'une partie neuve.
