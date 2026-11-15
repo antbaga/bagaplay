@@ -107,17 +107,18 @@ export function massilia(c){
   G.view=G.root.querySelector('.mb-view');G.board=G.root.querySelector('.mb-board');G.tokens=G.root.querySelector('.mb-tokens');G.dice=[...G.root.querySelectorAll('.mb-die')];G.panel=G.root.querySelector('.mb-panel');G.modal=G.root.querySelector('.mb-modal');
   G.dice.forEach(d=>{d.innerHTML=[1,2,3,4,5,6].map(f=>`<div class="mb-face f${f}">${[1,2,3,4,5,6,7,8,9].map(k=>`<i class="${DICE_PIPS[f].includes(k)?'on':''}"></i>`).join('')}</div>`).join('');d.dataset.v='1'});
   G.toks=S.players.map(p=>{const t=el('div','mb-tok',`<div class="mb-tokin" style="--c:${TOKENS.find(x=>x.id===p.token).color}">${TOKEN_SVG[p.token]}</div><div class="mb-tokshadow"></div>`);G.tokens.append(t);return {el:t,pos:p.pos,x:0,y:0,z:0,hop:null}});
-  G.cam={x:SIZE/2,y:SIZE/2,rz:0,tilt:42,z:.3};G.money=S.players.map(p=>p.money);
-  c.listen(G.root.querySelector('.mb-cam'),'click',()=>{camMode=camMode==='follow'?'overview':'follow';SFX.click();G.root.querySelector('.mb-cam').classList.toggle('on',camMode==='overview')});
+  G.cam={x:SIZE/2,y:SIZE/2,rz:0,tilt:42,z:.3};G.user={rz:0,tilt:0,z:1,px:0,py:0,last:0,drag:false};G.money=S.players.map(p=>p.money);
+  c.listen(G.root.querySelector('.mb-cam'),'click',()=>{camMode=camMode==='follow'?'overview':'follow';Object.assign(G.user,{rz:0,tilt:0,z:1,px:0,py:0});SFX.click();G.root.querySelector('.mb-cam').classList.toggle('on',camMode==='overview')});
   c.listen(G.root.querySelector('.mb-fast'),'click',()=>{fast=!fast;SFX.click();G.root.querySelector('.mb-fast').classList.toggle('on',fast)});
   if(ON)c.listen(G.root.querySelector('.mb-quit'),'click',leaveParty);
   G.board.querySelectorAll('.mb-sq').forEach(sq=>c.listen(sq,'click',()=>{if(!busyModal&&!tasks.length)propCard(+sq.dataset.i)}));
-  players();refreshBoard();placeTokens(true);
+  players();refreshBoard();placeTokens(true);diceGesture();viewGesture();
   if(isNew){run(introSeq())}else{run(function*(){toast(T('Reprise de la partie','Game resumed'));yield .8}())}
   cameraTo(cur().pos)}
  const cur=()=>M.cur(S);
  function players(){const box=G.root.querySelector('.mb-players');box.innerHTML=S.players.map((p,i)=>`<button class="mb-pl${p.out?' out':''}${i===S.turn?' on':''}" data-i="${i}" style="--c:${TOKENS.find(t=>t.id===p.token).color}"><span class="mb-plt">${TOKEN_SVG[p.token]}</span><span class="mb-pln">${esc(p.name)}</span><b class="mb-plm">${p.out?T('Faillite','Bankrupt'):fmt(G.money[i])}</b>${p.jail?'<i class="mb-pljail">🚔</i>':''}${p.cards.length?'<i class="mb-plcard">🎟️</i>':''}<span class="mb-bubble"></span></button>`).join('');
-  box.querySelectorAll('.mb-pl').forEach(b=>c.listen(b,'click',()=>{if(!busyModal&&!tasks.length)assets(+b.dataset.i,true)}))}
+  box.querySelectorAll('.mb-pl').forEach(b=>c.listen(b,'click',()=>{if(!busyModal&&!tasks.length)assets(+b.dataset.i,true)}));
+  const now=performance.now();for(const k in G.chipFx||{}){const f=G.chipFx[k];if(f.until>now)box.querySelector(`.mb-pl[data-i="${k}"]`)?.classList.add(f.cls)}}
  function refreshBoard(){for(let i=0;i<SQUARES.length;i++){const sq=G.board.querySelector(`.mb-sq[data-i="${i}"]`);if(!sq)continue;const o=S.own[i];
   sq.classList.toggle('mort',!!S.mort[i]);const own=sq.querySelector('.mb-own');if(own){own.style.background=o!=null?TOKENS.find(t=>t.id===S.players[o].token).color:'transparent';own.classList.toggle('on',o!=null)}
   const hs=sq.querySelector('.mb-houses');if(hs){const h=S.houses[i]||0,want=h===5?'villa':String(h);if(hs.dataset.h!==want){hs.dataset.h=want;hs.innerHTML=h===5?cube('villa'):Array.from({length:h},()=>cube('cab')).join('')}}}}
@@ -129,10 +130,24 @@ export function massilia(c){
   if(camMode==='overview'||focus==null)return {x:SIZE/2,y:SIZE/2,rz:G.cam.rz-((G.cam.rz%360)+360)%360,tilt:36,z:fit*1.0};
   const side=Math.floor(focus/10)%4,[x,y]=spot(focus,1);let rz=-side*90;while(rz-G.cam.rz>180)rz-=360;while(rz-G.cam.rz<-180)rz+=360;
   const ix=SIZE/2+(x-SIZE/2)*.9,iy=SIZE/2+(y-SIZE/2)*.9;return {x:ix,y:iy,rz,tilt:55,z:fit*2.05}}
- function applyCam(dt){const t=camTarget(),k=Math.min(1,dt*3.2*SPEED());for(const key of ['x','y','rz','tilt','z'])G.cam[key]+=(t[key]-G.cam[key])*k;
+ function applyCam(dt){const t=camTarget(),U=G.user,k=Math.min(1,dt*3.2*SPEED());t.rz+=U.rz;t.tilt=Math.max(12,Math.min(78,t.tilt+U.tilt));t.z*=U.z;
+  for(const key of ['x','y','rz','tilt','z'])G.cam[key]+=(t[key]-G.cam[key])*(U.drag&&key!=='x'&&key!=='y'?1:k);
+  if(!U.drag&&performance.now()-U.last>2500){const f=Math.min(1,dt*2);U.px-=U.px*f;U.py-=U.py*f}
   const vw=G.view.clientWidth,vh=G.view.clientHeight,cm=G.cam;
-  G.board.style.transform=`translate(${vw/2}px,${vh*(camMode==='overview'||focus==null?.52:.64)}px) rotateX(${cm.tilt}deg) rotateZ(${cm.rz}deg) scale(${cm.z}) translate(${-cm.x}px,${-cm.y}px)`;
+  G.board.style.transform=`translate(${vw/2+U.px}px,${vh*(camMode==='overview'||focus==null?.52:.64)+U.py}px) rotateX(${cm.tilt}deg) rotateZ(${cm.rz}deg) scale(${cm.z}) translate(${-cm.x}px,${-cm.y}px)`;
   G.board.style.setProperty('--rz',`${-cm.rz}deg`);G.board.style.setProperty('--tilt',`${-cm.tilt}deg`)}
+ // ---- la vue se manipule aux doigts : glisser = tourner / incliner, pincer = zoomer, deux doigts = déplacer
+ function viewGesture(){const v=G.view,pts=new Map(),U=G.user;let moved=0,pinch=null;
+  const mid=()=>{const a=[...pts.values()];return {x:(a[0].x+a[1].x)/2,y:(a[0].y+a[1].y)/2,d:Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y)}};
+  c.listen(v,'pointerdown',e=>{pts.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pts.size===1)moved=0;if(pts.size===2)pinch=mid();U.drag=true;U.last=performance.now()});
+  c.listen(v,'pointermove',e=>{const p=pts.get(e.pointerId);if(!p)return;const dx=e.clientX-p.x,dy=e.clientY-p.y;
+   if(pts.size===1){moved+=Math.abs(dx)+Math.abs(dy);if(moved>8){if(!v.hasPointerCapture?.(e.pointerId))v.setPointerCapture?.(e.pointerId);U.rz+=dx*.32;U.tilt=Math.max(-40,Math.min(30,U.tilt-dy*.22))}p.x=e.clientX;p.y=e.clientY}
+   else if(pts.size===2){p.x=e.clientX;p.y=e.clientY;const m=mid();moved+=20;if(pinch&&pinch.d>10){U.z=Math.max(.55,Math.min(2.6,U.z*m.d/pinch.d));U.px+=m.x-pinch.x;U.py+=m.y-pinch.y}pinch=m}
+   U.last=performance.now()});
+  const end=e=>{pts.delete(e.pointerId);if(pts.size<2)pinch=null;if(!pts.size)U.drag=false;U.last=performance.now()};
+  c.listen(v,'pointerup',end);c.listen(v,'pointercancel',end);
+  // un glisser ne doit pas ouvrir la fiche de la case sous le doigt
+  v.addEventListener('click',e=>{if(moved>8){e.stopPropagation();e.preventDefault();moved=0}},true)}
  // ---- pions
  function slotOf(pi){const p=S.players[pi];let k=0;for(let j=0;j<pi;j++){const q=S.players[j];if(!q.out&&G.toks[j].pos===G.toks[pi].pos)k++}return k}
  function placeTokens(snap){S.players.forEach((p,i)=>{const tk=G.toks[i];if(tk.hop)return;const [x,y]=spot(tk.pos,slotOf(i),p.jail>0&&tk.pos===JAIL);if(snap){tk.x=x;tk.y=y}tk.tx=x;tk.ty=y;tk.el.classList.toggle('out',p.out)})}
@@ -142,16 +157,46 @@ export function massilia(c){
  function hop(pi,to,d=.22,high){const tk=G.toks[pi],[x0,y0]=[tk.x,tk.y];tk.pos=to;const [x1,y1]=spot(to,slotOf(pi),false);tk.hop={x0,y0,x1,y1,t:0,d,high};tk.tx=x1;tk.ty=y1}
 
  // ---- dés 3D
- function rollDice(d){const box=G.root.querySelector('.mb-dice');box.classList.add('show');SFX.dice();
-  G.dice.forEach((die,k)=>{const [rx,ry]=FACE_ROT[d[k]],sx=360*(2+Math.floor(Math.random()*2)),sy=360*(2+Math.floor(Math.random()*2));die.style.transition='none';die.style.transform=`rotateX(${Math.random()*360}deg) rotateY(${Math.random()*360}deg)`;void die.offsetWidth;
+ function rollDice(d){const box=G.root.querySelector('.mb-dice');box.classList.remove('ready');box.classList.add('show');SFX.dice();const power=G.fling?.power||1;
+  if(G.fling){box.style.transition='none';box.style.setProperty('--fx',G.fling.x+'px');box.style.setProperty('--fy',G.fling.y+'px');void box.offsetWidth;box.style.transition='';G.fling=null}
+  requestAnimationFrame(()=>{box.style.setProperty('--fx','0px');box.style.setProperty('--fy','0px')});buzz([15,40,15,40,25]);
+  G.dice.forEach((die,k)=>{const [rx,ry]=FACE_ROT[d[k]],sx=360*(2+Math.floor(Math.random()*2+power)),sy=360*(2+Math.floor(Math.random()*2+power));die.style.transition='none';die.style.transform=`rotateX(${Math.random()*360}deg) rotateY(${Math.random()*360}deg)`;void die.offsetWidth;
    die.style.transition=`transform ${.9/SPEED()}s cubic-bezier(.2,.9,.3,1.05)`;die.style.transform=`rotateX(${rx+sx}deg) rotateY(${ry+sy}deg)`})}
- const hideDice=()=>G.root.querySelector('.mb-dice').classList.remove('show');
+ const hideDice=()=>G.root.querySelector('.mb-dice').classList.remove('show','ready');
+ // dés prêts à être lancés : ils attendent au milieu de l'écran, on les attrape et on les jette d'un geste
+ function armDice(){const box=G.root.querySelector('.mb-dice');if(box.classList.contains('ready'))return;box.classList.add('show','ready');box.style.setProperty('--fx','0px');box.style.setProperty('--fy','0px');
+  G.dice.forEach((d,k)=>{d.style.transition='transform .4s';d.style.transform=`rotateX(${-25+k*18}deg) rotateY(${35-k*60}deg)`})}
+ function disarmDice(){G?.root.querySelector('.mb-dice')?.classList.remove('ready')}
+ function throwDice(dx,dy,power){const box=G.root.querySelector('.mb-dice');if(!box.classList.contains('ready')||tasks.length||busyModal)return;
+  box.classList.remove('ready');const k=Math.min(3,Math.max(1.6,power*2));G.fling={x:dx*k,y:dy*k,power:Math.min(2,power)};human({a:'roll',d:window.__mbTest&&window.__mbForce||undefined})}
+ function diceGesture(){const box=G.root.querySelector('.mb-dice');let st=null;
+  c.listen(box,'pointerdown',e=>{if(!box.classList.contains('ready'))return;e.stopPropagation();box.setPointerCapture?.(e.pointerId);st={x:e.clientX,y:e.clientY,t:performance.now(),lx:e.clientX,ly:e.clientY,lt:performance.now(),vx:0,vy:0};box.style.transition='none'});
+  c.listen(box,'pointermove',e=>{if(!st)return;e.stopPropagation();const now=performance.now(),dt=Math.max(1,now-st.lt);st.vx=(e.clientX-st.lx)/dt;st.vy=(e.clientY-st.ly)/dt;st.lx=e.clientX;st.ly=e.clientY;st.lt=now;
+   const dx=e.clientX-st.x,dy=e.clientY-st.y;box.style.setProperty('--fx',dx+'px');box.style.setProperty('--fy',dy+'px');G.dice.forEach((d,k)=>{d.style.transition='none';d.style.transform=`rotateX(${-25+k*18-dy*1.4}deg) rotateY(${35-k*60+dx*1.4}deg)`})});
+  const up=e=>{if(!st)return;e.stopPropagation();const dx=e.clientX-st.x,dy=e.clientY-st.y,dist=Math.hypot(dx,dy),speed=Math.hypot(st.vx,st.vy);box.style.transition='';st=null;
+   if(dist<10){throwDice(0,-110,1);return}
+   if(dist<45&&speed<.4){box.style.setProperty('--fx','0px');box.style.setProperty('--fy','0px');return}
+   const n=Math.max(1,dist);throwDice(dx/n*150,dy/n*150,.6+speed)};
+  c.listen(box,'pointerup',up);c.listen(box,'pointercancel',up)}
 
  // ---- petites interfaces : toast, bulles, argent qui vole
  function toast(text,kind=''){const t=G.root.querySelector('.mb-toast');t.textContent=text;t.className='mb-toast show '+kind;clearTimeout(G.toastT);G.toastT=setTimeout(()=>t.classList.remove('show'),2200/SPEED())}
  function say(pi,key){const p=S.players[pi];let line=null;if(p.char!=null){const L=CHARACTERS[p.char].lines[key];if(L)line=L[Math.floor(Math.random()*L.length)]}else if(HUMAN_LINES[key])line=HUMAN_LINES[key][0];if(!line)return;
   const b=G.root.querySelector(`.mb-pl[data-i="${pi}"] .mb-bubble`);if(!b)return;b.textContent=X(line);b.classList.remove('show');void b.offsetWidth;b.classList.add('show');clearTimeout(b._t);b._t=setTimeout(()=>b.classList.remove('show'),2600/SPEED())}
  function floatMoney(pi,amount){const chip=G.root.querySelector(`.mb-pl[data-i="${pi}"]`);if(!chip)return;const f=el('div','mb-float '+(amount>0?'plus':'minus'),(amount>0?'+':'−')+fmt(Math.abs(amount)));chip.append(f);setTimeout(()=>f.remove(),1400)}
+ // paiement : celui qui paie a le seum (nuage, larmes, il tremble), celui qui reçoit kiffe (il saute, ça brille), les pièces volent
+ const SEUM=[['Le seum…','Ugh…'],['Mon PEL !','My savings!'],['Pâtes tout le mois…','Pasta all month…'],['C’est du vol !','This is robbery!'],['Peuchère, ma retraite…','There goes my pension…'],['Aïe aïe aïe…','Ouch ouch ouch…']];
+ const KIFFE=[['Merci patron !','Thanks, boss!'],['Ça paie le pastis !','Drinks are on me!'],['Hé hé hé…','Heh heh heh…'],['Le business, c’est le business','Business is business'],['Trop facile','Too easy'],['Jackpot !','Jackpot!']];
+ function payFx(from,to,amount,reason){if(!G)return;G.root.querySelector('.mb-payfx')?.remove();const pick=a=>X(a[Math.floor(Math.random()*a.length)]);
+  const who=pi=>pi!=null?`<div class="mb-fxtok" style="--c:${TOKENS.find(t=>t.id===S.players[pi].token).color}">${TOKEN_SVG[S.players[pi].token]}</div><b>${esc(S.players[pi].name)}</b>`
+   :reason==='tax'?`<div class="mb-fxtok bank">🏛️</div><b>${T('Le fisc','The taxman')}</b>`:`<div class="mb-fxtok bank">🏦</div><b>${T('La banque','The bank')}</b>`;
+  const coins=Array.from({length:Math.min(14,4+Math.round(amount/40))},(_,k)=>`<i style="--d:${(k*.07).toFixed(2)}s;--h:${30+(k*37)%50}px">🪙</i>`).join('');
+  const fx=el('div','mb-payfx',`<div class="mb-fxside seum">${from!=null||reason!=='go'?'<span class="mb-cloud">🌧️</span>':''}${who(from)}<em class="minus">−${fmt(amount)}</em><small>${from!=null?pick(SEUM):''}</small></div>
+   <div class="mb-coins">${coins}</div><div class="mb-fxside kiffe"><span class="mb-sparkle">✨</span>${who(to)}<em class="plus">+${fmt(amount)}</em><small>${to!=null?pick(KIFFE):''}</small></div>`);
+  fx.style.setProperty('--sp',SPEED());G.root.append(fx);setTimeout(()=>fx.remove(),1600/SPEED());
+  for(const [pi,cls] of [[from,'seum'],[to,'kiffe']]){if(pi==null)continue;const ch=G.root.querySelector(`.mb-pl[data-i="${pi}"]`);(G.chipFx||={})[pi]={cls,until:performance.now()+1500/SPEED()};if(ch){ch.classList.remove('seum','kiffe');void ch.offsetWidth;ch.classList.add(cls);setTimeout(()=>G.root.querySelector(`.mb-pl[data-i="${pi}"]`)?.classList.remove(cls),1500/SPEED())}}
+  if(from!=null){tone(330,300,.22,'sawtooth',.035);tone(300,210,.45,'sawtooth',.035,.22);if(local(S.players[from]))buzz([90,50,90])}
+  if(to!=null){setTimeout(()=>SFX.cash(),450/SPEED());if(local(S.players[to]))buzz([20,30,20,30,40])}}
  function syncMoney(){S.players.forEach((p,i)=>{G.money[i]=p.money});players()}
 
  // ---- modales
@@ -160,7 +205,7 @@ export function massilia(c){
  function rentRows(i){const s=SQUARES[i];if(s.t==='station')return [1,2,3,4].map(n=>`<tr><td>${n} ${T(n>1?'lignes':'ligne',n>1?'lines':'line')}</td><td>${fmt(25*2**(n-1))}</td></tr>`).join('');
   if(s.t==='util')return `<tr><td>${T('Une possédée','One owned')}</td><td>4 × ${T('les dés','dice')}</td></tr><tr><td>${T('Les deux','Both')}</td><td>10 × ${T('les dés','dice')}</td></tr>`;
   const r=M.rentTable(i);return `<tr><td>${T('Loyer','Rent')}</td><td>${fmt(r[0])}</td></tr><tr><td>${T('Quartier complet','Full set')}</td><td>${fmt(r[0]*2)}</td></tr>${[1,2,3,4].map(h=>`<tr><td>${'🏠'.repeat(h)} ${h} ${T(h>1?'cabanons':'cabanon',h>1?'huts':'hut')}</td><td>${fmt(r[h])}</td></tr>`).join('')}<tr><td>🏰 ${T('Villa','Villa')}</td><td>${fmt(r[5])}</td></tr>`}
- function propCard(i,mode=null){const s=SQUARES[i];if(!s.price&&!s.tag)return;const o=S.own[i],grp=s.g?GROUPS[s.g]:null,p=cur();
+ function propCard(i,mode=null,back=null){const s=SQUARES[i];if(!s.price&&!s.tag)return;const o=S.own[i],grp=s.g?GROUPS[s.g]:null,p=cur();
   const head=grp?`<div class="mb-ph" style="background:${grp.color}"><small>${T('Titre de propriété','Title deed')}</small><h3>${X(s.name)}</h3></div>`:`<div class="mb-ph plain"><i>${s.icon}</i><h3>${X(s.name)}</h3></div>`;
   let body=`<p class="mb-tag">${X(s.tag||['',''])}</p>`;
   if(s.price)body+=`<table class="mb-rents">${rentRows(i)}</table><p class="mb-small">${s.t==='prop'?`${T('Cabanon','Hut')} : ${fmt(M.houseCost(i))} · `:''}${T('Hypothèque','Mortgage')} : ${fmt(M.mortgageValue(i))}</p>
@@ -171,13 +216,15 @@ export function massilia(c){
     if(M.canMortgage(S,i))btns+=`<button class="mb-b" data-a="mortgage">${T('Hypothéquer','Mortgage')} · +${fmt(M.mortgageValue(i))}</button>`;if(M.canUnmortgage(S,i))btns+=`<button class="mb-b" data-a="unmortgage">${T('Lever l’hypothèque','Pay off mortgage')} · ${fmt(M.unmortgageCost(i))}</button>`}
    btns+=`<button class="mb-b" data-a="close">${T('Fermer','Close')}</button>`}
   const card=modal(head+body+`<div class="mb-btns">${btns}</div>`,'prop');
-  card.querySelectorAll('[data-a]').forEach(b=>c.listen(b,'click',()=>{const a=b.dataset.a;closeModal();if(a==='close')return panel();human({a,i})}))}
+  card.querySelectorAll('[data-a]').forEach(b=>c.listen(b,'click',()=>{const a=b.dataset.a;closeModal();if(a==='close')return back?back():panel();if(back&&a!=='buy'&&a!=='decline'){if(M.act(S,{a,i})){quickEvents(S.ev.splice(0))}return propCard(i,null,back)}human({a,i})}))}
  function assets(pi,readOnly=false){const p=S.players[pi],mine=M.propsOf(S,pi),me=!readOnly&&local(p)&&pi===S.turn;
   const groups=[...new Set(mine.map(i=>SQUARES[i].g||SQUARES[i].t))];
-  const rows=groups.map(g=>`<div class="mb-ag">${mine.filter(i=>(SQUARES[i].g||SQUARES[i].t)===g).map(i=>{const s=SQUARES[i],h=S.houses[i]||0;return `<div class="mb-ar${S.mort[i]?' mort':''}"><span class="mb-dot" style="background:${s.g?GROUPS[s.g].color:'#c9c2b0'}"></span><b>${X(s.name)}</b><em>${h===5?'🏰':'🏠'.repeat(h)}${S.mort[i]?'⛔':''}</em>
+  const rows=groups.map(g=>`<div class="mb-ag">${mine.filter(i=>(SQUARES[i].g||SQUARES[i].t)===g).map(i=>{const s=SQUARES[i],h=S.houses[i]||0;return `<div class="mb-ar${S.mort[i]?' mort':''}" data-p="${i}"><span class="mb-dot" style="background:${s.g?GROUPS[s.g].color:'#c9c2b0'}"></span><b>${X(s.name)}</b><em>${h===5?'🏰':'🏠'.repeat(h)}${S.mort[i]?'⛔':''}</em>
    ${me?`${M.canBuild(S,i)?`<button data-a="build" data-i="${i}" aria-label="${T('Construire','Build')}">＋🏠</button>`:''}${M.canSell(S,i)?`<button data-a="sell" data-i="${i}" aria-label="${T('Vendre','Sell')}">－🏠</button>`:''}${M.canMortgage(S,i)?`<button data-a="mortgage" data-i="${i}">${T('Hypo','Mortg.')}</button>`:''}${M.canUnmortgage(S,i)?`<button data-a="unmortgage" data-i="${i}">${T('Lever','Repay')}</button>`:''}`:''}</div>`}).join('')}</div>`).join('');
   const card=modal(`<h3>${esc(p.name)} · ${fmt(p.money)}</h3><p class="mb-small">${T('Fortune','Net worth')} : ${fmt(M.netWorth(S,p))}${p.cards.length?` · 🎟️ ${T('carte de sortie','get-out card')}`:''}</p><div class="mb-assets">${rows||`<p class="mb-small">${T('Aucune propriété pour l’instant.','No property yet.')}</p>`}</div><div class="mb-btns"><button class="mb-b" data-x="1">${T('Fermer','Close')}</button></div>`,'assets');
-  card.querySelectorAll('[data-a]').forEach(b=>c.listen(b,'click',()=>{if(M.act(S,{a:b.dataset.a,i:+b.dataset.i})){const evs=S.ev.splice(0);quickEvents(evs);assets(pi)}}));
+  card.querySelectorAll('[data-a]').forEach(b=>c.listen(b,'click',e=>{e.stopPropagation();if(M.act(S,{a:b.dataset.a,i:+b.dataset.i})){const evs=S.ev.splice(0);quickEvents(evs);assets(pi,readOnly)}}));
+  // toucher une propriété : sa fiche (retour à la liste en la fermant)
+  card.querySelectorAll('[data-p]').forEach(r=>c.listen(r,'click',()=>{SFX.click();closeModal();propCard(+r.dataset.p,null,()=>assets(pi,readOnly))}));
   c.listen(card.querySelector('[data-x]'),'click',()=>{closeModal();panel()})}
  // effets immédiats (construction depuis la fiche) sans bloquer
  function quickEvents(evs){push(evs);for(const e of evs){if(e.t==='build'){SFX.build()}if(e.t==='sell'||e.t==='mortgage')SFX.coins();if(e.t==='unmortgage')SFX.pay()}refreshBoard();syncMoney();panel();save()}
@@ -207,19 +254,19 @@ export function massilia(c){
   c.listen(card.querySelector('[data-n]'),'click',()=>{closeModal();say(t.from,'pay');done()})}
 
  // ---- panneau d'actions du joueur humain
- function panel(){if(!G)return;const p=cur(),pn=G.panel;players();
+ function panel(){if(!G)return;const p=cur(),pn=G.panel;players();if(!(local(p)&&S.phase==='roll'&&!tasks.length&&!busyModal&&!over))disarmDice();
   if(over||S.phase==='over'){pn.innerHTML='';return}
   if(!local(p)||tasks.length||busyModal){pn.innerHTML=`<div class="mb-status"><span class="mb-ptok">${TOKEN_SVG[p.token]}</span><b>${esc(p.name)}</b> ${!p.human?T('réfléchit…','is thinking…'):!mine(p)?T('joue…','is playing…'):''}</div>`;return}
   const btn=(a,label,cls='',dis=false)=>`<button class="mb-b ${cls}" data-a="${a}" ${dis?'disabled':''}>${label}</button>`;let main='',side='';
   const pass=ON||S.players.filter(q=>q.human&&!q.out).length>1;
-  if(S.phase==='roll')main=btn('roll',`🎲 ${T('Lancer les dés','Roll the dice')}`,'primary big');
+  if(S.phase==='roll'){armDice();main=`<p class="mb-swipe">👆 ${T('Glisse les dés pour les lancer','Swipe the dice to roll')}</p>${btn('roll',`🎲 ${T('Lancer','Roll')}`,'primary small')}`}
   else if(S.phase==='jail')main=`${p.cards.length?btn('jailCard',`🎟️ ${T('Utiliser la carte','Use the card')}`,'primary'):''}${btn('jailPay',`${T('Payer','Pay')} ${fmt(JAIL_FINE)}`,'',p.money<JAIL_FINE)}${btn('jailRoll',`🎲 ${T('Tenter un double','Try for doubles')}`,p.cards.length?'':'primary')}`;
   else if(S.phase==='end')main=btn('endTurn',`${T('Fin du tour','End turn')} ›`,'primary big');
   else if(S.phase==='buy'){propCard(S.pending.i,'buy');return}
   else if(S.phase==='debt'){debt();return}
   side=`${btn('assets',`🏠 ${T('Mes biens','My properties')}`)}${!ON&&M.active(S).length>1?btn('trade',`🤝 ${T('Échanger','Trade')}`):''}`;
   pn.innerHTML=`<div class="mb-status"><span class="mb-ptok">${TOKEN_SVG[p.token]}</span><b>${esc(p.name)}</b>${pass?` · ${T('à toi !','your turn!')}`:''}${p.jail?` · 🚔 ${T('aux Baumettes','in Les Baumettes')}`:''}</div><div class="mb-acts">${main}</div><div class="mb-side">${side}</div>`;
-  pn.querySelectorAll('[data-a]').forEach(b=>c.listen(b,'click',()=>{const a=b.dataset.a;SFX.click();if(a==='assets')return assets(S.turn);if(a==='trade')return tradeDialog();human({a})}))}
+  pn.querySelectorAll('[data-a]').forEach(b=>c.listen(b,'click',()=>{const a=b.dataset.a;SFX.click();if(a==='assets')return assets(S.turn);if(a==='trade')return tradeDialog();if(a==='roll')return throwDice(0,-120,1);human({a})}))}
  function debt(){const p=cur(),d=S.pending,to=typeof d.to==='number'?S.players[d.to].name:T('la banque','the bank');const can=p.money>=d.amount,liq=M.liquidity(S,p.id);
   const card=modal(`<h3>💸 ${T('Aïe, il faut payer','Ouch, time to pay')}</h3><p>${T('Tu dois','You owe')} <b>${fmt(d.amount)}</b> ${T('à','to')} <b>${esc(to)}</b>. ${T('Tu as','You have')} ${fmt(p.money)}.</p>
    <p class="mb-small">${can?T('Tu as assez, tu peux payer.','You have enough, you can pay.'):liq+p.money>=d.amount?T('Vends des cabanons ou hypothèque des propriétés pour réunir la somme.','Sell huts or mortgage properties to raise the money.'):T('Même en vendant tout, ça ne suffira pas…','Even selling everything won’t be enough…')}</p>
@@ -237,15 +284,16 @@ export function massilia(c){
    case 'dice':cameraTo(G.toks[e.p].pos);rollDice(e.d);yield 1.05;if(e.d[0]===e.d[1]&&!e.jail){SFX.double();say(e.p,'double');toast(T('Double !','Doubles!'),'good')}yield .25;break;
    case 'move':{hideDice();const n=Math.abs(e.steps),dir=Math.sign(e.steps)||1;if(n>12&&e.steps<0){hop(e.p,e.to,.6,90);SFX.hop();yield .6;break}
     for(let k=1;k<=n;k++){const to=((e.from+dir*k)%40+40)%40;hop(e.p,to,.2);cameraTo(to);SFX.hop();yield .2}placeTokens();yield .15;break}
-   case 'go':floatMoney(e.p,e.amount);SFX.go();syncMoney();toast(X(QUIPS.go[0]),'good');say(e.p,'go');yield .5;break;
+   case 'go':floatMoney(e.p,e.amount);SFX.go();syncMoney();payFx(null,e.p,e.amount,'go');say(e.p,'go');yield 1.3;break;
    case 'land':pulse(e.i);yield .25;break;
    case 'buy':SFX.cash();refreshBoard();floatMoney(e.p,-e.price);syncMoney();say(e.p,'buy');if(!local(P))toast(T(`${P.name} achète ${X(SQUARES[e.i].name)}`,`${P.name} buys ${X(SQUARES[e.i].name)}`));yield .9;break;
    case 'pass':if(!local(P))toast(T(`${P.name} passe son tour sur ${X(SQUARES[e.i].name)}`,`${P.name} skips ${X(SQUARES[e.i].name)}`));yield .4;break;
    case 'pay':{if(e.from!=null)floatMoney(e.from,-e.amount);if(e.to!=null)floatMoney(e.to,e.amount);syncMoney();
-    if(e.reason==='rent'){SFX.coins();say(e.from,'pay');setTimeout(()=>say(e.to,'rent'),700/SPEED());toast(T(`Loyer : ${fmt(e.amount)} pour ${S.players[e.to].name}`,`Rent: ${fmt(e.amount)} to ${S.players[e.to].name}`))}
-    else if(e.reason==='tax'){SFX.pay();toast(`${X(SQUARES[e.i].name)} : −${fmt(e.amount)}`,'bad')}else SFX.coins();yield .8;break}
+    const big=e.reason==='rent'||e.amount>=40;if(big)payFx(e.from,e.to,e.amount,e.reason);
+    if(e.reason==='rent'){SFX.coins();say(e.from,'pay');setTimeout(()=>say(e.to,'rent'),700/SPEED())}
+    else if(e.reason==='tax'){SFX.pay();if(!big)toast(`${X(SQUARES[e.i].name)} : −${fmt(e.amount)}`,'bad')}else SFX.coins();yield big?1.55:.8;break}
    case 'debt':yield .2;break;
-   case 'card':{const card=DECKS[e.deck][e.idx];(e.deck==='mistral'?SFX.mistral:SFX.gossip)();SFX.card();showCard(e.deck,card,P);yield local(P)?'modal':2.6;if(!local(P))closeModal();yield .2;break}
+   case 'card':{const card=DECKS[e.deck][e.idx];if(local(P)){pile(e.deck);yield 'modal'}(e.deck==='mistral'?SFX.mistral:SFX.gossip)();SFX.card();showCard(e.deck,card,P);yield local(P)?'modal':2.6;if(!local(P))closeModal();yield .2;break}
    case 'jail':SFX.jail();say(e.p,'jail');if(e.why==='three')toast(X(QUIPS.three[0]),'bad');else toast(T(`${P.name} part en garde à vue !`,`${P.name} is off to Les Baumettes!`),'bad');hop(e.p,JAIL,.7,140);cameraTo(JAIL);yield .8;placeTokens();players();yield .3;break;
    case 'free':if(e.how==='double')toast(T('Double : libéré !','Doubles: free!'),'good');else if(e.how==='card')toast(T('« Je connais quelqu’un » : libéré !','“I know someone”: free!'),'good');else toast(T('Amende payée : libéré.','Fine paid: free.'));SFX.pay();syncMoney();placeTokens();yield .5;break;
    case 'build':SFX.build();refreshBoard();syncMoney();if(!local(P))toast(T(`${P.name} construit sur ${X(SQUARES[e.i].name)}`,`${P.name} builds on ${X(SQUARES[e.i].name)}`));pulse(e.i);yield .6;break;
@@ -255,6 +303,15 @@ export function massilia(c){
    case 'quip':toast(X(QUIPS[e.k][0]));yield .6;break;
    case 'over':over=true;yield* ending();break}}
  function pulse(i){const sq=G.board.querySelector(`.mb-sq[data-i="${i}"]`);if(!sq)return;sq.classList.remove('pulse');void sq.offsetWidth;sq.classList.add('pulse')}
+ // paquet de cartes : glisser la carte du dessus pour la tirer
+ function pile(deck){const nm=X(SQUARES[deck==='mistral'?7:2].name),ic=deck==='mistral'?'🌬️':'💬';
+  const m=modal(`<div class="mb-pile ${deck}"><div class="mb-stack">${[0,1,2,3,4,5].map(k=>`<div class="mb-pc" style="--k:${k}"><i>${ic}</i><b>${nm}</b></div>`).join('')}</div><p>👆 ${T('Glisse la carte du dessus pour la tirer','Swipe the top card to draw it')}</p></div>`,'cardm');
+  const top=m.querySelector('.mb-pc:last-child');let st=null,done=false;SFX.card();
+  const go=(dx,dy)=>{if(done)return;done=true;const n=Math.hypot(dx,dy)||1;top.style.transition='transform .32s ease-in,opacity .32s';top.style.transform=`translate(${dx/n*520}px,${dy/n*520}px) rotate(${dx/n*40}deg)`;top.style.opacity='0';SFX.card();buzz(20);setTimeout(()=>{if(busyModal)closeModal()},300)};
+  c.listen(top,'pointerdown',e=>{top.setPointerCapture?.(e.pointerId);st={x:e.clientX,y:e.clientY};top.style.transition='none'});
+  c.listen(top,'pointermove',e=>{if(!st||done)return;const dx=e.clientX-st.x,dy=e.clientY-st.y;top.style.transform=`translate(${dx}px,${dy}px) rotate(${dx*.08}deg)`});
+  const up=e=>{if(!st||done)return;const dx=e.clientX-st.x,dy=e.clientY-st.y,d=Math.hypot(dx,dy);st=null;if(d<10)return go(0,-1);if(d>55)return go(dx,dy);top.style.transition='transform .25s';top.style.transform=''};
+  c.listen(top,'pointerup',up);c.listen(top,'pointercancel',up)}
  function showCard(deck,card,P){const card2=modal(`<div class="mb-flip ${deck}"><div class="mb-cardin"><div class="mb-cfront"><i>${deck==='mistral'?'🌬️':'💬'}</i><b>${X(SQUARES[deck==='mistral'?7:2].name)}</b></div><div class="mb-cback"><small>${X(SQUARES[deck==='mistral'?7:2].name)}</small><p>${X(card.text)}</p>${local(P)?`<button class="mb-b primary">OK</button>`:`<span class="mb-small">${esc(P.name)}</span>`}</div></div></div>`,'cardm');
   requestAnimationFrame(()=>card2.querySelector('.mb-flip').classList.add('turn'));const ok=card2.querySelector('button');if(ok)c.listen(ok,'click',()=>closeModal())}
  function* ending(){if(!ON)clearRun('massilia');const w=S.winner!=null?S.players[S.winner]:null;SFX.win();

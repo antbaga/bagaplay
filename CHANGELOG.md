@@ -1,3 +1,17 @@
+# 5.13.0 — 15 novembre 2026
+
+- Nouveau jeu : **BagaCooker**, un petit resto en 3D vue de 3/4.
+  - On dirige le chef (toque, foulard rouge, grosse moustache) au joystick du pouce gauche ; au pouce droit, ✋ prendre / poser / dresser / servir / jeter, et 🔪 couper ou laver (maintenu) ou sprinter (appui). Les boutons affichent ce qu’ils vont faire. Au clavier : flèches ou ZQSD, Espace, Maj.
+  - Ingrédients : pain, fromage, salade et tomate à couper, steak à la poêle (il cuit tout seul… et brûle si on traîne), pommes de terre à couper puis à frire. On monte les assiettes et on sert au passe ; à partir du 3e resto, les assiettes reviennent sales et se lavent à l’évier.
+  - Six restos (du food truck au Palace de la Corniche), sept recettes jusqu’au Royal Baga à cinq ingrédients, tickets de commande avec minuteur, pourboire selon la rapidité, combo, clients qui partent fâchés (« Kevin est parti manger un kebab »), trois étoiles par resto.
+  - Animations et effets : chef qui marche, coupe et frotte, vapeur, fumée du cramé, alarme, éclats de légumes, gouttes, confettis au service, secousses, vibrations ; musique de bistrot qui accélère au dernier rush.
+- Massilia Biz :
+  - Dans « Mes biens », toucher une propriété ouvre sa fiche (construire, hypothéquer…), puis on revient à la liste.
+  - Les dés en 3D attendent au milieu de l’écran : on les attrape et on les lance d’un geste (plus le geste est rapide, plus ils tournent). Un petit bouton « Lancer » reste disponible.
+  - Sur une case Coup de Mistral ou Tchatche, un paquet de cartes apparaît : on glisse la carte du dessus pour la tirer.
+  - La vue du plateau se manipule aux doigts : glisser pour tourner et incliner, pincer pour zoomer, deux doigts pour déplacer. Le bouton 🗺️ remet la vue d’origine.
+  - Paiements animés : celui qui paie a le seum (nuage de pluie, il tremble, « Mon PEL ! »), celui qui reçoit kiffe (il saute, ça brille, « Ça paie le pastis ! »), les pièces volent de l’un à l’autre. Aussi pour le fisc, la banque et le passage par la case Départ.
+
 # 5.12.0 — 15 novembre 2026
 
 - Nouveau jeu : **BagaGuesser**, dans l’esprit de GeoGuessr, ouvert en permanence (pas de parties à lancer).
