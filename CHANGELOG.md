@@ -1,3 +1,16 @@
+# 5.15.0 — 16 novembre 2026
+
+- Nouveau jeu : BagaWorld, un MMO tactique à la Dofus en 3D façon cubes (étape 1, en solo) :
+  - Création du personnage : 4 classes (Bourrin, Viseur, Bisouilleur, Fourbe), peau, cheveux, nom.
+  - Un monde de 112 × 112 cases qu’on parcourt en continu, sans changement de map : Bagatown (mairie, taverne, forge, boutique, école, fontaine, statue du Bagaphénix), la Prairie des Moutoufous, la Plage de Baga, le Bois des Champis, les Collines Boudeuses et le Trône du Mouton Royal. On touche le sol pour marcher, on glisse pour tourner la vue, on pince pour zoomer (flèches ou ZQSD au clavier).
+  - 9 monstres en groupes qui se promènent ; on touche un groupe pour l’attaquer. Les Sangliers Boudeurs et les Araknées attaquent d’eux-mêmes si on passe trop près. Le Mouton Royal (niveau 20) est fait pour être affronté en groupe.
+  - Combats au tour par tour sur une grille découpée dans le décor : phase de placement, ordre d’initiative, PA et PM, portée, ligne de vue, sorts en ligne, tacle et fuite, poussée contre les murs, pièges, poisons, soins, invisibilité, bonus et malus, coups critiques. 6 sorts par classe débloqués du niveau 1 au 15, plus l’arme équipée.
+  - Progression : XP et niveaux jusqu’à 50, 5 points de caractéristiques par niveau (Vitalité, Sagesse, Force, Intelligence, Chance, Agilité), réinitialisation gratuite chez Maître Bagaclasse.
+  - Équipement sur 7 emplacements (coiffe, cape, amulette, anneau, ceinture, bottes, arme) visible sur le personnage, butin sur les monstres, kamas, boutiques de Mamie Kamas (potions) et du Forgeron Momo (équipement), revente.
+  - 6 quêtes chez les PNJ de Bagatown, Bagaaps pour voyager entre les zones déjà découvertes, carte du monde, PV qui remontent hors combat (plus vite assis).
+  - Musiques par zone et en combat, bruitages, vibrations. Défaite : on se réveille à la statue du Bagaphénix.
+  - Prochaines étapes : le multijoueur (voir les autres joueurs, groupes jusqu’à 4, combats en groupe, duels), puis les métiers, un donjon et d’autres quêtes.
+
 # 5.14.0 — 16 novembre 2026
 
 - BagaCooker :
