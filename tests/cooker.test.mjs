@@ -51,3 +51,10 @@ test('fries: chop the potato before frying; time runs out and the level ends wit
  face(S,'p');A(S);const F=face(S,'F');A(S);assert.ok(S.ev.some(e=>e.t==='chopFirst'));assert.ok(S.p.hold);
  const K=face(S,'K');A(S);for(let i=0;i<20;i++)C.step(S,.1,{b:true});A(S);assert.equal(S.p.hold.st,'chop');at(S,...beside(S,F));A(S);C.step(S,C.FRY+.1,{});assert.equal(F.item.st,'fry');
  S.score=S.L.stars[1];C.step(S,S.left+1,{});assert.ok(S.over);assert.equal(C.starsFor(S),2)});
+
+test('tutorial: no clock, one salad, the step follows what is in the kitchen',()=>{const S=C.tutorial(1);const t0=S.left;C.step(S,30,{});assert.equal(S.left,t0);assert.equal(S.orders.length,1);
+ assert.equal(C.tutoStep(S),'takeLettuce');face(S,'l');A(S);assert.equal(C.tutoStep(S),'boardLettuce');
+ const K=S.tiles.flat().filter(t=>t.ch==='K');at(S,...beside(S,K[0]));A(S);assert.equal(C.tutoStep(S),'chopLettuce');for(let i=0;i<20;i++)C.step(S,.1,{b:true});assert.equal(C.tutoStep(S),'takeTomato');
+ face(S,'t');A(S);assert.equal(C.tutoStep(S),'boardTomato');at(S,...beside(S,K[1]));A(S);for(let i=0;i<20;i++)C.step(S,.1,{b:true});assert.equal(C.tutoStep(S),'plate');
+ face(S,'D');A(S);assert.equal(C.tutoStep(S),'addLettuce');at(S,...beside(S,K[0]));A(S);assert.equal(C.tutoStep(S),'addTomato');at(S,...beside(S,K[1]));A(S);assert.equal(C.tutoStep(S),'serve');
+ face(S,'O');A(S);assert.equal(C.tutoStep(S),'done')});

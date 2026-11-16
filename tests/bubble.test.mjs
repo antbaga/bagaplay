@@ -16,7 +16,7 @@ test('150 levels: everything hangs from the ceiling, palettes and goals are cons
   if(lv.goal==='chicks')assert.ok(lv.chicks>=2)}});
 
 test('no snapping: the ball freezes exactly where it first touches another bubble',()=>{
- const S=game([bub(1,200,18,0)]);const res=B.trace(S,200,500,Math.PI/2-.06);const hit=S.bubbles[0];
+ const S=game([bub(1,200,18,0)]);const res=B.trace(S,200,500,Math.PI/2-.04);const hit=S.bubbles[0];
  assert.equal(res.hit,1);const d=Math.hypot(res.end[0]-hit.x,res.end[1]-hit.y);assert.ok(Math.abs(d-B.D)<.5,`distance ${d}`);
  B.apply(S,{t:'c',c:1},res);const placed=S.bubbles.find(b=>b.id!==1);assert.ok(Math.abs(placed.x-res.end[0])<1e-9&&Math.abs(placed.y-res.end[1])<1e-9,'posée exactement au point de contact');
  // et la position ne tombe pas sur une case de grille

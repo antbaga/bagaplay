@@ -6,14 +6,14 @@ const C={floorA:'#f6efe1',floorB:'#7fc8c0',wood:'#c98a52',woodD:'#a96d3c',woodL:
  tile:'#ffffff',tileB:'#d7eef4',stripe:'#e9573f',dark:'#3b3f46',red:'#e2453c',gold:'#f3c33a',blue:'#5fb4e6'};
 
 // ---- cuisine : un maillage statique pour le sol, les murs et les meubles (les objets posés sont dessinés à part)
-export function kitchenMesh(R,S){const b=new Builder(),W=S.W,H=S.H;
+export function kitchenMesh(R,S,opt={}){const b=new Builder(),W=S.W,H=S.H;
  // sol en damier sous toute la cuisine, plinthe autour
  for(let z=0;z<H;z++)for(let x=0;x<W;x++)b.box(x,-.06,z,x+1,0,z+1,(x+z)%2?C.floorA:C.floorB,'t');
  b.box(-.4,-.6,-.4,W+.4,-.06,H+.4,'#5a4a3c','tnsew');
  // mur du fond carrelé avec une frise, et deux murets sur les côtés
  for(let y=0;y<9;y++)for(let x=0;x<W*2;x++)b.box(x*.5,y*.25,-.12,x*.5+.5,y*.25+.25,-.02,(x+y)%2?C.tile:C.tileB,'s');
  b.box(0,1.15,-.11,W,1.25,-.01,C.stripe,'s');b.box(-.02,0,-.12,W+.02,2.3,-.1,'#e8e2d6','t');
- b.box(-.12,0,-.12,-.02,1.2,H,'#efe6d6','tnsew');b.box(W+.02,0,-.12,W+.12,1.2,H,'#efe6d6','tnsew');
+ b.box(-.12,0,-.12,-.02,1.2,H,'#efe6d6','tnsew');if(!opt.side)b.box(W+.02,0,-.12,W+.12,1.2,H,'#efe6d6','tnsew');   // vue de côté : pas de muret devant la caméra
  for(const row of S.tiles)for(const t of row)furniture(b,t);
  return R.mesh(b)}
 function counterBase(b,x,z,side,top){b.box(x+.02,0,z+.02,x+.98,CT-.05,z+.98,side,'nsew');b.box(x,CT-.05,z,x+1,CT,z+1,top,'tnsew',shade(hex(top),.85))}

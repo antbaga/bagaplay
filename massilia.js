@@ -127,14 +127,15 @@ export function massilia(c){
  // ---- caméra : suit le pion (côté du plateau tourné vers soi), ou vue d'ensemble
  function cameraTo(i){focus=i}
  function camTarget(){const vw=G.view.clientWidth,vh=G.view.clientHeight;const fit=Math.min(vw/SIZE,vh/SIZE*1.25)*.98;
+  if(G.tradeView)return {x:SIZE/2,y:SIZE/2,rz:G.cam.rz-((G.cam.rz%360)+360)%360,tilt:0,z:Math.min(vw*.96,vh*.34)/SIZE};
   if(camMode==='overview'||focus==null)return {x:SIZE/2,y:SIZE/2,rz:G.cam.rz-((G.cam.rz%360)+360)%360,tilt:36,z:fit*1.0};
   const side=Math.floor(focus/10)%4,[x,y]=spot(focus,1);let rz=-side*90;while(rz-G.cam.rz>180)rz-=360;while(rz-G.cam.rz<-180)rz+=360;
   const ix=SIZE/2+(x-SIZE/2)*.9,iy=SIZE/2+(y-SIZE/2)*.9;return {x:ix,y:iy,rz,tilt:55,z:fit*2.05}}
- function applyCam(dt){const t=camTarget(),U=G.user,k=Math.min(1,dt*3.2*SPEED());t.rz+=U.rz;t.tilt=Math.max(12,Math.min(78,t.tilt+U.tilt));t.z*=U.z;
+ function applyCam(dt){const t=camTarget(),U=G.tradeView?{rz:0,tilt:0,z:1,px:0,py:0,drag:false,last:0}:G.user,k=Math.min(1,dt*3.2*SPEED());t.rz+=U.rz;t.tilt=Math.max(12,Math.min(78,t.tilt+U.tilt));t.z*=U.z;
   for(const key of ['x','y','rz','tilt','z'])G.cam[key]+=(t[key]-G.cam[key])*(U.drag&&key!=='x'&&key!=='y'?1:k);
   if(!U.drag&&performance.now()-U.last>2500){const f=Math.min(1,dt*2);U.px-=U.px*f;U.py-=U.py*f}
   const vw=G.view.clientWidth,vh=G.view.clientHeight,cm=G.cam;
-  G.board.style.transform=`translate(${vw/2+U.px}px,${vh*(camMode==='overview'||focus==null?.52:.64)+U.py}px) rotateX(${cm.tilt}deg) rotateZ(${cm.rz}deg) scale(${cm.z}) translate(${-cm.x}px,${-cm.y}px)`;
+  G.board.style.transform=`translate(${vw/2+U.px}px,${vh*(G.tradeView?.32:camMode==='overview'||focus==null?.52:.64)+U.py}px) rotateX(${cm.tilt}deg) rotateZ(${cm.rz}deg) scale(${cm.z}) translate(${-cm.x}px,${-cm.y}px)`;
   G.board.style.setProperty('--rz',`${-cm.rz}deg`);G.board.style.setProperty('--tilt',`${-cm.tilt}deg`)}
  // ---- la vue se manipule aux doigts : glisser = tourner / incliner, pincer = zoomer, deux doigts = déplacer
  function viewGesture(){const v=G.view,pts=new Map(),U=G.user;let moved=0,pinch=null;
@@ -200,8 +201,8 @@ export function massilia(c){
  function syncMoney(){S.players.forEach((p,i)=>{G.money[i]=p.money});players()}
 
  // ---- modales
- function modal(html,cls=''){G.modal.innerHTML=`<div class="mb-card ${cls}">${html}</div>`;G.modal.hidden=false;busyModal=true;return G.modal.firstChild}
- function closeModal(){G.modal.hidden=true;G.modal.innerHTML='';busyModal=false}
+ function modal(html,cls=''){const dz=G.root.querySelector('.mb-dice');if(dz?.classList.contains('ready'))dz.classList.remove('ready','show');G.modal.innerHTML=`<div class="mb-card ${cls}">${html}</div>`;G.modal.hidden=false;busyModal=true;return G.modal.firstChild}
+ function closeModal(){G.modal.hidden=true;G.modal.innerHTML='';busyModal=false;if(G.tradeView)unmarkTrade()}
  function rentRows(i){const s=SQUARES[i];if(s.t==='station')return [1,2,3,4].map(n=>`<tr><td>${n} ${T(n>1?'lignes':'ligne',n>1?'lines':'line')}</td><td>${fmt(25*2**(n-1))}</td></tr>`).join('');
   if(s.t==='util')return `<tr><td>${T('Une possédée','One owned')}</td><td>4 × ${T('les dés','dice')}</td></tr><tr><td>${T('Les deux','Both')}</td><td>10 × ${T('les dés','dice')}</td></tr>`;
   const r=M.rentTable(i);return `<tr><td>${T('Loyer','Rent')}</td><td>${fmt(r[0])}</td></tr><tr><td>${T('Quartier complet','Full set')}</td><td>${fmt(r[0]*2)}</td></tr>${[1,2,3,4].map(h=>`<tr><td>${'🏠'.repeat(h)} ${h} ${T(h>1?'cabanons':'cabanon',h>1?'huts':'hut')}</td><td>${fmt(r[h])}</td></tr>`).join('')}<tr><td>🏰 ${T('Villa','Villa')}</td><td>${fmt(r[5])}</td></tr>`}
@@ -230,16 +231,28 @@ export function massilia(c){
  function quickEvents(evs){push(evs);for(const e of evs){if(e.t==='build'){SFX.build()}if(e.t==='sell'||e.t==='mortgage')SFX.coins();if(e.t==='unmortgage')SFX.pay()}refreshBoard();syncMoney();panel();save()}
 
  // ---- échanges
+ // ---- échanges : le plateau reste visible au-dessus (vue d'ensemble), les biens de chacun y sont entourés de sa couleur,
+ // ceux qui changent de main clignotent ; en bas, les cartes des deux joueurs
+ const tokColor=pid=>TOKENS.find(t=>t.id===S.players[pid].token).color;
+ function markTrade(a,b,sel=[]){G.tradeView=true;const A=new Set(M.propsOf(S,a)),B=new Set(M.propsOf(S,b)),X2=new Set(sel);
+  G.board.querySelectorAll('.mb-sq').forEach(sq=>{const i=+sq.dataset.i,who=A.has(i)?a:B.has(i)?b:null;sq.classList.toggle('tr',who!=null);sq.classList.toggle('tr-sel',X2.has(i));sq.classList.toggle('tr-dim',who==null);if(who!=null)sq.style.setProperty('--tc',tokColor(who))})}
+ function unmarkTrade(){if(!G)return;G.tradeView=false;G.board.querySelectorAll('.mb-sq').forEach(sq=>sq.classList.remove('tr','tr-sel','tr-dim'))}
+ function miniCard(i,{sel=false,side='',dis=false,why=''}={}){const sq=SQUARES[i],col=sq.g?GROUPS[sq.g].color:'#c9c2b0',h=S.houses[i]||0,ic=sq.t==='port'?'⛴️':sq.t==='util'?'💡':'';
+  const sub=S.mort[i]?T('hypothéquée','mortgaged'):h?`${h===5?'🏰':'🏠'.repeat(h)} · ${T('loyer','rent')} ${fmt(M.rentOf(S,i))}`:`${fmt(sq.price)}`;
+  return `<button class="mb-ti${sel?' on':''}${dis?' dis':''}" data-s="${side}" data-i="${i}" ${dis?'disabled':''}><span class="mb-band" style="background:${col}">${ic}</span><span class="mb-tn"><b>${X(sq.name)}</b><small>${dis?why:sub}</small></span>${sel?'<i>✓</i>':''}</button>`}
  function tradeDialog(){const p=cur(),others=M.active(S).filter(o=>o!==p);let to=others[0].id,give=new Set(),get=new Set(),money=0;
   const tradable=(i,pid)=>S.own[i]===pid&&(SQUARES[i].t!=='prop'||M.GROUP_IDX[SQUARES[i].g].every(j=>!S.houses[j]));
-  const draw=()=>{const o=S.players[to],mine=M.propsOf(S,p.id).filter(i=>tradable(i,p.id)),theirs=M.propsOf(S,to).filter(i=>tradable(i,to));
-   const list=(arr,set,side)=>arr.length?arr.map(i=>`<button class="mb-ti${set.has(i)?' on':''}" data-s="${side}" data-i="${i}"><span class="mb-dot" style="background:${SQUARES[i].g?GROUPS[SQUARES[i].g].color:'#c9c2b0'}"></span>${X(SQUARES[i].name)}</button>`).join(''):`<p class="mb-small">${T('Rien à échanger','Nothing to trade')}</p>`;
-   const card=modal(`<h3>🤝 ${T('Proposer un échange','Propose a trade')}</h3><div class="mb-chips">${others.map(q=>`<button data-to="${q.id}" class="${q.id===to?'on':''}">${esc(q.name)}</button>`).join('')}</div>
-    <div class="mb-tcols"><div><h4>${T('Tu donnes','You give')}</h4>${list(mine,give,'g')}</div><div><h4>${T('Tu reçois','You get')}</h4>${list(theirs,get,'r')}</div></div>
+  const draw=()=>{const o=S.players[to],mine=M.propsOf(S,p.id),theirs=M.propsOf(S,to);
+   const list=(arr,set,side,pid)=>arr.length?arr.map(i=>miniCard(i,{sel:set.has(i),side,dis:!tradable(i,pid),why:T('maisons dans le groupe','houses in the set')})).join(''):`<p class="mb-small">${T('Aucune propriété','No properties')}</p>`;
+   const head=(q)=>`<h4><span class="mb-ptok" style="--c:${tokColor(q.id)}">${TOKEN_SVG[q.token]}</span>${esc(q.name)}<small>${fmt(q.money)}</small></h4>`;
+   const card=modal(`<h3>🤝 ${T('Proposer un échange','Propose a trade')}</h3>${others.length>1?`<div class="mb-chips">${others.map(q=>`<button data-to="${q.id}" class="${q.id===to?'on':''}">${esc(q.name)}</button>`).join('')}</div>`:''}
+    <p class="mb-small mb-tlegend">${T('Sur le plateau : les biens de chacun sont entourés de sa couleur, ceux de l’échange clignotent.','On the board: each player’s properties are outlined in their colour; the ones in the trade blink.')}</p>
+    <div class="mb-tcols"><div>${head(p)}<p class="mb-tl">${T('Tu donnes','You give')}</p>${list(mine,give,'g',p.id)}</div><div>${head(o)}<p class="mb-tl">${T('Tu reçois','You get')}</p>${list(theirs,get,'r',to)}</div></div>
     <div class="mb-money"><button data-m="-50">−50</button><button data-m="-10">−10</button><b>${money>=0?`${T('Tu paies','You pay')} ${fmt(money)}`:`${esc(o.name)} ${T('paie','pays')} ${fmt(-money)}`}</b><button data-m="10">+10</button><button data-m="50">+50</button></div>
     <div class="mb-btns"><button class="mb-b primary" data-go="1" ${M.tradeOk(S,{from:p.id,to,give:[...give],get:[...get],money})?'':'disabled'}>${T('Proposer','Propose')}</button><button class="mb-b" data-x="1">${T('Annuler','Cancel')}</button></div>`,'trade');
+   markTrade(p.id,to,[...give,...get]);
    card.querySelectorAll('[data-to]').forEach(b=>c.listen(b,'click',()=>{to=+b.dataset.to;give.clear();get.clear();money=0;draw()}));
-   card.querySelectorAll('.mb-ti').forEach(b=>c.listen(b,'click',()=>{const set=b.dataset.s==='g'?give:get,i=+b.dataset.i;set.has(i)?set.delete(i):set.add(i);draw()}));
+   card.querySelectorAll('.mb-ti:not(.dis)').forEach(b=>c.listen(b,'click',()=>{const set=b.dataset.s==='g'?give:get,i=+b.dataset.i;set.has(i)?set.delete(i):set.add(i);SFX.click();pulse(i);draw()}));
    card.querySelectorAll('[data-m]').forEach(b=>c.listen(b,'click',()=>{money=Math.max(-o.money,Math.min(p.money,money+ +b.dataset.m));draw()}));
    c.listen(card.querySelector('[data-x]'),'click',()=>{closeModal();panel()});
    c.listen(card.querySelector('[data-go]'),'click',()=>{const t={from:p.id,to,give:[...give],get:[...get],money};closeModal();if(o.human)askHuman(t,()=>panel());else{const ok=M.aiAccepts(S,t);if(ok){M.doTrade(S,t);S.ev.length=0;SFX.cash();say(to,'buy');toast(T(`${o.name} accepte l’échange !`,`${o.name} accepts the trade!`),'good');refreshBoard();syncMoney();save()}else{say(to,'pay');toast(T(`${o.name} refuse : « Tu me prends pour un pigeon ? »`,`${o.name} refuses: “Do you take me for a fool?”`),'bad')}panel()}})};
@@ -248,8 +261,9 @@ export function massilia(c){
   if(t.give.length)parts.push(`${esc(A.name)} ${T('donne','gives')} <b>${names(t.give)}</b>`);if(t.get.length)parts.push(`${T('contre','for')} <b>${names(t.get)}</b>`);
   if(t.money>0)parts.push(`${T('et paie','and pays')} <b>${fmt(t.money)}</b>`);if(t.money<0)parts.push(`${T('et reçoit','and receives')} <b>${fmt(-t.money)}</b>`);
   if(!t.give.length)parts.unshift(`${esc(A.name)} ${T('propose','offers')} <b>${fmt(Math.abs(t.money))}</b>`);return parts.join(' ')}
- function askHuman(t,done){const B=S.players[t.to];const card=modal(`<h3>📩 ${T('Proposition pour','Offer for')} ${esc(B.name)}</h3><p>${tradeText(t)}</p>${S.players.filter(p=>p.human).length>1?`<p class="mb-small">${T('Passe le téléphone à','Hand the phone to')} ${esc(B.name)}.</p>`:''}
-   <div class="mb-btns"><button class="mb-b primary" data-y="1">${T('Accepter','Accept')}</button><button class="mb-b" data-n="1">${T('Refuser','Decline')}</button></div>`,'trade');
+ function askHuman(t,done){const B=S.players[t.to],A=S.players[t.from];const side=(arr,who)=>arr.length?arr.map(i=>miniCard(i,{sel:true})).join(''):`<p class="mb-small">${t.money&&(who==='a'?t.money>0:t.money<0)?fmt(Math.abs(t.money)):'—'}</p>`;
+  const card=modal(`<h3>📩 ${T('Proposition pour','Offer for')} ${esc(B.name)}</h3><p>${tradeText(t)}</p><div class="mb-tcols"><div><p class="mb-tl">${esc(A.name)} ${T('donne','gives')}</p>${side(t.give,'a')}</div><div><p class="mb-tl">${esc(B.name)} ${T('donne','gives')}</p>${side(t.get,'b')}</div></div>${S.players.filter(p=>p.human).length>1?`<p class="mb-small">${T('Passe le téléphone à','Hand the phone to')} ${esc(B.name)}.</p>`:''}
+   <div class="mb-btns"><button class="mb-b primary" data-y="1">${T('Accepter','Accept')}</button><button class="mb-b" data-n="1">${T('Refuser','Decline')}</button></div>`,'trade');markTrade(t.from,t.to,[...t.give,...t.get]);
   c.listen(card.querySelector('[data-y]'),'click',()=>{closeModal();if(M.doTrade(S,t)){S.ev.length=0;SFX.cash();toast(T('Marché conclu !','Deal!'),'good');say(t.from,'buy');refreshBoard();syncMoney();save()}done()});
   c.listen(card.querySelector('[data-n]'),'click',()=>{closeModal();say(t.from,'pay');done()})}
 

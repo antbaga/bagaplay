@@ -11,7 +11,7 @@ const WORLDS=[
  {name:'Désert doré',sky:['#6b3a1f','#e2954a'],hill:'#8a5426',deco:'dunes'},
  {name:'Fête foraine',sky:['#3c1747','#a03f86'],hill:'#2a0f33',deco:'tents'},
  {name:'Espace',sky:['#06081c','#1d1f4f'],hill:'#0d1030',deco:'planets'}];
-const GOAL_TXT={clear:'Éclate toutes les bulles',chicks:'Libère tous les poussins',top:'Dégage la rangée du haut'};
+const GOAL_TXT={clear:'Éclate toutes les bulles',chicks:'Libère toutes les étoiles',top:'Dégage la rangée du haut'};
 const BOOSTS=[['rainbow','🌈','Arc-en-ciel'],['bomb','💣','Bombe'],['fire','🔥','Boule de feu'],['slow','⏳','Retarder la descente (+5 tirs)']];
 function load(){try{const o=JSON.parse(localStorage.getItem(STORE)||'{}');return {stars:o.stars||{},best:o.best||{},boost:migrate(Object.assign({rainbow:3,bomb:3,fire:3,slow:2},o.boost||{}))}}catch{return {stars:{},best:{},boost:{rainbow:3,bomb:3,fire:3,slow:2}}}}
 function migrate(b){if(b.plus5!=null){b.slow=(b.slow||0)+b.plus5;delete b.plus5}return b}
@@ -64,7 +64,7 @@ export function bubble(c){
    <p class="bb-info">${lv.colors} couleurs · le plafond descend tous les ${lv.every} tirs</p><p class="bb-info">★★★ en ${lv.stars[1]} tirs max · ★★ en ${lv.stars[0]}</p><p class="bb-stars">${'★'.repeat(P.stars[n]||0)}${'☆'.repeat(3-(P.stars[n]||0))}</p>
    <button class="bb-play">Jouer</button><button class="bb-back">Carte</button></div>`;wrap.append(m);
   c.listen(m.querySelector('.bb-play'),'click',()=>{m.remove();start(n)});c.listen(m.querySelector('.bb-back'),'click',()=>{m.remove();if(!wrap.querySelector('.bb-map'))showMap()})}
- const goalIcon=g=>g==='chicks'?'🐥':g==='top'?'⬆️':'🫧';
+ const goalIcon=g=>g==='chicks'?'🌟':g==='top'?'⬆️':'🫧';
 
  // ---- partie
  function start(n){wrap.innerHTML='';level=n;G=B.newGame(n,(Math.random()*2**31)|0);
@@ -134,7 +134,11 @@ export function bubble(c){
   sp.star=mk(x=>{const gr=x.createLinearGradient(-B.R,-B.R,B.R,B.R);['#ff5d5d','#ffd23f','#5fd068','#4cc3ff','#b67cff'].forEach((c0,i)=>gr.addColorStop(i/4,c0));x.fillStyle=gr;x.beginPath();x.arc(0,0,B.R-.5,0,7);x.fill();x.fillStyle='#fff';x.beginPath();for(let i=0;i<10;i++){const r=i%2?4.5:11,a=i*Math.PI/5-Math.PI/2;x.lineTo(Math.cos(a)*r,Math.sin(a)*r)}x.closePath();x.fill()});
   sp.rainbow=sp.star;
   sp.ice=mk(x=>{x.fillStyle='rgba(225,245,255,.62)';x.beginPath();x.arc(0,0,B.R-.5,0,7);x.fill();x.strokeStyle='rgba(255,255,255,.95)';x.lineWidth=2;x.stroke();x.lineWidth=1.2;x.beginPath();x.moveTo(-9,-9);x.lineTo(-3,-3);x.moveTo(6,-10);x.lineTo(3,-2);x.moveTo(9,6);x.lineTo(2,2);x.stroke()});
-  sp.chick=mk(x=>{x.fillStyle='#ffe066';x.beginPath();x.arc(0,2,9,0,7);x.fill();x.fillStyle='#ffd23f';x.beginPath();x.arc(0,-6,6.5,0,7);x.fill();x.fillStyle='#2b2622';x.beginPath();x.arc(-2.4,-7,1.3,0,7);x.arc(2.4,-7,1.3,0,7);x.fill();x.fillStyle='#ff8a2a';x.beginPath();x.moveTo(-2,-4.6);x.lineTo(2,-4.6);x.lineTo(0,-2.4);x.fill()});
+  // petite étoile mignonne (prisonnière de la bulle) : visage, joues roses, reflet
+  sp.chick=mk(x=>{const st=(r1,r2)=>{x.beginPath();for(let i=0;i<10;i++){const r=i%2?r2:r1,a=-Math.PI/2+i*Math.PI/5;x.lineTo(Math.cos(a)*r,Math.sin(a)*r+1)}x.closePath()};
+   x.fillStyle='#ffb72b';st(11,5.4);x.fill();x.fillStyle='#ffe066';st(9.6,4.7);x.fill();x.fillStyle='rgba(255,255,255,.7)';x.beginPath();x.ellipse(-3.2,-3.4,1.6,2.4,-.5,0,7);x.fill();
+   x.fillStyle='#2b2622';x.beginPath();x.arc(-2.3,.6,1.15,0,7);x.arc(2.3,.6,1.15,0,7);x.fill();x.fillStyle='#fff';x.beginPath();x.arc(-1.9,.2,.4,0,7);x.arc(2.7,.2,.4,0,7);x.fill();
+   x.fillStyle='#ff8fa3';x.beginPath();x.ellipse(-4,2.6,1.4,.9,0,0,7);x.ellipse(4,2.6,1.4,.9,0,0,7);x.fill();x.strokeStyle='#2b2622';x.lineWidth=.9;x.beginPath();x.arc(0,2.2,1.3,.2,Math.PI-.2);x.stroke()});
   sp.fire=mk(x=>{const gr=x.createRadialGradient(0,2,2,0,0,B.R);gr.addColorStop(0,'#fff3b0');gr.addColorStop(.4,'#ffb02e');gr.addColorStop(1,'#e2431f');x.fillStyle=gr;x.beginPath();x.arc(0,0,B.R-.5,0,7);x.fill();x.fillStyle='rgba(255,255,255,.5)';x.beginPath();x.ellipse(-5,-7,4,2.5,-.6,0,7);x.fill()});
   sp.bombBall=sp.bomb;return sp}
  function background(){const o=document.createElement('canvas');o.width=Math.ceil(run.lw*run.k*run.dpr);o.height=Math.ceil(run.lh*run.k*run.dpr);const x=o.getContext('2d');x.scale(run.k*run.dpr,run.k*run.dpr);
@@ -177,7 +181,7 @@ export function bubble(c){
    for(let i=0;i<pts.length-1&&acc<MAX;i++){const [x0,y0]=pts[i],[x1,y1]=pts[i+1],L=Math.hypot(x1-x0,y1-y0);for(let d=spacing-((acc+phase)%spacing);d<L&&acc+d<MAX;d+=spacing){const t=d/L,px=x0+(x1-x0)*t,py=Y(y0+(y1-y0)*t);g.globalAlpha=Math.max(0,1-(acc+d)/MAX);g.beginPath();g.arc(px,py,3.2,0,7);g.fill()}acc+=L}g.globalAlpha=1}
   // bulle en vol
   if(r.fly){drawBall(r.fly.b,r.fly.x,Y(r.fly.y));if(r.fly.b.t==='fire'){for(let i=0;i<3;i++){r.parts.push({x:r.fly.x+(Math.random()-.5)*10,y:r.fly.y+(Math.random()-.5)*10,vx:0,vy:30,life:.35,col:'#ffb02e',r:3})}}}
-  // chutes, particules, textes, poussins libérés
+  // chutes, particules, textes, étoiles libérées
   for(const f of r.falls){g.globalAlpha=Math.min(1,f.life);drawCell(f.x,Y(f.y),f.cell,.95)}g.globalAlpha=1;
   for(const p of r.parts){g.globalAlpha=Math.max(0,Math.min(1,p.life*1.6));g.fillStyle=p.col;g.beginPath();g.arc(p.x,Y(p.y),p.r,0,7);g.fill()}g.globalAlpha=1;
   g.textAlign='center';for(const t of r.texts){g.globalAlpha=Math.min(1,t.life*2);g.font='800 16px system-ui';g.lineWidth=3;g.strokeStyle='rgba(0,0,0,.45)';g.strokeText(t.t,t.x,Y(t.y));g.fillStyle='#fff';g.fillText(t.t,t.x,Y(t.y))}g.globalAlpha=1;

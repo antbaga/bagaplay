@@ -68,14 +68,20 @@ export function newGame(n,seed=Date.now()){const lv=makeLevel(n);
 export function nextBall(S){const pr=present(S);const pool=pr.length?pr:Array.from({length:S.colors},(_,i)=>i);return {t:'c',c:pool[Math.floor(S.rnd()*pool.length)]}}
 
 // ---- trajectoire : rebonds sur les murs ; arrêt au premier contact (bulle ou plafond) ; la boule de feu traverse tout
+// la bulle lancée ne s'arrête qu'en touchant 20 % plus près que ce qu'on voit (elle se faufile mieux entre deux bulles),
+// puis on la recule au contact exact pour qu'elle ne chevauche pas ses voisines
+export const HIT=D*.8;
+function settle(S,x,y,hit){let nx=x-hit.x,ny=y-hit.y;const n=Math.hypot(nx,ny)||1;x=hit.x+nx/n*D;y=hit.y+ny/n*D;
+ for(let it=0;it<4;it++){let moved=false;for(const b of S.bubbles){if(b===hit)continue;const dx=x-b.x,dy=y-b.y,d=Math.hypot(dx,dy);if(d<D-.5&&d>1e-6){const k=(D-d)/d;x+=dx*k*.5;y+=dy*k*.5;moved=true}}if(!moved)break}
+ x=Math.max(R,Math.min(W-R,x));y=Math.max(S.top+R,y);return [x,y]}
 export function trace(S,sx,sy,angle,fire=false){let x=sx,y=sy,dx=Math.cos(angle);const dy=-Math.sin(angle),pts=[[x,y]],hits=[],seen=new Set(),STEP=3;
  for(let k=0;k<4000;k++){let px=x,py=y;x+=dx*STEP;y+=dy*STEP;
   if(x<R||x>W-R){const wall=x<R?R:W-R,u=(wall-px)/(x-px),wy=py+(y-py)*u;pts.push([wall,wy]);x=2*wall-x;dx=-dx;px=wall;py=wy}
   if(fire){for(const b of S.bubbles)if(!seen.has(b.id)&&d2(b,{x,y})<(D-3)**2){seen.add(b.id);hits.push(b.id)}if(y-R<=S.top){pts.push([x,y]);return {pts,hits,end:[x,y],fire:true}}continue}
   // premier contact le long du petit segment
   let best=null;const vx=x-px,vy=y-py,a=vx*vx+vy*vy||1e-9;
-  for(const b of S.bubbles){const ox=px-b.x,oy=py-b.y;const c=ox*ox+oy*oy-D*D;if(c<=0){best={u:0,b};break}const bb=2*(vx*ox+vy*oy),disc=bb*bb-4*a*c;if(disc<0)continue;const u=(-bb-Math.sqrt(disc))/(2*a);if(u>=0&&u<=1&&(!best||u<best.u))best={u,b}}
-  if(best){const ex=px+vx*best.u,ey=py+vy*best.u;pts.push([ex,ey]);return {pts,end:[ex,ey],hit:best.b.id,hits}}
+  for(const b of S.bubbles){const ox=px-b.x,oy=py-b.y;const c=ox*ox+oy*oy-HIT*HIT;if(c<=0){best={u:0,b};break}const bb=2*(vx*ox+vy*oy),disc=bb*bb-4*a*c;if(disc<0)continue;const u=(-bb-Math.sqrt(disc))/(2*a);if(u>=0&&u<=1&&(!best||u<best.u))best={u,b}}
+  if(best){const [ex,ey]=settle(S,px+vx*best.u,py+vy*best.u,best.b);pts.push([ex,ey]);return {pts,end:[ex,ey],hit:best.b.id,hits}}
   const cy=S.top+R;if(y<=cy){const u=(py-cy)/Math.max(1e-6,py-y),ex=px+vx*u;pts.push([ex,cy]);return {pts,end:[ex,cy],hits,ceiling:true}}}
  pts.push([x,y]);return {pts,end:[x,y],hits}}
 

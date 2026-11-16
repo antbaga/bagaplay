@@ -705,3 +705,33 @@ body:has(.install-banner) footer{padding-bottom:120px}
 .ck-banner.show{opacity:1;transform:translate(-50%,-50%) scale(1)}.ck-banner.count{font-size:72px;color:#ffd23f}.ck-banner.go{font-size:52px;color:#ffb347}.ck-banner.good{color:#bff59a}.ck-banner.bad{color:#ff8a7a}
 .ck-banner.title{background:#fff7ea;color:#3b2a1e;text-shadow:none;border-radius:18px;padding:10px 18px;font-size:24px;box-shadow:0 5px 0 rgba(0,0,0,.25)}
 .ck-nogl{position:absolute;inset:0;display:grid;place-items:center;padding:30px;text-align:center}
+/* Massilia : échanges avec le plateau visible */
+.mb-modal:has(.mb-card.trade){align-items:flex-end;background:rgba(10,30,45,.12);padding:8px}
+.mb-card.trade{max-height:50%;overflow-y:auto;width:100%;max-width:520px;border-radius:20px 20px 14px 14px}
+.mb-tlegend{margin:2px 0 4px}
+.mb-tcols h4{display:flex;align-items:center;gap:5px;font-size:13px}.mb-tcols h4 small{margin-left:auto;font-size:12px;color:#2f7a55}
+.mb-tcols h4 .mb-ptok{width:22px;height:22px;border-radius:50%;background:var(--c);display:inline-grid;place-items:center}.mb-tcols h4 .mb-ptok svg{width:17px;height:17px}
+.mb-tl{margin:2px 0 4px;font-size:11px;font-weight:900;color:#7a6a4a;text-transform:uppercase}
+.mb-ti{position:relative;padding:0;overflow:hidden;align-items:stretch}.mb-ti .mb-band{flex:none;width:16px;display:grid;place-items:center;font-size:10px}
+.mb-ti .mb-tn{flex:1;min-width:0;padding:4px 5px}.mb-ti .mb-tn b{display:block;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.mb-ti .mb-tn small{display:block;font-size:10px;color:#6b7a70;font-weight:700}
+.mb-ti i{font-style:normal;align-self:center;padding-right:6px;color:#2f7a55;font-weight:900}.mb-ti.dis{opacity:.5}
+.mb-sq.tr{box-shadow:inset 0 0 0 5px var(--tc),0 0 0 4px var(--tc);z-index:2}
+.mb-sq.tr-dim{filter:saturate(.2) brightness(.7)}
+.mb-sq.tr-sel{animation:mb-trsel .7s ease-in-out infinite}
+@keyframes mb-trsel{50%{box-shadow:0 0 0 7px var(--tc),0 0 26px #fff;transform-style:preserve-3d;translate:0 0 14px}}
+.lobby-length{display:flex;gap:6px;margin:8px 0}.lobby-length button{flex:1;border:2px solid #d9e2c6;background:#fff;border-radius:12px;padding:8px 6px;font:inherit;font-weight:800;font-size:13px;color:#2c3e2f}.lobby-length button.on{border-color:#2f7a55;background:#e5f3ea}
+/* BagaCooker 5.14 : étiquettes des postes, aide, tuto */
+.ck-badge{position:absolute;left:0;top:0;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;background:rgba(255,253,245,.92);display:grid;place-items:center;font-size:18px;box-shadow:0 2px 0 rgba(0,0,0,.25);transition:background .2s}
+.ck-badge.crate{width:34px;height:34px;margin:-17px 0 0 -17px;font-size:22px;background:rgba(255,236,200,.95)}
+.ck-badge.pass{width:auto;height:30px;border-radius:15px;padding:0 9px 0 6px;display:flex;align-items:center;gap:3px;margin:-15px 0 0 -36px;background:#e2453c;color:#fff}.ck-badge.pass b{font-size:11px;letter-spacing:.3px}
+.ck-badge.hint{background:#ffd23f;animation:ck-hint .6s ease-in-out infinite;z-index:2}
+.ck-badge.go{background:#3fbf5a;animation:ck-go .5s ease-in-out infinite;z-index:3;box-shadow:0 0 0 4px rgba(63,191,90,.45),0 2px 0 rgba(0,0,0,.25)}
+@keyframes ck-hint{50%{scale:1.25}}@keyframes ck-go{50%{scale:1.3}}
+.ck-badge.tuto{background:#ffd23f;scale:1.2;box-shadow:0 0 0 4px rgba(255,210,63,.55)}
+.ck-arrow{position:absolute;left:0;top:0;font-size:34px;font-weight:900;color:#ffd23f;margin:-24px 0 0 -12px;text-shadow:0 3px 0 rgba(0,0,0,.45);animation:ck-arrow .55s ease-in-out infinite alternate;pointer-events:none;z-index:4}
+@keyframes ck-arrow{to{translate:0 -10px}}
+.ck-tuto{position:absolute;left:10px;right:10px;top:84px;background:#fff7ea;color:#3b2a1e;border-radius:16px;padding:10px 12px 8px;font-weight:900;font-size:14.5px;text-align:center;box-shadow:0 4px 0 rgba(0,0,0,.25);z-index:5}
+.ck-tuto.pop{animation:ck-in .35s cubic-bezier(.2,1.4,.4,1)}
+.ck-tuto i{display:flex;justify-content:center;gap:4px;margin-top:6px}.ck-tuto u{width:14px;height:5px;border-radius:3px;background:#e8dccb}.ck-tuto u.ok{background:#5fb04a}.ck-tuto u.on{background:#ffb347}
+.ck-first{background:#fff;border-radius:12px;padding:8px 10px;font-size:13px;font-weight:800;margin:6px 0 10px}
+.ck-tutobtn{display:block;margin:12px auto 0;border:0;border-radius:14px;padding:10px 16px;background:rgba(255,255,255,.14);color:#fff;font:inherit;font-weight:900}

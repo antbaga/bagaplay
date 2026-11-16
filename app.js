@@ -99,7 +99,7 @@ function chooseDifficulty(id){dialog('Difficulté','','Jouer',()=>{difficulty=+d
 const RESUME={bagastore:()=>savedRun('bagastore'),sudoku:savedSudoku,binero:()=>savedRun('binero'),crossword:()=>savedRun('crossword'),arrowword:()=>savedRun('arrowword'),'2048':()=>savedRun('2048'),massilia:()=>savedRun('massilia')};
 function resumeGame(id){const run=RESUME[id]?.();if(!run)return;difficulty=run.level??1;launch(id,false,{resume:true})}
 document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-filter]').forEach(x=>x.classList.toggle('active',x===b));renderCards(b.dataset.filter)});
-const VERSION='5.13.0';
+const VERSION='5.14.0';
 function setVolume(kind,v){vol[kind]=Math.max(0,Math.min(1,v));saved.vol=vol;persist();if(kind==='music'){setMusicVolume(vol.music);sound=vol.music>0;if(!paused)music(sound)}}
 function updateSound(){$('#footer-version').textContent=`BagaPlay ${VERSION} · Sans pub, sans compte.`}
 // Réglages : son, langue, version.
@@ -231,8 +231,10 @@ $('#pseudo-save').onclick=savePseudo;$('#pseudo').addEventListener('keydown',e=>
 // ---------------------------------------------------------------- salon (jeux à deux, pétanque à plusieurs)
 let lobbyGame=null,lobbyTimer=0,lobbySearch=null,partyPick=[];
 const PARTY_GAMES=['petanque','massilia'],isParty=id=>PARTY_GAMES.includes(id);
-const MASSILIA_RULES='Massilia Biz : 2 à 6 joueurs. Invite des joueurs ci-dessus : chacun joue son tour sur son téléphone, les autres voient les dés et les pions bouger. Partie rapide en 20 tours, le plus riche gagne. Quitter une partie en cours l’arrête pour tout le monde.';
-function openLobby(id){lobbyGame=id;const g=games.find(x=>x.id===id),party=isParty(id);$('#lobby-title').textContent=g.title;$('#lobby-rules').textContent=id==='massilia'?MASSILIA_RULES:party?PETANQUE_RULES:DUEL_RULES[id];$('#home').hidden=true;$('#scores').hidden=true;$('#lobby').hidden=false;lobbyStatus('');
+let partyQuick=true;   // Massilia Biz en ligne : partie rapide ou jusqu’à la faillite (choisi par celui qui invite)
+document.querySelectorAll('#lobby-length [data-q]').forEach(b=>b.onclick=()=>{partyQuick=b.dataset.q==='1';document.querySelectorAll('#lobby-length [data-q]').forEach(x=>x.classList.toggle('on',x===b))});
+const MASSILIA_RULES='Massilia Biz : 2 à 6 joueurs. Invite des joueurs ci-dessus : chacun joue son tour sur son téléphone, les autres voient les dés et les pions bouger. Choisis la durée avant d’inviter : partie rapide en 20 tours (le plus riche gagne) ou jusqu’à la faillite. Quitter une partie en cours l’arrête pour tout le monde.';
+function openLobby(id){lobbyGame=id;const g=games.find(x=>x.id===id),party=isParty(id);$('#lobby-title').textContent=g.title;$('#lobby-rules').textContent=id==='massilia'?MASSILIA_RULES:party?PETANQUE_RULES:DUEL_RULES[id];$('#lobby-length').hidden=id!=='massilia';$('#home').hidden=true;$('#scores').hidden=true;$('#lobby').hidden=false;lobbyStatus('');
  $('#lobby-ai').hidden=!(AI_GAMES.includes(id)||party);$('#lobby-local').textContent=party?'Jouer à plusieurs sur ce téléphone':'Jouer à deux sur ce téléphone';
  const on=online.enabled();$('#lobby-on').hidden=!on;$('#lobby-off').hidden=on;if(!on&&globalThis.bagaWebNeedsInstall)$('#lobby-off').textContent='Pour jouer en ligne, installe BagaPlay sur ton écran d’accueil : touche Partager puis « Sur l’écran d’accueil ».';
  partyPick=[];renderPick();
@@ -243,7 +245,7 @@ function lobbyStatus(t){$('#lobby-status').textContent=t}
 // Pétanque : choix des invités (puces), puis « Inviter ».
 function addPick(r){if(partyPick.some(p=>p.id===r.id))return;if(partyPick.length>=5){toast('6 joueurs au maximum.');return}partyPick.push(r);renderPick();lobbySearch.clear()}
 function renderPick(){const box=$('#lobby-pick');box.hidden=!isParty(lobbyGame)||!partyPick.length;const chips=$('#lobby-pick-list');chips.replaceChildren(...partyPick.map(r=>{const b=el('button','pick-chip',r.name+' ✕');b.setAttribute('aria-label','Retirer '+r.name);b.onclick=()=>{partyPick=partyPick.filter(p=>p!==r);renderPick()};return b}));$('#lobby-invite').textContent='Inviter ('+(partyPick.length+1)+' joueurs)'}
-$('#lobby-invite').onclick=()=>needPseudo(async()=>{const picks=partyPick.slice();if(!picks.length)return;$('#lobby-invite').disabled=true;try{await online.createParty(lobbyGame,picks.map(r=>r.id));partyPick=[];renderPick();toast('Invitations envoyées');loadMatches(true);askPushOnce()}catch(e){toast(e.message)}finally{$('#lobby-invite').disabled=false}});
+$('#lobby-invite').onclick=()=>needPseudo(async()=>{const picks=partyPick.slice();if(!picks.length)return;$('#lobby-invite').disabled=true;try{await online.createParty(lobbyGame,picks.map(r=>r.id),lobbyGame==='massilia'?{quick:partyQuick}:null);partyPick=[];renderPick();toast('Invitations envoyées');loadMatches(true);askPushOnce()}catch(e){toast(e.message)}finally{$('#lobby-invite').disabled=false}});
 // Défi : il part dans « Mes parties » en attente, l'adversaire accepte ou refuse.
 function offerChallenge(r,game){const g=games.find(x=>x.id===game);
  dialog('Défier '+r.name+' ?',`Défi ${GAME_PREP[game]}. ${r.name} l’accepte ou le refuse.`,'Défier',()=>needPseudo(async()=>{try{lobbyStatus('Envoi du défi…');await online.challenge(r.id,game,initialState(game));lobbyStatus('');toast('Défi envoyé à '+r.name);loadMatches(true);askPushOnce()}catch(e){lobbyStatus(e.message);toast(e.message)}}),'Annuler',()=>{})}

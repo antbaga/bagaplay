@@ -74,7 +74,9 @@ export const declineMatch=id=>matchAction(id,'decline');
 export const hideMatch=id=>matchAction(id,'hide');
 
 // ---- parties à plusieurs (pétanque)
-export const createParty=(game,pubs)=>rpc('party_create',{p_player:me(),p_name:named(),p_game:game,p_others:pubs});
+// opts (Massilia Biz : {quick}) : si la base n'a pas encore la mise à jour 5.14, on crée la partie sans
+export async function createParty(game,pubs,opts=null){const base={p_player:me(),p_name:named(),p_game:game,p_others:pubs};
+ if(!opts)return rpc('party_create',base);try{return await rpc('party_create',{...base,p_opts:opts})}catch(e){if(/function|schema cache|p_opts/i.test(e.message||''))return rpc('party_create',base);throw e}}
 export const respondParty=(id,yes)=>rpc('party_respond',{p_player:me(),p_id:id,p_accept:!!yes});
 export const getParty=id=>rpc('get_party',{p_player:me(),p_id:id});
 export const myParties=()=>rpc('my_parties',{p_player:me()});

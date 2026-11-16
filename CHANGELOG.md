@@ -1,3 +1,19 @@
+# 5.14.0 — 16 novembre 2026
+
+- BagaCooker :
+  - Tout est plus gros : en portrait, la cuisine est vue de côté (son petit côté prend la largeur de l’écran), les ingrédients sur les plans de travail, dans les mains et dans les assiettes sont nettement plus grands, chaque caisse montre une pile de son ingrédient.
+  - Une étiquette au-dessus de chaque poste (🥬 🍅 🥩 🍞 🧀 🥔, 🔪 planche, 🍳 poêle, 🍟 friteuse, 🧽 évier, 🍽️ assiettes, 🗑️ poubelle, 🛎️ Service). Les endroits où l’on peut poser ce qu’on tient s’allument, et le passe devient vert quand l’assiette en main correspond à une commande.
+  - Les bras du chef sont dans le bon sens (vers l’avant quand il porte, coupe ou lave).
+  - Animations : les objets font un petit « pop » quand on les pose ou qu’ils changent d’état, la caisse rebondit quand on y pioche, l’ingrédient tressaute pendant la découpe, l’assiette servie s’envole par le passe, le chef se penche en marchant.
+  - Tuto au premier lancement du premier resto : on prépare une salade pas à pas (flèche au-dessus du bon poste, consigne en haut), sans chrono, puis le vrai service commence. On peut le passer, et le refaire depuis la carte des restos.
+- Massilia Biz :
+  - En ligne, celui qui invite choisit la durée : partie rapide en 20 tours ou jusqu’à la faillite (nécessite le SQL 5.14).
+  - Échanges : le plateau reste visible au-dessus, vu de dessus ; les propriétés de chacun y sont entourées de sa couleur, celles de l’échange clignotent. En bas, toutes les cartes des deux joueurs (groupe, prix ou loyer actuel, maisons, hypothèque), y compris celles qu’on ne peut pas échanger à cause des maisons. Le joueur qui reçoit la proposition voit la même chose.
+- Éclate-Bulles :
+  - La bulle lancée ne s’arrête qu’en touchant 20 % plus près que ce qu’on voit : elle se faufile mieux entre deux bulles. Une fois arrêtée, elle se recule au contact pour ne pas chevaucher ses voisines.
+  - Les poussins sont remplacés par de petites étoiles mignonnes (thème spatial) : « Libère toutes les étoiles ».
+- Mots croisés et fléchés : 948 mots au lieu de 443.
+
 # 5.13.0 — 15 novembre 2026
 
 - Nouveau jeu : **BagaCooker**, un petit resto en 3D vue de 3/4.

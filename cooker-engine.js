@@ -131,8 +131,9 @@ function spawnOrder(S){const r=S.L.recipes[Math.floor(S.rnd()*S.L.recipes.length
  const o={id:S.nextId(),r,life:R.life,left:R.life,who:WHO[Math.floor(S.rnd()*WHO.length)]};S.orders.push(o);S.ev.push({t:'order',r,who:o.who})}
 
 // input : {mx,mz} joystick (-1..1), a : appui prendre/poser, b : bouton action maintenu, bTap : appui action
-export function step(S,dt,inp={}){if(S.over)return;S.t+=dt;S.left-=dt;const p=S.p;
- if(S.left<=0){S.left=0;S.over=true;S.ev.push({t:'over'});return}
+export function step(S,dt,inp={}){if(S.over)return;S.t+=dt;const p=S.p;
+ // tuto : pas de chrono, pas de nouvelles commandes, la commande d'exemple attend
+ if(!S.tut){S.left-=dt;if(S.left<=0){S.left=0;S.over=true;S.ev.push({t:'over'});return}}
  // déplacement
  const mx=inp.mx||0,mz=inp.mz||0,m=Math.hypot(mx,mz);p.dashCd=Math.max(0,p.dashCd-dt);p.dash=Math.max(0,p.dash-dt);
  const w=workable(S);
@@ -150,8 +151,8 @@ export function step(S,dt,inp={}){if(S.over)return;S.t+=dt;S.left-=dt;const p=S.
   if(t.ch==='S'&&it.k==='steak'&&it.st!=='burnt'){it.heat+=dt;if(it.st==='raw'&&it.heat>=COOK){it.st='cook';it.heat=0;S.ev.push({t:'cooked',k:'steak',x:t.x,z:t.z})}else if(it.st==='cook'&&it.heat>=BURN){it.st='burnt';S.ev.push({t:'burnt',k:'steak',x:t.x,z:t.z})}}
   if(t.ch==='F'&&it.k==='potato'&&it.st!=='burnt'&&it.st!=='raw'){it.heat+=dt;if(it.st==='chop'&&it.heat>=FRY){it.st='fry';it.heat=0;S.ev.push({t:'cooked',k:'potato',x:t.x,z:t.z})}else if(it.st==='fry'&&it.heat>=FRY_BURN){it.st='burnt';S.ev.push({t:'burnt',k:'potato',x:t.x,z:t.z})}}}
  // commandes : une nouvelle régulièrement (4 au plus), tout de suite s'il n'y en a plus
- S.orderT-=dt;if(!S.orders.length)S.orderT=Math.min(S.orderT,1.5);if(S.orders.length<4&&S.orderT<=0){spawnOrder(S);S.orderT=S.L.every}
- for(const o of S.orders)o.left-=dt;
+ if(!S.tut){S.orderT-=dt;if(!S.orders.length)S.orderT=Math.min(S.orderT,1.5);if(S.orders.length<4&&S.orderT<=0){spawnOrder(S);S.orderT=S.L.every}
+  for(const o of S.orders)o.left-=dt}
  for(const o of S.orders.filter(o=>o.left<=0)){S.lost++;S.combo=0;S.score=Math.max(0,S.score-10);S.ev.push({t:'angry',r:o.r,who:o.who})}
  S.orders=S.orders.filter(o=>o.left>0);
  // assiettes qui reviennent (sales, ou propres tant qu'on n'apprend pas la plonge)
@@ -159,6 +160,18 @@ export function step(S,dt,inp={}){if(S.over)return;S.t+=dt;S.left-=dt;const p=S.
  for(const r of S.returns.filter(r=>r.t<=0)){const d=S.tiles.flat().find(t=>t.ch==='D');if(d){S.L.wash?d.dirty++:d.clean++;S.ev.push({t:'return',x:d.x,z:d.z,dirty:S.L.wash})}}
  S.returns=S.returns.filter(r=>r.t>0)}
 
+// partie d'apprentissage : une salade à préparer, sans chrono
+export function tutorial(seed=1){const S=newGame(1,seed);S.tut=true;S.orders=[{id:S.nextId(),r:'salade',life:999,left:999,who:'Tatie Josette'}];return S}
+// étape du tuto d'après l'état de la cuisine (on peut s'écarter du chemin, l'étape suit)
+export function tutoStep(S){const all=[...S.tiles.flat().map(t=>t.item).filter(Boolean),S.p.hold].filter(Boolean),plates=all.filter(i=>i.k==='plate'&&!i.dirty);
+ const inPlate=k=>plates.some(p=>p.parts.includes(k)),held=S.p.hold,board=k=>S.tiles.flat().find(t=>t.ch==='K'&&t.item?.k===k);
+ const chopped=k=>inPlate(k)||all.some(i=>i.k===k&&i.st==='chop');
+ if(S.served>0)return 'done';
+ if(plates.some(p=>p.parts.includes('lettuce')&&p.parts.includes('tomato')))return held?.k==='plate'?'serve':'pickPlate';
+ if(plates.length&&chopped('lettuce')&&chopped('tomato'))return inPlate('lettuce')?'addTomato':'addLettuce';
+ if(chopped('lettuce')&&chopped('tomato'))return 'plate';
+ if(!chopped('lettuce')){if(board('lettuce'))return 'chopLettuce';if(held?.k==='lettuce')return 'boardLettuce';return 'takeLettuce'}
+ if(board('tomato'))return 'chopTomato';if(held?.k==='tomato')return 'boardTomato';return 'takeTomato'}
 export const starsFor=S=>S.L.stars.filter(s=>S.score>=s).length;
 // progression affichée au-dessus d'une case : [part, type]
 export function gauge(t){const it=t.item;
