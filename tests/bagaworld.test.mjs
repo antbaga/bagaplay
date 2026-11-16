@@ -101,3 +101,34 @@ test('en ligne : rejoindre, forcer le départ, abandonner, rejouer le journal à
  const S2=init();for(const x of log){drain(S2);assert.ok(F.act(S2,x))}drain(S2);drain(S);
  assert.deepEqual(S2.f.map(f=>[f.id,f.hp,f.x,f.y,f.alive]),S.f.map(f=>[f.id,f.hp,f.x,f.y,f.alive]));assert.equal(S2.phase,S.phase);
 });
+
+test('donjon : les salles s’enchaînent dans le même combat, à l’identique chez tous les clients', async()=>{
+ const F=await import('../bagaworld-fight.js'),C=await import('../bagaworld-char.js'),WW=await import('../bagaworld-world.js'),D=await import('../bagaworld-data.js');
+ const hero=C.newChar('H','bourrin');hero.xp=D.xpFor(40);hero.base.vit=400;hero.base.str=300;const me=C.fighterOf(hero,'me');me.ai='melee';
+ const rooms=D.DUNGEON.rooms.map((r,i)=>({arena:WW.dungeonArena(i),mobs:r.mobs.map(([m,l],j)=>C.mobFighter(m,l,'r'+i+'m'+j))}));
+ const make=()=>F.newFight(rooms[0].arena,[[me],rooms[0].mobs],99,{waves:rooms.slice(1)});
+ const S=make(),log=[],waves=[];const drain=S=>{let n=0;while(S.phase==='fight'&&F.current(S)?.kind==='mob'&&n++<300){const a=F.aiAction(S)||{a:'end'};if(!F.act(S,a))F.act(S,{a:'end'})}};
+ const push=a=>{assert.ok(F.act(S,a),JSON.stringify(a));log.push(a)};
+ push({a:'ready',id:'me'});
+ for(let k=0;k<600&&S.phase!=='over';k++){drain(S);if(S.phase==='over')break;if(S.phase==='place'){push({a:'ready',id:'me'});continue}
+  // le héros joue comme une IA (actions passées par le journal)
+  const a=F.aiAction(S)||{a:'end',id:'me'};const x={...a,id:'me'};if(!F.act(S,x)){F.act(S,{a:'end',id:'me'});log.push({a:'end',id:'me'})}else log.push(x);
+  for(const e of S.ev.splice(0))if(e.t==='wave')waves.push(e.n)}
+ assert.equal(S.phase,'over');assert.equal(S.winner,0,'le héros surpuissant gagne');assert.deepEqual(waves,[2,3,4]);
+ assert.equal(S.f.filter(f=>f.kind==='mob').length,D.DUNGEON.rooms.reduce((n,r)=>n+r.mobs.length,0),'tous les monstres comptent pour les récompenses');
+ const S2=make();for(const a of log){drain(S2);F.act(S2,a)}drain(S2);assert.equal(S2.phase,'over');assert.deepEqual(S2.f.map(f=>[f.id,f.hp]),S.f.map(f=>[f.id,f.hp]));
+});
+
+test('métiers : récolte, niveaux, fabrication, panoplies, quêtes à rapporter', async()=>{
+ const C=await import('../bagaworld-char.js'),D=await import('../bagaworld-data.js'),WW=await import('../bagaworld-world.js');
+ const ch=C.newChar('M','bisou');assert.equal(C.harvest(ch,D.HARVEST.tree).err,'job');C.learnJob(ch,'bucheron');assert.equal(C.harvest(ch,D.HARVEST.pine).err,'lvl');
+ for(let i=0;i<50;i++)C.harvest(ch,D.HARVEST.tree,()=>.9);assert.ok(C.jobLevel(ch,'bucheron')>=5);assert.ok(!C.harvest(ch,D.HARVEST.pine).err);
+ assert.equal(C.canCraft(ch,'arc_palmier'),'niveau');const n=C.maxCraft(ch,'planche');assert.ok(n>=6);C.craft(ch,'planche',n);assert.equal(ch.inv.planche,n);
+ for(const [id,r] of Object.entries(D.RECIPES)){assert.ok(D.ITEMS[id],id);assert.ok(D.JOBS[r.job]);for(const i in r.in)assert.ok(D.ITEMS[i],i)}
+ for(const h of Object.values(D.HARVEST))assert.ok(D.ITEMS[h.item]&&D.JOBS[h.job]);
+ ch.xp=D.xpFor(20);for(const i of ['coiffe_champidou','cape_champidou','anneau_champidou']){ch.inv[i]=1}const pm=C.derived(ch).pm;
+ C.equip(ch,'coiffe_champidou');C.equip(ch,'cape_champidou');assert.equal(C.derived(ch).pm,pm);C.equip(ch,'anneau_champidou');assert.equal(C.derived(ch).pm,pm+1,'3 pièces : +1 PM');
+ C.acceptQuest(ch,'q_bois');assert.equal(C.questState(ch,'q_bois'),'active');ch.inv.frene=10;assert.equal(C.questState(ch,'q_bois'),'ready');C.finishQuest(ch,'q_bois');assert.equal(ch.inv.frene,2);
+ const W=WW.genWorld();for(const j of Object.values(D.JOBS))assert.ok(W.npcs.some(n=>n.id===j.master),j.master);
+ const items=new Set();for(let z=0;z<W.N;z++)for(let x=0;x<W.N;x++){const h=WW.harvestAt(W,x,z);if(h)items.add(h.item)}for(const h of Object.values(D.HARVEST))assert.ok(items.has(h.item),'récoltable quelque part : '+h.item);
+});

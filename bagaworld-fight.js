@@ -11,7 +11,8 @@ const DIRS=[[1,0],[-1,0],[0,1],[0,-1]];
 export const dist=(a,b)=>Math.abs(a.x-b.x)+Math.abs(a.y-b.y);
 
 // ---- création. arena : {w,h,grid,start:[[cells équipe 0],[cells équipe 1]]}
-export function newFight(arena,teams,seed=1){const S={w:arena.w,h:arena.h,grid:arena.grid.slice(),start:arena.start,f:[],order:[],turn:0,round:1,phase:'place',traps:[],rnd:rng(seed),ev:[],winner:null,nextId:1,log:[]};
+// opts.waves : salles suivantes d'un donjon [{arena, mobs:[combattants]}], jouées à la suite dans le même combat
+export function newFight(arena,teams,seed=1,opts={}){const S={w:arena.w,h:arena.h,grid:arena.grid.slice(),start:arena.start,arena,f:[],order:[],turn:0,round:1,phase:'place',traps:[],rnd:rng(seed),ev:[],winner:null,nextId:1,log:[],waves:opts.waves||[],wave:0};
  teams.forEach((list,team)=>list.forEach(src=>S.f.push(fighter(S,src,team))));
  // placement par défaut : les cases de départ de chaque équipe dans l'ordre
  for(const team of [0,1]){const cells=S.start[team].slice();S.f.filter(f=>f.team===team).forEach((f,i)=>{const c=cells[i%cells.length];f.x=c[0];f.y=c[1]})}
@@ -98,7 +99,7 @@ export function act(S,a){if(S.phase==='over')return false;const ev=e=>S.ev.push(
  if(a.a==='cast'){const why=canCast(S,f,a.spell,a.x,a.y);if(why)return false;cast(S,f,a.spell,a.x,a.y);return true}
  return false}
 
-function start(S){S.phase='fight';const t0=S.f.filter(f=>f.team===0).sort((a,b)=>b.init-a.init),t1=S.f.filter(f=>f.team===1).sort((a,b)=>b.init-a.init);
+function start(S){S.phase='fight';const t0=S.f.filter(f=>f.team===0&&f.alive).sort((a,b)=>b.init-a.init),t1=S.f.filter(f=>f.team===1&&f.alive).sort((a,b)=>b.init-a.init);
  const first=(t0[0]?.init||0)>=(t1[0]?.init||0)?[t0,t1]:[t1,t0];S.order=[];for(let i=0;i<Math.max(t0.length,t1.length);i++){if(first[0][i])S.order.push(first[0][i].id);if(first[1][i])S.order.push(first[1][i].id)}
  S.turn=0;S.ev.push({t:'start'});beginTurn(S)}
 function beginTurn(S){const f=current(S);if(!f)return;if(!f.alive)return nextTurn(S);
@@ -153,8 +154,15 @@ function push(S,f,o,n){const dx=Math.sign(o.x-f.x),dy=Math.sign(o.y-f.y);const s
  if(n>0&&left>0){const d=left*(4+Math.floor(f.lvl/10));o.hp=Math.max(0,o.hp-d);S.ev.push({t:'dmg',id:o.id,v:d,el:'neutral',push:true});if(o.hp<=0)kill(S,o)}
  const tr=S.traps.find(t=>t.x===o.x&&t.y===o.y&&t.team!==o.team);if(tr)triggerTrap(S,tr)}
 function kill(S,o){o.alive=false;o.hp=0;S.ev.push({t:'die',id:o.id});check(S)}
-function check(S){if(S.phase==='over')return;for(const team of [0,1])if(!S.f.some(f=>f.team===team&&f.alive)){S.phase='over';S.winner=1-team;S.ev.push({t:'over',winner:1-team});return}
+function check(S){if(S.phase==='over')return;for(const team of [0,1])if(!S.f.some(f=>f.team===team&&f.alive)){if(team===1&&S.wave<S.waves.length&&S.f.some(f=>f.team===0&&f.alive)){nextWave(S);return}S.phase='over';S.winner=1-team;S.ev.push({t:'over',winner:1-team});return}
  const c=current(S);if(c&&!c.alive&&S.phase==='fight')nextTurn(S)}
+
+// salle suivante d'un donjon : nouvelle carte, nouveaux monstres, les survivants gardent leurs PV et se replacent
+function nextWave(S){const w=S.waves[S.wave++],A=w.arena;S.arena=A;S.grid=A.grid.slice();S.start=A.start;S.traps=[];S.order=[];S.turn=0;
+ for(const f of S.f){f.buffs=[];f.invis=0;f.cds={};f.uses={};f.ready=false;if(!f.alive)f.x=f.y=-9}
+ S.f.filter(f=>f.team===0&&f.alive).forEach((f,i)=>{const c=A.start[0][i%A.start[0].length];f.x=c[0];f.y=c[1]});
+ w.mobs.forEach((src,i)=>{const m=fighter(S,src,1),c=A.start[1][i%A.start[1].length];m.x=c[0];m.y=c[1];S.f.push(m)});
+ S.phase='place';S.ev.push({t:'wave',n:S.wave+1,of:S.waves.length+1})}
 
 // ---- IA des monstres : renvoie les actions de son tour (une par une, pour pouvoir les animer)
 export function aiAction(S){const f=current(S);if(!f||S.phase!=='fight')return null;

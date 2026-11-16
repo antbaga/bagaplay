@@ -29,11 +29,11 @@ export function bagaworld(c){
  const ui=document.createElement('div');ui.className='bw-ui';wrap.append(ui);
  const R=createGL(cv);if(!R){ui.innerHTML=`<div class="bw-nogl">${T('Ton appareil ne permet pas d’afficher BagaWorld en 3D (WebGL indisponible).','Your device can’t display BagaWorld in 3D (WebGL unavailable).')}</div>`;return {destroy(){}}}
  const W=WW.genWorld(),groups=WW.spawnGroups(W),wr=F.rng(Date.now()&0xffff);
- const save0=load();let ch=save0?.char||null,disc=new Set(save0?.zaaps||['town']);
+ const save0=load();let ch=save0?.char||null;if(ch)ch.jobs??={};let disc=new Set(save0?.zaaps||['town']);
  let mode=ch?'world':'create',alive=true,t=0,dt=.016,lastSave=0;
  const P={x:W.start.x,z:W.start.z,y:BH,yaw:0,path:[],walk:0,sit:false,goal:null};if(save0?.pos&&WW.walkable(W,save0.pos.x,save0.pos.z)){P.x=save0.pos.x;P.z=save0.pos.z}
  const cam={yaw:0,dist:12,el:.92,x:P.x,z:P.z,shake:0},view={VP:null,eye:null,w:1,h:1};
- const M={chunks:new Map(),water:null,cube:MD.cubeMesh(R),tile:MD.tileMesh(R),mobs:{},chars:new Map(),npcs:{}};
+ const M={chunks:new Map(),dung:[],water:null,cube:MD.cubeMesh(R),tile:MD.tileMesh(R),mobs:{},chars:new Map(),npcs:{}};
  const NET={on:false,pub:null,others:new Map(),chat:[],lastChat:0,group:[],fights:[],inv:[],shown:new Set(),ignore:new Set(),t:0,busy:false,err:0,now:false,grp:false,leader:false,first:true,scope:'local',myBubble:null};
  try{NET.on=online_.enabled()&&online_.registered()}catch{}
  const fx=[],floats=[];let fight=null,zoneNow=null,dialogOpen=false,panelOpen=null,regenT=0;
@@ -100,10 +100,11 @@ export function bagaworld(c){
   for(const n of W.npcs)cand.push({k:'npc',o:n,x:n.x,z:n.z,y:WW.tileH(W,n.x,n.z)*BH+.8});
   for(const o of NET.others.values())if(o.d.state!=='fight')cand.push({k:'player',o,x:o.x,z:o.z,y:WW.tileH(W,o.x,o.z)*BH+.8});
   for(const f2 of NET.fights)cand.push({k:'fightm',o:f2,x:f2.x,z:f2.z,y:WW.tileH(W,f2.x,f2.z)*BH+.8});
+  cand.push({k:'cave',o:W.cave,x:W.cave.x,z:W.cave.z-1.4,y:WW.tileH(W,W.cave.x,W.cave.z)*BH+1});
   for(const zp of W.zaaps)cand.push({k:'zaap',o:zp,x:zp.x,z:zp.z-1.2,y:WW.tileH(W,zp.x,zp.z)*BH+.8});
   for(const q of cand){const s=scr(q.x,q.y,q.z);if(!s)continue;const d=Math.hypot(s[0]-x,s[1]-y);if(d<46&&(!best||d<best.d))best={...q,d}}
   if(best){SFX.click();if(best.k==='player'){playerCard(best.o);return}if(best.k==='fightm'){fightCard(best.o);return}goTo(best.x,best.z,best);return}
-  const g=groundAt(x,y);if(g)goTo(g.x,g.z,null)}
+  const g=groundAt(x,y);if(!g)return;if(harvestTap(g))return;goTo(g.x,g.z,null)}
  function goTo(x,z,goal){let tx=x,tz=z;if(!WW.walkable(W,tx,tz)){const near=[];for(let r=1;r<=2;r++)for(let dz=-r;dz<=r;dz++)for(let dx=-r;dx<=r;dx++){const xx=Math.floor(x)+dx+.5,zz=Math.floor(z)+dz+.5;if(WW.walkable(W,xx,zz))near.push([xx,zz,Math.hypot(xx-P.x,zz-P.z)])}
    near.sort((a,b)=>a[2]-b[2]);if(!near.length)return;[tx,tz]=near[0]}
   const path=WW.findPath(W,P.x,P.z,tx,tz,6000);if(!path){toastMsg(T('Je ne peux pas aller là-bas.','I can’t get there.'));return}
@@ -120,7 +121,9 @@ export function bagaworld(c){
   if(P.goal){const g=P.goal,d=Math.hypot(g.x-P.x,g.z-P.z);
    if(g.k==='mob'&&g.o.dead<=0&&!g.o.busy&&!g.o.remote){if(d<1.4){P.path=[];P.goal=null;startFight(g.o)}else if(!P.path.length||Math.hypot(P.path.at(-1)[0]-g.o.x,P.path.at(-1)[1]-g.o.z)>1.5)goTo(g.o.x,g.o.z,g)}
    else if(g.k==='npc'&&d<1.8){P.path=[];P.goal=null;talk(g.o.id)}else if(g.k==='zaap'&&d<2.2){P.path=[];P.goal=null;zaapPanel(g.o)}
+   else if(g.k==='cave'&&d<2.4){P.path=[];P.goal=null;dungeonPanel()}else if(g.k==='harvest'&&!P.path.length){P.goal=null;startHarvest(g.h)}
    else if(!P.path.length)P.goal=null}
+  harvestTick();regrowTick();
   // groupes agressifs
   for(const g of groups)if(g.aggro&&g.dead<=0&&!g.busy&&!g.remote&&!starting&&Math.hypot(g.x-P.x,g.z-P.z)<2.2&&WW.zoneAt(Math.floor(P.x),Math.floor(P.z))!=='town'){toastMsg(T('Tu t’es fait agresser !','You got ambushed!'));startFight(g);return}
   WW.tickGroups(W,groups,dt,wr);
@@ -144,7 +147,7 @@ export function bagaworld(c){
   // Bagaaps : étincelles
   for(const zp of W.zaaps)if(Math.random()<dt*6&&Math.hypot(zp.x-cam.x,zp.z-cam.z)<20)fx.push({x:zp.x+(Math.random()-.5)*.6,y:WW.tileH(W,zp.x,zp.z-1.2)*BH+.6,z:zp.z-1.2+(Math.random()-.5)*.6,vx:0,vy:.8,vz:0,life:1,col:hex('#c9b8ff'),s:.06,g:-.3})
   // le joueur
-  const pose=P.sit?{legL:-1.5,legR:-1.5,bob:-.2,armL:.3,armR:.3}:P.path.length||keys.size?{legL:Math.sin(P.walk)*.7,legR:-Math.sin(P.walk)*.7,armL:-Math.sin(P.walk)*.6,armR:Math.sin(P.walk)*.6,bob:Math.abs(Math.sin(P.walk))*.05}:{bob:Math.sin(t*2)*.01,armR:Math.sin(t*1.3)*.05};
+  const pose=P.harv?(P.harv.h.fish?{armR:1.3,armL:1.1,bob:Math.sin(t*3)*.01}:{armR:.7+Math.sin(t*11)*.9,armL:.5+Math.sin(t*11)*.7,lean:-.12-Math.max(0,Math.sin(t*11))*.1}):P.sit?{legL:-1.5,legR:-1.5,bob:-.2,armL:.3,armR:.3}:P.path.length||keys.size?{legL:Math.sin(P.walk)*.7,legR:-Math.sin(P.walk)*.7,armL:-Math.sin(P.walk)*.6,armR:Math.sin(P.walk)*.6,bob:Math.abs(Math.sin(P.walk))*.05}:{bob:Math.sin(t*2)*.01,armR:Math.sin(t*1.3)*.05};
   shadow(P.x,P.y,P.z,.5);MD.drawChar(R,M4,charParts(myLook()),M4.trs(P.x,P.y,P.z,P.yaw,1.4),pose);
   if(marker){marker.t+=dt;if(marker.t>1.2||!P.path.length)marker=null;else{const s=.5+Math.sin(marker.t*8)*.1;R.draw(M.tile,M4.mul(M4.t(marker.x-s/2/.92,WW.tileH(W,marker.x,marker.z)*BH+.03,marker.z-s/2/.92),M4.sc(s,1,s)),[1,.85,.2,1],.7)}}}
  function drawMob(id,x,y,z,yaw,a=1,tint=null){const s=MD.MOB_SCALE[id]||1,sq=1+Math.sin(t*6+x*3)*.04;shadow(x,y,z,.45*s);R.draw(mobMesh(id),M4.mul(M4.trs(x,y,z,yaw,s),M4.sc(1/sq,sq,1/sq)),tint,a)}
@@ -161,15 +164,15 @@ export function bagaworld(c){
  const myFid=()=>NET.on&&NET.pub?NET.pub:'me';
  const meF=()=>fight?fight.S.f.find(f=>f.id===fight.me):null;
  const myTeam=()=>meF()?.team??0;
- function buildFight(init,meId,g,online){const S=F.newFight(init.arena,init.teams,init.seed);
-  fight={S,A:init.arena,g,seed:init.seed,me:meId,kind:init.kind||'pve',online,init};
+ function buildFight(init,meId,g,online){const S=F.newFight(init.arena,init.teams,init.seed,{waves:init.waves||[]});
+  fight={S,A:S.arena,g,seed:init.seed,me:meId,kind:init.kind||'pve',online,init};
   F_={sel:null,disp:new Map(),aiT:0,busy:0,over:false,timer:60,hover:null,queue:[],posting:false,t0:t,went:false};return S}
  function dispAll(){for(const f of fight.S.f){const d=F_.disp.get(f.id);if(!d)F_.disp.set(f.id,{x:f.x,y:f.y,path:[],yaw:f.team?0:Math.PI,hit:0});else if(!d.path.length&&d.tx==null){d.x=f.x;d.y=f.y}}}
  function enterFight(){mode='fight';music('fight');SFX.bleat();buzz([40,40,40]);const A=fight.A;cam.x=A.ox+A.w/2;cam.z=A.oz+A.h/2;cam.dist=fitDist();P.path=[];P.goal=null;P.sit=false;closePanel();
   dispAll();if(fight.S.phase==='place')banner(fight.kind==='pvp'?T('Duel !','Duel!'):T('Combat !','Fight!'),T('Place-toi sur une case bleue, puis « Prêt »','Pick a blue cell, then “Ready”'));fightUI()}
  // les tours des monstres d'un coup, sans animation (pour rattraper un combat en cours)
  function drainAI(S){let n=0;while(S.phase==='fight'&&F.current(S)?.kind==='mob'&&n++<300){const a=F.aiAction(S)||{a:'end'};if(!F.act(S,a))F.act(S,{a:'end'})}}
- function replay(list){const S=fight.S;for(const a of list){drainAI(S);F.act(S,a);fight.online.applied++}S.ev.length=0;fight.online.recv=fight.online.applied}
+ function replay(list){const S=fight.S;for(const a of list){drainAI(S);F.act(S,a);fight.online.applied++}S.ev.length=0;fight.online.recv=fight.online.applied;fight.A=S.arena}
  async function startFight(g){if(fight||starting)return;g.busy=true;P.path=[];P.goal=null;
   let meId=myFid();const A=WW.arenaAt(W,P.x,P.z,g.x,g.z),seed=(Math.random()*2**31)|0,
    init={kind:'pve',arena:A,seed,teams:[[C.fighterOf(ch,meId)],g.members.map(([m,l],i)=>C.mobFighter(m,l,'m'+i))],gid:g.gid};
@@ -182,12 +185,13 @@ export function bagaworld(c){
   try{for(let k=0;k<4;k++){const r=await online_.bwSync(netState(),NET.lastChat,id,0);const fd=r.fight;if(!fd||!fd.init)throw new Error(T('Combat introuvable.','Fight not found.'));
     if(fd.status!=='active')throw new Error(T('Combat terminé.','Fight over.'));
     let log=fd.log;const pub=r.me.id;NET.pub=pub;
+    if(!resume&&fd.init.dungeon&&!ch.inv[D.DUNGEON.key])throw new Error(T('Il te faut une Clé moisie pour entrer dans la grotte.','You need a Mouldy Key to enter the cave.'));
     if(!resume){const me=C.fighterOf(ch,pub);try{await online_.bwFightAct(id,fd.n,{a:'join',f:me});log=[...log,{a:'join',f:{...me,id:pub}}]}catch(e){if(/conflit/.test(e.message))continue;throw e}}
     if(!alive)return;const g=groups.find(q=>q.gid===fd.init.gid)||null;if(g)g.busy=true;
     buildFight(fd.init,pub,g,{id,applied:0,recv:0});replay(log);
     if(fight.S.phase==='over'){online_.bwFightDone(id).catch(()=>{});NET.ignore.add(id);fight=null;F_=null;return}
     if(!meF()){const why=T('Trop tard, le combat a commencé.','Too late, the fight has started.');online_.bwFightDone(id).catch(()=>{});fight=null;F_=null;throw new Error(why)}
-    P.x=fight.A.ox+meF().x+.5;P.z=fight.A.oz+meF().y+.5;enterFight();if(!resume)toastMsg(T('Tu rejoins le combat !','You join the fight!'),'good');return}
+    if(fight.init.dungeon){if(!resume){C.takeItem(ch,D.DUNGEON.key);store()}}else{P.x=fight.A.ox+meF().x+.5;P.z=fight.A.oz+meF().y+.5}enterFight();if(!resume)toastMsg(T('Tu rejoins le combat !','You join the fight!'),'good');return}
    throw new Error(T('Trop de monde en même temps, réessaie.','Too busy, try again.'))}
   catch(e){NET.ignore.add(id);toastMsg(e.message)}finally{starting=false}}
  // duel accepté : celui qui accepte prépare l'arène entre les deux joueurs et crée le combat
@@ -227,6 +231,8 @@ export function bagaworld(c){
    case 'join':toastMsg(`${f.name} ${T('rejoint le combat !','joins the fight!')}`,'good');SFX.buff();break;
    case 'quit':toastMsg(T('Un joueur a quitté le combat.','A player left the fight.'));break;
    case 'start':syncDisp();break;
+   case 'wave':{fight.A=S.arena;for(const f2 of S.f){const d2=F_.disp.get(f2.id);if(d2){d2.x=f2.x;d2.y=f2.y;d2.path=[];d2.tx=null}}F_.t0=t;F_.went=false;F_.sel=null;
+    const room=D.DUNGEON.rooms[e.n-1];banner(`${T('Salle','Room')} ${e.n}/${e.of}`,room?nm(room):'',3);SFX.zap();buzz([30,60,30]);cam.x=fight.A.ox+fight.A.w/2;cam.z=fight.A.oz+fight.A.h/2;break}
    case 'step':d.path.push([e.x,e.y]);break;
    case 'tp':case 'dash':case 'push':d.path=[];d.tx=e.x;d.ty=e.y;d.slide=0;d.fx=d.x;d.fy=d.y;if(e.t==='push')cam.shake=.3;break;
    case 'cast':{const sp=F.spellOf(f,e.spell),from=cw(f.x,f.y),to=cw(e.x,e.y);d.cast=.35;d.yaw=Math.atan2(-(e.x-f.x),-(e.y-f.y));F_.busy+=.45;
@@ -260,7 +266,7 @@ export function bagaworld(c){
    else if(o&&S.phase==='fight'&&c?.kind==='player'&&(o.quiet||0)>65&&o.recv===o.applied){o.quiet=0;doAct({a:'end',id:c.id})}   // joueur absent
    else if(o&&S.phase==='place'&&fight.kind==='pve'&&!F_.went&&t-F_.t0>32&&fight.S.f[0]?.id===fight.me){F_.went=true;doAct({a:'go'})}}
   hud();fightHud()}
- function drawFight(){const S=fight.S,A=fight.A;drawWorld(true);
+ function drawFight(){const S=fight.S,A=fight.A;if(A.dungeon)R.draw(M.dung[A.room]||(M.dung[A.room]=MD.dungeonMesh(R,A)),M4.id());else drawWorld(true);
   const me=meF(),mt=myTeam(),myTurn=myTurnNow();
   // grille : cases de placement, de déplacement, de portée et de zone
   const marks=new Map();const mark=(x,y,col,a)=>marks.set(x+','+y,[x,y,col,a]);
@@ -272,7 +278,7 @@ export function bagaworld(c){
   for(const tr of S.traps)if(tr.team===mt)mark(tr.x,tr.y,[.7,.3,.9,1],.6);
   for(const [x,y,col,a] of marks.values())R.draw(M.tile,M4.t(A.ox+x,cellY(x,y)+.02,A.oz+y),col,a);
   // combattants (case de couleur d'équipe, celui qui joue est surligné)
-  const cur=F.current(S);for(const f of S.f){const d=F_.disp.get(f.id);if(!d)continue;if(!f.alive&&!d.dying){d.dying=1}if(d.dying){d.dying-=dt*1.2;if(d.dying<=0)continue}
+  const cur=F.current(S);for(const f of S.f){const d=F_.disp.get(f.id);if(!d||f.x<0)continue;if(!f.alive&&!d.dying){d.dying=1}if(d.dying){d.dying-=dt*1.2;if(d.dying<=0)continue}
    const ally=f.team===mt,x=A.ox+d.x+.5,z=A.oz+d.y+.5,y=cellY(Math.round(d.x),Math.round(d.y)),a=(f.invis&&!ally?0:f.invis?.45:1)*(d.dying?Math.max(0,d.dying):1),tint=d.hit>0?[1,1,1,d.hit*2]:null;
    R.draw(M.tile,M4.mul(M4.t(x-.45,y+.025,z-.45),M4.sc(.98,1,.98)),ally?[.25,.55,1,1]:[1,.3,.25,1],f===cur?.85:.45);if(a<=0)continue;
    if(f.kind==='mob')drawMob(f.mob,x,y+(d.cast?Math.sin(d.cast*9)*.15:0),z,d.yaw??0,a,tint);
@@ -289,11 +295,11 @@ export function bagaworld(c){
    (won?SFX.win:SFX.lose)();fight=null;F_=null;mode='world';cam.x=P.x;cam.z=P.z;cam.dist=worldDist();zoneNow=null;fightUI();return}
   const humans=S.f.filter(f=>f.kind==='player'&&f.team===0),idx=Math.max(0,humans.findIndex(f=>f.id===fight.me));
   const r=C.rewards(S,humans.map(f=>({ch:f.id===fight.me?ch:pseudoChar(f)})),F.rng((fight.seed^0x5bd1^hashId(fight.me))>>>0))[idx]||{xp:0,kamas:0,drops:[]};
-  ch.hp=won?Math.max(1,me?.hp||1):null;
+  ch.hp=won?Math.max(1,me?.hp||1):null;const dg=!!fight.init?.dungeon;if(dg&&won)ch.dungeons=(ch.dungeons||0)+1;
   let lv=null;if(won){lv=C.applyRewards(ch,r,S);if(g){g.dead=40;g.busy=false}SFX.win()}else{if(g)g.busy=false;SFX.lose()}
   if(!won){const ph=W.phoenix;P.x=ph.x;P.z=ph.z;ch.hp=Math.round(C.derived(ch).maxHp*.15)}
   store();const items=r.drops.reduce((m,i)=>(m[i]=(m[i]||0)+1,m),{});
-  panel(`<div class="bw-result ${won?'win':'lose'}"><h2>${won?T('Victoire !','Victory!'):T('Défaite…','Defeat…')}</h2>
+  panel(`<div class="bw-result ${won?'win':'lose'}"><h2>${won?(dg?T('Grotte terminée !','Cave cleared!'):T('Victoire !','Victory!')):T('Défaite…','Defeat…')}</h2>
    ${won?`<p>${humans.length>1?T('Vous avez battu','You beat'):T('Tu as battu','You beat')} ${S.f.filter(f=>f.kind==='mob').map(f=>`${esc(nm(D.MOBS[f.mob]))} (${f.lvl})`).join(', ')}.</p>${humans.length>1?`<p class="bw-small">${T('Avec','With')} ${humans.filter(f=>f.id!==fight.me).map(f=>esc(f.name)).join(', ')}</p>`:''}
    <div class="bw-gains"><span>✨ +${r.xp} XP</span><span>🪙 +${r.kamas} kamas</span></div>
    ${Object.keys(items).length?`<div class="bw-drops">${Object.entries(items).map(([i,n])=>`<span title="${esc(nm(D.ITEMS[i]))}">${D.ITEMS[i].ic}<b>×${n}</b><small>${esc(nm(D.ITEMS[i]))}</small></span>`).join('')}</div>`:''}
@@ -337,7 +343,7 @@ export function bagaworld(c){
  const questMark=npc=>{for(const qid in D.QUESTS){if(D.QUESTS[qid].giver!==npc)continue;const s=C.questState(ch,qid);if(s==='ready')return '❓ ';if(s==='available')return '❗ '}return ''};
  function fightUI(){const box=ui.querySelector('.bw-fight');if(!box)return;box.hidden=!fight;if(!fight)return;const S=fight.S,me=meF();if(!me)return;const mt=me.team;
   box.querySelector('.bw-ready').hidden=S.phase!=='place';box.querySelector('.bw-ready').disabled=!!me.ready;box.querySelector('.bw-ready').textContent=me.ready?T('En attente…','Waiting…'):T('Prêt !','Ready!');box.querySelector('.bw-end').hidden=S.phase!=='fight';
-  box.querySelector('.bw-timeline').innerHTML=(S.phase==='place'?S.f:S.order.map(id=>S.f.find(f=>f.id===id))).map(f=>`<span class="bw-tl ${f.team!==mt?'red':'blue'}${f===F.current(S)?' cur':''}${f.alive?'':' dead'}" data-id="${f.id}">${f.kind==='mob'?mobIcon(f.mob):D.CLASSES[f.cls].ic}${f.kind==='player'&&f.ready&&S.phase==='place'?'<u>✓</u>':''}<i style="width:${(100*f.hp/f.maxHp).toFixed(0)}%"></i></span>`).join('');
+  box.querySelector('.bw-timeline').innerHTML=(S.phase==='place'?S.f.filter(f=>f.alive):S.order.map(id=>S.f.find(f=>f.id===id))).map(f=>`<span class="bw-tl ${f.team!==mt?'red':'blue'}${f===F.current(S)?' cur':''}${f.alive?'':' dead'}" data-id="${f.id}">${f.kind==='mob'?mobIcon(f.mob):D.CLASSES[f.cls].ic}${f.kind==='player'&&f.ready&&S.phase==='place'?'<u>✓</u>':''}<i style="width:${(100*f.hp/f.maxHp).toFixed(0)}%"></i></span>`).join('');
   box.querySelectorAll('.bw-tl').forEach(el=>c.listen(el,'click',()=>showFighter(S.f.find(f=>f.id===el.dataset.id))));
   const list=[...me.spells,...(me.weapon?['weapon']:[])];
   box.querySelector('.bw-spells').innerHTML=list.map(id=>{const sp=F.spellOf(me,id),cd=me.cds[id]||0,used=sp.perTurn&&(me.uses[id]||0)>=sp.perTurn,off=!myTurnNow()||sp.pa>me.pa||cd>0||used;
@@ -376,22 +382,22 @@ export function bagaworld(c){
  function statLines(st){return Object.entries(st||{}).map(([k,v])=>`<span>${D.STATS[k].ic} ${v>0?'+':''}${v} ${nm(D.STATS[k])}</span>`).join('')}
  function itemPanel(id,worn=false){const it=D.ITEMS[id],L=C.level(ch);
   const card=panel(`<h3>${it.ic} ${esc(nm(it))}</h3><p class="bw-flav">${esc(X(it.d))}</p>${it.slot?`<p>${X(D.SLOT_FR[it.slot])} · ${T('niveau','level')} ${it.lvl}${it.lvl>L?` <b class="bw-red">(${T('trop haut','too high')})</b>`:''}</p><div class="bw-kv">${statLines(it.stats)}</div>${it.weapon?`<p>⚔️ ${it.weapon.pa} PA · ${D.EL[it.weapon.el].ic} ${it.weapon.min}-${it.weapon.max} · 🎯 ${it.weapon.range.join('-')}</p>`:''}`:''}
-   ${it.use?`<p>💚 ${T('Rend','Restores')} ${it.use.heal} PV</p>`:''}<p class="bw-small">${T('Revente','Sells for')} : 🪙 ${Math.max(1,Math.floor(it.price*.4))}</p>
+   ${it.use?`<p>💚 ${T('Rend','Restores')} ${it.use.heal} PV</p>`:''}${setInfo(it)}<p class="bw-small">${T('Revente','Sells for')} : 🪙 ${Math.max(1,Math.floor(it.price*.4))}</p>
    <div class="bw-btns">${worn?`<button class="bw-b" data-a="unequip">${T('Retirer','Unequip')}</button>`:it.slot?`<button class="bw-b primary" data-a="equip" ${C.canEquip(ch,id)?'':'disabled'}>${T('Équiper','Equip')}</button>`:''}${it.use&&!worn?`<button class="bw-b primary" data-a="use">${T('Utiliser','Use')}</button>`:''}<button class="bw-b" data-a="back">${T('Retour','Back')}</button></div>`);
   card.querySelectorAll('[data-a]').forEach(b=>c.listen(b,'click',()=>{const a=b.dataset.a;if(a==='equip'&&C.equip(ch,id)){SFX.buff();toastMsg(T('Équipé !','Equipped!'),'good')}if(a==='unequip')C.unequip(ch,it.slot);
    if(a==='use'){const got=C.useItem(ch,id);SFX.heal();toastMsg(`+${got} PV`,'good')}store();bag()}))}
  function stats(){const d=C.derived(ch);
-  const card=panel(`<h3>⭐ ${esc(ch.name)} <small>${nm(D.CLASSES[ch.cls])} · ${T('niveau','level')} ${d.lvl}</small></h3><p class="bw-small">${T('Points à répartir','Points to spend')} : <b>${ch.points}</b> · ${T('la Sagesse coûte 3 points','Wisdom costs 3 points')}</p>
+  const card=panel(`<h3>⭐ ${esc(ch.name)} <small>${nm(D.CLASSES[ch.cls])} · ${T('niveau','level')} ${d.lvl}</small></h3><div class="bw-tabs"><button class="on">${T('Caractéristiques','Characteristics')}</button><button data-tab="jobs">${T('Métiers','Jobs')}</button></div><p class="bw-small">${T('Points à répartir','Points to spend')} : <b>${ch.points}</b> · ${T('la Sagesse coûte 3 points','Wisdom costs 3 points')}</p>
    <div class="bw-stats">${['vit','wis','str','int','cha','agi'].map(k=>`<div><span>${D.STATS[k].ic} ${nm(D.STATS[k])}</span><b>${d.stats[k]??d.vit}</b><small>${ch.base[k]?`(${ch.base[k]} ${T('investis','spent')})`:''}</small><button data-k="${k}" ${ch.points>=C.COST[k]?'':'disabled'}>+</button><button data-k10="${k}" ${ch.points>=C.COST[k]*10?'':'disabled'}>+10</button></div>`).join('')}</div>
    <div class="bw-kv"><span>❤️ ${d.maxHp} PV</span><span>⭐ ${d.pa} PA</span><span>👟 ${d.pm} PM</span><span>⚡ ${d.init} init.</span>${d.range?`<span>🎯 +${d.range}</span>`:''}</div>
    <p class="bw-small">${T('Force : Terre · Intelligence : Feu et soins · Chance : Eau · Agilité : Air, fuite et tacle · Sagesse : XP et butin.','Strength: Earth · Intelligence: Fire and heals · Chance: Water · Agility: Air, escape and tackle · Wisdom: XP and drops.')}</p>
    <button class="bw-b" data-close>${T('Fermer','Close')}</button>`);
-  card.querySelectorAll('[data-k],[data-k10]').forEach(b=>c.listen(b,'click',()=>{const k=b.dataset.k||b.dataset.k10;if(C.spend(ch,k,b.dataset.k10?10:1)){SFX.click();store();stats()}}))}
+  card.querySelectorAll('[data-k],[data-k10]').forEach(b=>c.listen(b,'click',()=>{const k=b.dataset.k||b.dataset.k10;if(C.spend(ch,k,b.dataset.k10?10:1)){SFX.click();store();stats()}}));c.listen(card.querySelector('[data-tab]'),'click',jobsPanel)}
  function spells(){const L=C.level(ch);const card=panel(`<h3>✨ ${T('Sorts','Spells')} <small>${nm(D.CLASSES[ch.cls])}</small></h3><div class="bw-splist">${D.classSpells(ch.cls).map(id=>{const sp=D.SPELLS[id],ok=sp.lvl<=L;
    return `<button class="bw-spl${ok?'':' lock'}" data-s="${id}"><span>${sp.ic}</span><b>${esc(nm(sp))}</b><small>${ok?`${sp.pa} PA · ${sp.range.join('-')} ${T('PO','range')}`:`${T('niveau','level')} ${sp.lvl}`}</small></button>`}).join('')}</div><button class="bw-b" data-close>${T('Fermer','Close')}</button>`);
   card.querySelectorAll('.bw-spl').forEach(b=>c.listen(b,'click',()=>spellInfo(b.dataset.s,C.fighterOf(ch,'x'))))}
  function quests(){const rows=Object.entries(D.QUESTS).map(([id,q])=>{const s=C.questState(ch,id);if(s==='locked')return '';const prog=ch.quests[id];
-   return `<div class="bw-q ${s}"><b>${s==='done'?'✅':s==='ready'?'❓':s==='active'?'📜':'❗'} ${esc(nm(q))}</b><small>${esc(nm(D.NPCS[q.giver]))}</small>${s==='active'||s==='ready'?`<p>${Object.entries(q.kill).map(([m,n])=>`${mobIcon(m)} ${esc(nm(D.MOBS[m]))} ${Math.min(n,prog[m]||0)}/${n}`).join(' · ')}</p>`:s==='available'?`<p class="bw-small">${T('À demander à','Ask')} ${esc(nm(D.NPCS[q.giver]))}</p>`:''}</div>`}).join('');
+   return `<div class="bw-q ${s}"><b>${s==='done'?'✅':s==='ready'?'❓':s==='active'?'📜':'❗'} ${esc(nm(q))}</b><small>${esc(nm(D.NPCS[q.giver]))}</small>${s==='active'||s==='ready'?`<p>${[...Object.entries(q.kill||{}).map(([m,n])=>`${mobIcon(m)} ${esc(nm(D.MOBS[m]))} ${Math.min(n,prog[m]||0)}/${n}`),...Object.entries(q.bring||{}).map(([i,n])=>`${D.ITEMS[i].ic} ${esc(nm(D.ITEMS[i]))} ${Math.min(n,ch.inv[i]||0)}/${n}`)].join(' · ')}</p>`:s==='available'?`<p class="bw-small">${T('À demander à','Ask')} ${esc(nm(D.NPCS[q.giver]))}</p>`:''}</div>`}).join('');
   panel(`<h3>📜 ${T('Quêtes','Quests')}</h3><div class="bw-qs">${rows}</div><button class="bw-b" data-close>${T('Fermer','Close')}</button>`)}
  function map(){const card=panel(`<h3>🗺️ ${T('Carte du monde','World map')}</h3><canvas class="bw-map" width="224" height="224"></canvas><div class="bw-legend">${Object.entries(D.ZONES).map(([k,z])=>`<span><i class="z-${k}"></i>${esc(nm(z))} ${z.lvl!=='—'?`(${z.lvl})`:''}</span>`).join('')}</div><button class="bw-b" data-close>${T('Fermer','Close')}</button>`,'map');
   const x=card.querySelector('canvas').getContext('2d'),N=W.N,s=224/N,col={0:'#7cc45a',1:'#4f8f45',2:'#ecd9a0',3:'#3f97d8',4:'#b9935f',5:'#c9c3b6',6:'#86c95e',7:'#9a6b3e',8:'#8ab069'};
@@ -399,6 +405,7 @@ export function bagaworld(c){
   for(const zp of W.zaaps){x.fillStyle=disc.has(zp.id)?'#8c7cd9':'#666';x.beginPath();x.arc(zp.x*s,zp.z*s,4,0,7);x.fill()}
   for(const o of NET.others.values()){x.fillStyle=o.d.mate?'#3fdc6a':'#ffffff';x.beginPath();x.arc(o.x*s,o.z*s,3.5,0,7);x.fill()}
   for(const m of NET.group)if(m.id!==NET.pub&&m.online&&!NET.others.has(m.id)){x.fillStyle='#3fdc6a';x.beginPath();x.arc(m.x*s,m.z*s,3.5,0,7);x.fill()}
+  x.fillStyle='#8a3bd9';x.fillRect(W.cave.x*s-4,W.cave.z*s-6,8,8);
   x.fillStyle='#e2453c';x.beginPath();x.arc(P.x*s,P.z*s,5,0,7);x.fill();x.strokeStyle='#fff';x.lineWidth=2;x.stroke()}
  function zaapPanel(zp){const list=W.zaaps.filter(z=>z.id!==zp.id);const card=panel(`<h3>🌀 Bagaap · ${esc(nm(D.ZONES[zp.id]))}</h3><p class="bw-small">${T('Voyage instantané vers un Bagaap déjà découvert. 10 kamas (gratuit vers Bagatown).','Instant travel to a Bagaap you already found. 10 kamas (free to Bagatown).')}</p>
    <div class="bw-zlist">${list.map(z=>`<button class="bw-b" data-z="${z.id}" ${disc.has(z.id)?'':'disabled'}>${disc.has(z.id)?'🌀':'🔒'} ${esc(nm(D.ZONES[z.id]))} <small>${D.ZONES[z.id].lvl}</small></button>`).join('')}</div><button class="bw-b" data-close>${T('Fermer','Close')}</button>`);
@@ -409,7 +416,9 @@ export function bagaworld(c){
   const qs=Object.entries(D.QUESTS).filter(([,q])=>q.giver===id).map(([qid,q])=>({qid,q,s:C.questState(ch,qid)})).filter(o=>o.s!=='locked'&&o.s!=='done');
   const card=panel(`<h3>${esc(nm(n))}</h3><p class="bw-say">« ${esc(line)} »</p>${qs.map(({qid,q,s})=>`<div class="bw-qoffer"><b>${s==='ready'?'❓':'❗'} ${esc(nm(q))}</b><p>${esc(X(q.d))}</p><small>${T('Récompense','Reward')} : ✨ ${q.reward.xp} XP · 🪙 ${q.reward.kamas}${q.reward.item?` · ${D.ITEMS[q.reward.item].ic} ${esc(nm(D.ITEMS[q.reward.item]))}`:''}</small>
     ${s==='available'?`<button class="bw-b primary" data-acc="${qid}">${T('Accepter','Accept')}</button>`:s==='ready'?`<button class="bw-b primary" data-fin="${qid}">${T('Rendre la quête','Hand in')}</button>`:`<small>${T('En cours…','In progress…')}</small>`}</div>`).join('')}
-   <div class="bw-btns">${n.shop?`<button class="bw-b primary" data-shop>🛒 ${T('Boutique','Shop')}</button><button class="bw-b" data-sell>💰 ${T('Vendre','Sell')}</button>`:''}${n.reset?`<button class="bw-b" data-reset>🔄 ${T('Réinitialiser mes caractéristiques','Reset my characteristics')}</button>`:''}<button class="bw-b" data-close>${T('Au revoir','Bye')}</button></div>`,'talk');
+   ${n.job?jobBlock(n.job):''}<div class="bw-btns">${n.shop?`<button class="bw-b primary" data-shop>🛒 ${T('Boutique','Shop')}</button><button class="bw-b" data-sell>💰 ${T('Vendre','Sell')}</button>`:''}${n.reset?`<button class="bw-b" data-reset>🔄 ${T('Réinitialiser mes caractéristiques','Reset my characteristics')}</button>`:''}<button class="bw-b" data-close>${T('Au revoir','Bye')}</button></div>`,'talk');
+  card.querySelectorAll('[data-learn]').forEach(b=>c.listen(b,'click',()=>{if(C.learnJob(ch,b.dataset.learn)){SFX.level();banner(`${D.JOBS[b.dataset.learn].ic} ${nm(D.JOBS[b.dataset.learn])}`,T('Métier appris ! Touche les ressources dans le monde pour récolter.','Job learned! Tap resources in the world to harvest.'),3.5);store()}talk(id)}));
+  card.querySelectorAll('[data-craft]').forEach(b=>c.listen(b,'click',()=>craftPanel(b.dataset.craft,id)));
   card.querySelectorAll('[data-acc]').forEach(b=>c.listen(b,'click',()=>{C.acceptQuest(ch,b.dataset.acc);SFX.buff();toastMsg(T('Quête acceptée !','Quest accepted!'),'good');store();talk(id)}));
   card.querySelectorAll('[data-fin]').forEach(b=>c.listen(b,'click',()=>{const r=C.finishQuest(ch,b.dataset.fin);if(r){SFX.win();toastMsg(`✨ +${r.xp} XP · 🪙 +${r.kamas}`,'good');if(r.lv.after>r.lv.before){setTimeout(SFX.level,500);banner(T('Niveau ','Level ')+r.lv.after+' !',T('Nouveaux points à répartir','New points to spend'))}}store();talk(id)}));
   card.querySelector('[data-shop]')&&c.listen(card.querySelector('[data-shop]'),'click',()=>shop(id));card.querySelector('[data-sell]')&&c.listen(card.querySelector('[data-sell]'),'click',()=>sellPanel(id));
@@ -436,6 +445,69 @@ export function bagaworld(c){
    mode='world';cam.dist=worldDist();cam.oy=0;cam.yaw=0;store();frame();music('town');banner('BagaWorld',T('Va voir le Maire Bagatelle, au nord de la place','Go see Mayor Bagatelle, north of the square'),3.5);SFX.win()})}
  function drawCreate(){cam.x=W.start.x;cam.z=W.start.z-1;cam.yaw=t*.25;cam.dist=6.2;cam.el=.3;cam.oy=-1.25;camera();R.frame(cv.width,cv.height,view.VP,view.eye,[.62,.82,.95],[30,70]);drawWorld(true);
   MD.drawChar(R,M4,charParts({cls:create.cls,skin:create.skin,hair:create.hair,sex:create.sex,eq:{weapon:{bourrin:'epee_rouillee',viseur:'arc_bois',bisou:'baguette',fourbe:'dague'}[create.cls]}}),M4.trs(W.start.x,WW.tileH(W,W.start.x,W.start.z)*BH,W.start.z-1,0,1.4),{bob:Math.sin(t*2)*.02,armR:Math.sin(t*1.5)*.3+.3,armL:-.1})}
+
+ // ================= MÉTIERS ET DONJON =================
+ const dep=new Map();   // décors récoltés qui repoussent : case → {t, prop}
+ function rebuildAt(x,z){const key=Math.floor(x/MD.CH)+','+Math.floor(z/MD.CH),m=M.chunks.get(key);if(m){R.free(m);M.chunks.delete(key)}}
+ // toucher un décor récoltable (ou l'eau) : y aller, puis récolter
+ function harvestTap(g){let best=null;
+  for(let dz=-1;dz<=1;dz++)for(let dx=-1;dx<=1;dx++){const h=WW.harvestAt(W,g.x+dx,g.z+dz);if(!h)continue;const d=Math.hypot(h.x+.5-g.x,h.z+.5-g.z);if(d<(dx||dz?.95:1.3)&&(!best||d<best.d))best={...h,d}}
+  if(!best)return false;const L=C.jobLevel(ch,best.job),J=D.JOBS[best.job];
+  if(!L){if(best.prop===WW.P.deco||best.fish)return false;toastMsg(T(`Pour récolter ça, apprends le métier de ${J.fr} auprès de ${D.NPCS[J.master].fr}.`,`To harvest this, learn the ${J.en} job from ${D.NPCS[J.master].en}.`));return true}
+  if(L<best.lvl){toastMsg(T(`${nm(D.ITEMS[best.item])} : ${J.fr} niveau ${best.lvl} requis.`,`${nm(D.ITEMS[best.item])}: ${J.en} level ${best.lvl} needed.`));return true}
+  if(dep.has(best.k)){toastMsg(T('Déjà récolté. Ça repousse, patience.','Already harvested. It grows back, be patient.'));return true}
+  const spots=[];for(let dz=-1;dz<=1;dz++)for(let dx=-1;dx<=1;dx++){if(!dx&&!dz&&best.prop!==WW.P.deco)continue;const xx=best.x+dx+.5,zz=best.z+dz+.5;if(WW.walkable(W,xx,zz))spots.push([xx,zz,Math.hypot(xx-P.x,zz-P.z)])}
+  spots.sort((a,b)=>a[2]-b[2]);if(!spots.length)return false;
+  if(spots[0][2]<.3){startHarvest(best);return true}
+  goTo(spots[0][0],spots[0][1],{k:'harvest',h:best,x:spots[0][0],z:spots[0][1]});SFX.click();return true}
+ function startHarvest(h){P.path=[];P.goal=null;P.sit=false;P.harv={h,t:0,dur:h.fish?2.6:1.7};P.yaw=Math.atan2(-(h.x+.5-P.x),-(h.z+.5-P.z))}
+ function harvestTick(){const H=P.harv;if(!H)return;if(keys.size||P.path.length){P.harv=null;return}H.t+=dt;
+  if(Math.floor(H.t/.42)!==Math.floor((H.t-dt)/.42))(H.h.fish?()=>noise(.12,.03,1800,0,'bandpass'):H.h.job==='mineur'?()=>{tone(1200,900,.06,'square',.03);noise(.05,.05,3000)}:()=>noise(.08,.07,900))();
+  if(H.t<H.dur)return;P.harv=null;const h=H.h,r=C.harvest(ch,h);if(r.err){toastMsg(r.err);return}
+  floats.push({x:P.x,y:P.y+2,z:P.z,text:`+${r.n} ${D.ITEMS[r.item].ic}`,kind:'heal',t:1.3});toastMsg(`+${r.n} ${nm(D.ITEMS[r.item])}`,'good');SFX.coin();
+  if(r.lv&&r.lv.after>r.lv.before){banner(`${D.JOBS[h.job].ic} ${nm(D.JOBS[h.job])} ${T('niveau','level')} ${r.lv.after} !`,'',2.5);setTimeout(SFX.level,200)}
+  if(!h.fish){const pr=W.prop[h.k];dep.set(h.k,{t:60+Math.random()*60,prop:pr,x:h.x,z:h.z});W.prop[h.k]=[WW.P.tree,WW.P.pine,WW.P.palm].includes(pr)?WW.P.stump:WW.P.none;rebuildAt(h.x,h.z)}
+  store()}
+ function regrowTick(){for(const [k,v] of dep){v.t-=dt;if(v.t>0)continue;if(Math.hypot(v.x+.5-P.x,v.z+.5-P.z)<1)continue;W.prop[k]=v.prop;dep.delete(k);rebuildAt(v.x,v.z)}}
+ // maître de métier : apprendre, atelier
+ function jobBlock(job){const J=D.JOBS[job],L=C.jobLevel(ch,job);
+  return `<div class="bw-qoffer"><b>${J.ic} ${nm(J)}${L?` · ${T('niveau','level')} ${L}`:''}</b><p>${esc(X(J.d))}</p>${L?`<button class="bw-b primary" data-craft="${job}">🛠️ ${T('Atelier','Workshop')} · ${X(J.shop)}</button>`:`<button class="bw-b primary" data-learn="${job}">${T('Apprendre le métier (gratuit)','Learn the job (free)')}</button>`}</div>`}
+ function craftPanel(job,npc){const J=D.JOBS[job],L=C.jobLevel(ch,job),list=Object.entries(D.RECIPES).filter(([,r])=>r.job===job).sort((a,b)=>a[1].lvl-b[1].lvl);
+  const card=panel(`<h3>🛠️ ${X(J.shop)} <small>${J.ic} ${nm(J)} · ${T('niv.','lvl')} ${L}</small></h3><div class="bw-craft">${list.map(([id,r])=>{const it=D.ITEMS[id],mx=C.maxCraft(ch,id),lock=L<r.lvl;
+    return `<div class="bw-rc${lock?' lock':''}"><span class="ic">${it.ic}</span><div><b>${esc(nm(it))}</b><small>${lock?`🔒 ${T('niveau','level')} ${r.lvl} · `:''}${Object.entries(r.in).map(([i,q])=>`<i class="${(ch.inv[i]||0)>=q?'ok':'no'}">${D.ITEMS[i].ic} ${ch.inv[i]||0}/${q}</i>`).join(' ')}</small></div>
+     <button class="bw-b primary" data-c="${id}" data-n="1" ${mx>=1?'':'disabled'}>×1</button>${mx>1?`<button class="bw-b" data-c="${id}" data-n="${mx}">×${mx}</button>`:''}</div>`}).join('')}</div>
+   <p class="bw-small">${T('Touche une ligne pour voir l’objet.','Tap a line to see the item.')}</p><div class="bw-btns"><button class="bw-b" data-back>${T('Retour','Back')}</button></div>`,'craft');
+  card.querySelectorAll('[data-c]').forEach(b=>c.listen(b,'click',e=>{e.stopPropagation();const id=b.dataset.c,n=+b.dataset.n,r=C.craft(ch,id,n);if(!r)return;SFX.coin();burst(P.x,P.y+1.2,P.z,'#ffd23f',10,1.5,2);
+   toastMsg(`+${n} ${nm(D.ITEMS[id])}`,'good');if(r.lv.after>r.lv.before){banner(`${J.ic} ${nm(J)} ${T('niveau','level')} ${r.lv.after} !`,'',2.5);setTimeout(SFX.level,200)}store();craftPanel(job,npc)}));
+  card.querySelectorAll('.bw-rc').forEach(row=>c.listen(row,'click',()=>itemInfo(row.querySelector('[data-c]').dataset.c,()=>craftPanel(job,npc))));
+  c.listen(card.querySelector('[data-back]'),'click',()=>npc?talk(npc):closePanel())}
+ function itemInfo(id,back){const it=D.ITEMS[id];const card=panel(`<h3>${it.ic} ${esc(nm(it))}</h3><p class="bw-flav">${esc(X(it.d))}</p>${it.slot?`<p>${X(D.SLOT_FR[it.slot])} · ${T('niveau','level')} ${it.lvl}</p><div class="bw-kv">${statLines(it.stats)}</div>`:''}${it.weapon?`<p>⚔️ ${it.weapon.pa} PA · ${D.EL[it.weapon.el].ic} ${it.weapon.min}-${it.weapon.max} · 🎯 ${it.weapon.range.join('-')}</p>`:''}${it.use?`<p>💚 ${T('Rend','Restores')} ${it.use.heal} PV</p>`:''}${setInfo(it)}<div class="bw-btns"><button class="bw-b" data-back>${T('Retour','Back')}</button></div>`);
+  c.listen(card.querySelector('[data-back]'),'click',back)}
+ function setInfo(it){if(!it.set)return '';const S=D.SETS[it.set];return `<p class="bw-small">🧩 <b>${esc(nm(S))}</b></p><div class="bw-kv">${Object.entries(S.bonus).map(([n,b])=>`<span>${n} ${T('pièces','items')} :</span>${statLines(b)}`).join('')}</div>`}
+ function jobsPanel(){const sets=C.setBonuses(ch);
+  const card=panel(`<h3>⭐ ${esc(ch.name)}</h3><div class="bw-tabs"><button data-tab="stats">${T('Caractéristiques','Characteristics')}</button><button class="on">${T('Métiers','Jobs')}</button></div>
+   <div class="bw-jobs">${Object.entries(D.JOBS).map(([id,J])=>{const L=C.jobLevel(ch,id),xp=ch.jobs?.[id]?.xp||0,x0=D.jobXpFor(L),x1=D.jobXpFor(L+1);
+    const hv=Object.values(D.HARVEST).filter(h=>h.job===id);
+    return `<div class="${L?'':'off'}"><b>${J.ic} ${nm(J)}</b>${L?`<small>${T('niveau','level')} ${L}</small><div class="bw-xp jx"><i style="width:${L>=D.JOB_MAX?100:(100*(xp-x0)/Math.max(1,x1-x0)).toFixed(0)}%"></i></div>`:`<small>${T('Pas appris','Not learned')}</small>`}
+     <p>${hv.map(h=>`<span class="${L>=h.lvl?'':'lk'}">${D.ITEMS[h.item].ic} ${esc(nm(D.ITEMS[h.item]))}${L>=h.lvl?'':` (${h.lvl})`}</span>`).join(' ')}</p><p class="bw-small">${L?T(`Atelier : ${D.NPCS[J.master].fr}`,`Workshop: ${D.NPCS[J.master].en}`):T(`À apprendre auprès de ${D.NPCS[J.master].fr}`,`Learn it from ${D.NPCS[J.master].en}`)}</p></div>`}).join('')}</div>
+   ${sets.length?`<p class="bw-small">🧩 ${sets.map(s=>`<b>${esc(nm(D.SETS[s.id]))}</b> (${s.count})`).join(' · ')}</p>`:''}<button class="bw-b" data-close>${T('Fermer','Close')}</button>`);
+  c.listen(card.querySelector('[data-tab]'),'click',stats)}
+ // la grotte
+ function dungeonPanel(){const key=ch.inv[D.DUNGEON.key]||0,L=C.level(ch),mates=NET.group.filter(m=>m.online&&m.id!==NET.pub);
+  const card=panel(`<h3>🍄 ${esc(nm(D.DUNGEON))} <small>${T('niveau','level')} ${D.DUNGEON.lvl}</small></h3><p>${T('Quatre salles à la suite, sans pause, et le Grand Champidou au bout. Les PV ne remontent pas entre les salles.','Four rooms in a row, no break, and the Great Shroomdaddy at the end. HP doesn’t come back between rooms.')}</p>
+   <ol class="bw-rooms">${D.DUNGEON.rooms.map(r=>`<li>${esc(nm(r))} <small>${r.mobs.map(([m,l])=>mobIcon(m)).join(' ')}</small></li>`).join('')}</ol>
+   <p>${D.ITEMS.cle_grotte.ic} ${T('Clé moisie','Mouldy Key')} : <b>${key}</b>${key?'':T(' · à fabriquer (Herboriste niv. 8) ou à demander à Bernard.',' · craft one (Herbalist lvl 8) or ask Bernard.')}</p>
+   ${L<14?`<p class="bw-small bw-red">${T('Bernard te conseille de revenir niveau 14 au moins, et pas tout seul.','Bernard suggests you come back at level 14 at least, and not alone.')}</p>`:''}
+   ${NET.on&&mates.length?`<p class="bw-small">${T('Ton groupe aura 30 s pour te rejoindre (chacun avec sa clé).','Your group will have 30 s to join you (each with their own key).')}</p>`:''}
+   <div class="bw-btns"><button class="bw-b primary" data-go ${key?'':'disabled'}>🗝️ ${T('Entrer dans la grotte','Enter the cave')}</button><button class="bw-b" data-close>${T('Plus tard','Later')}</button></div>`,'dungeon');
+  c.listen(card.querySelector('[data-go]'),'click',()=>{closePanel();startDungeon()})}
+ async function startDungeon(){if(fight||starting||!ch.inv[D.DUNGEON.key])return;
+  const rooms=D.DUNGEON.rooms.map((r,i)=>({arena:WW.dungeonArena(i),mobs:r.mobs.map(([m,l],j)=>C.mobFighter(m,l,'r'+i+'m'+j))}));let meId=myFid();
+  const init={kind:'pve',dungeon:true,arena:rooms[0].arena,seed:(Math.random()*2**31)|0,teams:[[C.fighterOf(ch,meId)],rooms[0].mobs],waves:rooms.slice(1),gid:null};
+  let on=null;if(NET.on&&NET.pub){starting=true;try{const id=await online_.bwFightCreate('pve',init,W.cave.x,W.cave.z);on={id,applied:0,recv:0}}catch(e){toastMsg(T('Donjon hors ligne : ','Offline dungeon: ')+e.message)}starting=false;if(!alive)return}
+  if(!on&&meId!=='me'){meId='me';init.teams[0][0]={...init.teams[0][0],id:'me'}}
+  C.takeItem(ch,D.DUNGEON.key);store();buildFight(init,meId,null,on);enterFight();setTimeout(()=>fight&&banner(`${T('Salle','Room')} 1/${D.DUNGEON.rooms.length}`,nm(D.DUNGEON.rooms[0]),3),2300);
+  if(on&&NET.group.some(m=>m.online&&m.id!==NET.pub))toastMsg(T('Ton groupe a 30 s pour te rejoindre.','Your group has 30 s to join you.'),'good')}
 
  // ================= EN LIGNE =================
  // Toutes les ~1 s : on envoie sa position, on reçoit les joueurs proches, le chat, le groupe, les invitations et les combats
@@ -530,13 +602,13 @@ export function bagaworld(c){
  // ================= BOUCLE =================
  function frameDraw(){const w=wrap.clientWidth,h=wrap.clientHeight,dpr=Math.min(window.devicePixelRatio||1,1.75);const W2=Math.round(w*dpr),H2=Math.round(h*dpr);if(cv.width!==W2||cv.height!==H2){cv.width=W2;cv.height=H2}
   if(mode==='create'){drawCreate();return}
-  cam.el+=((mode==='fight'?1.08:.92)-cam.el)*Math.min(1,dt*3);camera();const sky=zoneNow==='woods'?[.55,.72,.62]:zoneNow==='hills'?[.7,.8,.92]:[.62,.82,.95];R.frame(cv.width,cv.height,view.VP,view.eye,sky,[cam.dist+10,cam.dist+26]);
+  cam.el+=((mode==='fight'?1.08:.92)-cam.el)*Math.min(1,dt*3);camera();const cave=mode==='fight'&&fight?.A.dungeon,sky=cave?[.05,.04,.07]:zoneNow==='woods'?[.55,.72,.62]:zoneNow==='hills'?[.7,.8,.92]:[.62,.82,.95];R.frame(cv.width,cv.height,view.VP,view.eye,sky,cave?[cam.dist+2,cam.dist+16]:[cam.dist+10,cam.dist+26]);
   if(mode==='fight'&&fight)drawFight();else drawWorld();
-  M.water??=MD.waterMesh(R,W);R.draw(M.water,M4.t(0,Math.sin(t*1.2)*.02,0),null,.82);drawFx();cam.shake=Math.max(0,cam.shake-dt*2)}
+  M.water??=MD.waterMesh(R,W);if(!cave)R.draw(M.water,M4.t(0,Math.sin(t*1.2)*.02,0),null,.82);drawFx();cam.shake=Math.max(0,cam.shake-dt*2)}
  function tick(d){dt=Math.min(d,.05);t+=dt;if(!alive)return;
   if(mode==='world'&&ch)worldTick();else if(mode==='fight'&&fight)fightTick();netTick();frameDraw()}
  // test automatique
- if(window.__bwTest)window.__bw={get ch(){return ch},get fight(){return fight},get F_(){return F_},get mode(){return mode},P,W,groups,startFight,talk,openPanel,tick,F,C,D,WW,worldTap,fightTap,view,cam,store,NET,joinFight,netApply,scr,myTurnNow,playerCardTest(){playerCard([...NET.others.values()][0])},fightTapCell(x,y){const p=cw(x,y),q=scr(p[0],p[1],p[2]);if(q)fightTap(q[0],q[1]);return q}};
+ if(window.__bwTest)window.__bw={get ch(){return ch},get fight(){return fight},get F_(){return F_},get mode(){return mode},P,W,groups,startFight,talk,openPanel,tick,F,C,D,WW,worldTap,fightTap,view,cam,store,NET,joinFight,netApply,scr,myTurnNow,doAct,craftPanel,dungeonPanel,jobsPanel,dep,playerCardTest(){playerCard([...NET.others.values()][0])},fightTapCell(x,y){const p=cw(x,y),q=scr(p[0],p[1],p[2]);if(q)fightTap(q[0],q[1]);return q}};
  if(mode==='create')createUI();else{frame();music('town');requestAnimationFrame(()=>{cam.dist=worldDist()})}
  return {update(d){tick(d)},destroy(){alive=false;store();if(NET.on){try{if(fight?.online&&!F_?.over)online_.bwFightAct(fight.online.id,fight.online.recv,{a:'quit',id:fight.me}).catch(()=>{});online_.bwBye().catch(()=>{})}catch{}}setMusicTheme(null);for(const m of M.chunks.values())R.free(m);R.free(M.water)}};
 }

@@ -50,6 +50,8 @@ function propMesh(b,p,x,y,z,k,ty){const cx=x+.5,cz=z+.5;
   case P.statue:b.cbox(cx,y,cz,.8,.5,.8,'#bdb6a8','tnsew','#a59e90');b.cbox(cx,y+.5,cz,.3,.5,.3,'#e8833a');b.cbox(cx,y+1,cz,.36,.3,.36,'#f2a33a');for(const s of [-1,1])b.box(cx+s*.18,y+.8,cz-.06,cx+s*.62,y+.9,cz+.06,'#ff5a3a','tnsew');b.cbox(cx,y+1.3,cz-.18,.08,.06,.12,'#ffd23f');break;
   case P.fountain:b.cbox(cx,y,cz,.96,.35,.96,'#bdb6a8','tnsew','#a59e90');b.cbox(cx,y+.35,cz,.7,.02,.7,'#59b0ea','t');for(const s of [-1,1])b.cbox(cx+s*.36,y+.35,cz,.1,1.1,.1,'#8c7cd9');b.cbox(cx,y+1.45,cz,.82,.1,.1,'#8c7cd9');b.cbox(cx,y+1.55,cz,.18,.18,.18,'#c9b8ff');break;
   case P.throne:b.cbox(cx,y,cz,1.1,.4,1,'#d4a017','tnsew','#b8890f');b.box(cx-.55,y+.4,cz-.5,cx+.55,y+1.7,cz-.3,'#d4a017','tnsew','#b8890f');b.cbox(cx,y+.4,cz,.9,.12,.8,'#c0392b');for(const s of [-1,1])b.cbox(cx+s*.5,y+1.7,cz-.4,.12,.25,.12,'#f2c14e');break;
+  case P.cave:{b.cbox(cx,y,cz,2.6,1.9,1.4,'#6f6a63','tnsew','#5b5650');b.cbox(cx,y+1.9,cz,2.2,.5,1.2,'#7c766e','tnsew','#686259');b.box(cx-.6,y,cz+.69,cx+.6,y+1.3,cz+.71,'#141018','s');
+   b.cbox(cx-1.05,y+1.95,cz+.3,.5,.3,.5,'#4e8a3a');b.cbox(cx+.9,y+2.2,cz-.1,.6,.35,.6,'#5c9a45');for(const [ox,oz,c] of [[-1.5,.9,'#8a3bd9'],[1.4,.8,'#d94a3a'],[1.6,-.3,'#e8b04a']]){b.cbox(cx+ox,y,cz+oz,.12,.35,.12,'#f3ead8');b.cbox(cx+ox,y+.33,cz+oz,.42,.14,.42,c)}break}
   case P.sign:b.cbox(cx,y,cz,.1,.8,.1,'#7a5236');b.cbox(cx,y+.6,cz,.6,.3,.06,'#c08a52');break}}
 
 function buildingMesh(b,bd,W){const {x0,z0,w,d,h}=bd,y=W.h[z0*W.N+x0]*BH,wall=hex(bd.wall),roof=hex(bd.roof),top=y+h*.9;
@@ -125,6 +127,13 @@ export const MOB_MODEL={
  vermichelle:b=>{for(let i=0;i<5;i++)b.cbox(0,0,-.32+i*.17,.3-i*.03,.26-i*.02,.18,i%2?'#9bd36b':'#8bc35b','tnsew','#5c8f3c');for(const s of [-1,1])b.cbox(s*.07,.15,-.42,.06,.06,.02,'#1d1a18','n');b.cbox(0,.04,-.42,.12,.03,.02,'#5c3a2a','n')},
  crabouillon:b=>{b.cbox(0,.12,0,.62,.26,.46,'#e8573f','tnsew','#c9432f');b.cbox(0,.38,0,.44,.06,.32,'#f0704f');for(const s of [-1,1]){b.cbox(s*.12,.38,-.18,.04,.18,.04,'#c9432f');b.cbox(s*.12,.56,-.18,.08,.08,.08,'#ffffff');b.cbox(s*.12,.58,-.22,.04,.04,.02,'#1d1a18','n');
   b.cbox(s*.42,.2,-.26,.2,.18,.22,'#e8573f','tnsew','#c9432f');b.cbox(s*.48,.24,-.4,.08,.1,.1,'#ffd9b3');for(let k=0;k<3;k++)b.cbox(s*.34,0,-.12+k*.14,.18,.06,.05,'#c9432f')}},
+ champinou:b=>{b.cbox(0,0,0,.26,.36,.24,'#fff3dc','tnsew','#eadfc4');for(const s of [-1,1])b.cbox(s*.07,.22,-.13,.05,.07,.02,'#1d1a18','n');b.cbox(0,.13,-.13,.08,.03,.02,'#e27a8a','n');
+  b.cbox(0,.34,0,.6,.18,.6,'#e8b04a','tnsew','#c9922f');b.cbox(0,.52,0,.36,.1,.36,'#f2c25e');for(const [x,z] of [[.16,.1],[-.14,-.12],[.02,.2]])b.cbox(x,.62,z,.08,.02,.08,'#fff8e0','t')},
+ champidou:b=>{b.cbox(0,0,0,.5,.62,.46,'#fff0d4','tnsew','#e6d6b4');for(const s of [-1,1]){b.cbox(s*.12,.4,-.24,.08,.1,.02,'#1d1a18','n');b.cbox(s*.12,.52,-.245,.12,.03,.02,'#5a2b8a','n');b.cbox(s*.34,.26,0,.18,.08,.08,'#fff0d4')}
+  b.cbox(0,.22,-.24,.2,.04,.02,'#8a3b3b','n');b.cbox(0,.1,-.235,.3,.08,.02,'#e8dcc0','n');
+  b.cbox(0,.6,0,1.2,.3,1.2,'#8a3bd9','tnsew','#6e2fb0');b.cbox(0,.9,0,.82,.2,.82,'#9b52e6');b.cbox(0,1.1,0,.44,.12,.44,'#ad6cf0');
+  for(const [x,z] of [[.36,.2],[-.3,-.3],[.08,.42],[-.4,.22],[.24,-.38],[0,0]])b.cbox(x,x===0?1.22:.92,z,.14,.03,.14,'#ffe9a8','t');
+  for(const s of [-1,1]){b.cbox(s*.22,1.22,-.05,.08,.18,.08,'#f2c14e');b.cbox(s*.22,1.4,-.05,.12,.06,.12,'#f2c14e')}b.cbox(0,1.26,-.05,.08,.24,.08,'#f2c14e');b.cbox(0,1.5,-.05,.12,.06,.12,'#e2453c')},
  champi:b=>{b.cbox(0,0,0,.34,.5,.32,'#fff3dc','tnsew','#eadfc4');for(const s of [-1,1]){b.cbox(s*.08,.3,-.17,.06,.08,.02,'#1d1a18','n');b.cbox(s*.24,.2,0,.12,.06,.06,'#fff3dc')}b.cbox(0,.18,-.17,.12,.03,.02,'#b5654a','n');
   b.cbox(0,.48,0,.86,.24,.86,'#d94a3a','tnsew','#b93a2c');b.cbox(0,.72,0,.56,.14,.56,'#e25a48');for(const [x,z] of [[.24,.12],[-.2,-.2],[.05,.3],[-.28,.16],[.16,-.26]])b.cbox(x,.86,z,.1,.02,.1,'#ffffff','t');
   b.cbox(0,.3,-.18,.1,.1,.02,'#f2c14e','n');b.cbox(0,.4,-.17,.04,.1,.02,'#3a6fd9','n')},
@@ -137,6 +146,18 @@ export const MOB_MODEL={
   for(let k=0;k<4;k++){const z=-.25+k*.17;b.box(s>0?.15:-.6,.38,z-.03,s>0?.6:-.15,.43,z+.03,'#2f253c','tnsew');b.box(s>0?.55:-.6,0,z-.03,s>0?.6:-.55,.4,z+.03,'#2f253c','tnsew')}}},
  moutonroyal:b=>{MOB_MODEL.moutoufou(b);b.cbox(0,.88,.06,.3,.1,.3,'#f2c14e','nsew');for(const [x,z] of [[-.12,-.06],[.12,-.06],[0,.18]])b.cbox(x,.98,z,.06,.1,.06,'#f2c14e');b.box(-.32,.2,.25,.32,.75,.32,'#c0392b','tnsew','#a5301f')}};
 export function mobMesh(R,id){const b=new Builder();(MOB_MODEL[id]||MOB_MODEL.moutoufou)(b);return R.mesh(b)}
-export const MOB_SCALE={moutoufou:1,poultoss:.9,vermichelle:1.1,crabouillon:1,champi:1.15,moustikouille:1,sanglier:1.1,araknee:1.1,moutonroyal:1.9};
+export const MOB_SCALE={moutoufou:1,poultoss:.9,vermichelle:1.1,crabouillon:1,champi:1.15,champinou:.95,champidou:1.7,moustikouille:1,sanglier:1.1,araknee:1.1,moutonroyal:1.9};
 export function cubeMesh(R){const b=new Builder();b.box(-.5,-.5,-.5,.5,.5,.5,'#ffffff','tnsewb');return R.mesh(b)}
 export function tileMesh(R){const b=new Builder();b.box(.04,0,.04,.96,.02,.96,'#ffffff','t');return R.mesh(b)}
+
+// ---- donjon : une salle de la grotte (sol de pierre, piliers moussus à champignons lumineux, gouffres, parois)
+export function dungeonMesh(R,A){const b=new Builder(),ox=A.ox,oz=A.oz;
+ for(let y=-2;y<A.h+2;y++)for(let x=-2;x<A.w+2;x++){const inside=x>=0&&y>=0&&x<A.w&&y<A.h,g=inside?A.grid[y*A.w+x]:3,wx=ox+x,wz=oz+y,k=(x+7)*31+(y+5)*17;
+  if(g===2)continue;   // gouffre : rien (le fond est noir)
+  if(g===3){const hh=2.2+hash(k,1)*1.6;if(y<0||x<0||x>=A.w||y>=A.h)b.box(wx,-.3,wz,wx+1,hh,wz+1,hash(k,2)<.5?'#3b3540':'#463f4b','tnsew','#2f2a34');continue}
+  for(let j=0;j<2;j++)for(let i=0;i<2;i++){const v=hash(x*2+i,y*2+j,4);b.box(wx+i*.5,-.04,wz+j*.5,wx+i*.5+.5,0,wz+j*.5+.5,v<.15?'#4b5a3e':v<.55?'#5d5866':'#6a6573','t')}
+  b.box(wx,-.6,wz,wx+1,-.04,wz+1,'#3a3540','nsew','#2c2832');
+  if(g===1){const hh=1.2+hash(k,3)*1.1;b.cbox(wx+.5,0,wz+.5,.82,hh,.82,'#6f6878','tnsew','#5a5463');b.cbox(wx+.5,hh,wz+.5,.9,.14,.9,'#4e7a3a');
+   for(const [dx,dz,c] of [[.32,.3,'#b48cff'],[-.3,.28,'#7ad9ff'],[.25,-.32,'#ffd36a']]){if(hash(k,dx*9+dz*7)<.5)continue;b.cbox(wx+.5+dx,.0,wz+.5+dz,.08,.25,.08,'#efe7d8');b.cbox(wx+.5+dx,.24,wz+.5+dz,.26,.1,.26,c)}}
+  else if(hash(k,6)<.08){b.cbox(wx+.3+hash(k,7)*.4,0,wz+.3+hash(k,8)*.4,.1,.2,.1,'#efe7d8');b.cbox(wx+.3+hash(k,7)*.4,.2,wz+.3+hash(k,8)*.4,.22,.08,.22,hash(k,9)<.5?'#b48cff':'#7ad9ff')}}
+ return R.mesh(b)}

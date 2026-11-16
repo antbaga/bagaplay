@@ -2,12 +2,12 @@
 // Bagatown au centre, la Prairie des Moutoufous au sud (et le trône du Mouton Royal tout au fond), la Plage de Baga à l'ouest,
 // le Bois des Champis à l'est, les Collines Boudeuses au nord. On s'y déplace en continu ; un combat se joue sur la grille
 // découpée autour de l'endroit où il commence.
-import {SPAWNS,MOBS} from './bagaworld-data.js';
+import {SPAWNS,MOBS,DUNGEON,HARVEST} from './bagaworld-data.js';
 import {rng} from './bagaworld-fight.js';
 
 export const WS=112,SEED=20261116;
 export const T={grass:0,dark:1,sand:2,water:3,path:4,stone:5,flowers:6,wood:7,moss:8};
-export const P={none:0,tree:1,pine:2,palm:3,rock:4,bush:5,shroom:6,fence:7,wall:8,lamp:9,deco:10,barrel:11,throne:12,fountain:13,statue:14,sign:15,stump:16};
+export const P={none:0,tree:1,pine:2,palm:3,rock:4,bush:5,shroom:6,fence:7,wall:8,lamp:9,deco:10,barrel:11,throne:12,fountain:13,statue:14,sign:15,stump:16,cave:17};
 const WALK_PROPS=new Set([P.none,P.deco]);
 
 function noise(seed){const h=(x,z)=>{let n=(x*374761393+z*668265263+seed*1442695041)|0;n=(n^(n>>>13))*1274126177|0;return((n^(n>>>16))>>>0)/4294967296};
@@ -62,13 +62,18 @@ export function genWorld(seed=SEED){const N=WS,h=new Uint8Array(N*N),type=new Ui
   if(zn==='woods')prop[k]=v<.16?P.tree:v<.21?P.shroom:v<.24?P.bush:v<.25?P.stump:P.none;
   else if(zn==='hills')prop[k]=v<.08?P.pine:v<.13?P.rock:v<.15?P.bush:P.none;
   else if(zn==='beach')prop[k]=type[k]===T.sand?(v<.03?P.palm:v<.045?P.rock:P.none):(v<.05?P.tree:v<.07?P.bush:P.none);
-  else prop[k]=v<.035?P.tree:v<.06?P.bush:v<.08&&type[k]===T.flowers?P.deco:v<.09?P.rock:P.none}
+  else prop[k]=v<.035?P.tree:v<.06?P.bush:v<.08?P.deco:v<.09?P.rock:P.none}
  // trône du Mouton Royal
  const tz=N-7;for(let z=tz-4;z<=tz+3;z++)for(let x=cx-5;x<=cx+5;x++){const k=I(x,z);type[k]=T.stone;prop[k]=P.none;h[k]=1}prop[I(cx,tz-3)]=P.throne;W.throne={x:cx+.5,z:tz-1.5};
  // Bagaaps (téléporteurs) dans chaque zone, et points d'apparition des monstres
  W.zaaps.push({id:'meadow',x:cx+3.5,z:cz+34.5},{id:'beach',x:24.5,z:cz+.5},{id:'woods',x:N-24.5,z:cz+.5},{id:'hills',x:cx+3.5,z:20.5});
  for(const zp of W.zaaps.slice(1)){const fx=Math.floor(zp.x),fz=Math.floor(zp.z);for(let dz=-2;dz<=3;dz++)for(let dx=-2;dx<=2;dx++){const kk=I(fx+dx,fz+dz);if(prop[kk]!==P.wall)prop[kk]=P.none;if(type[kk]===T.water){type[kk]=T.wood;h[kk]=1}}
   const k=I(fx,fz);prop[k]=P.fountain;h[k]=h[k]||1;zp.z+=1.2}
+ // maîtres de métier à côté du Bagaap de leur zone
+ for(const [zid,npc] of [['meadow','tata'],['beach','marcel'],['woods','josette'],['hills','leon']]){const zp=W.zaaps.find(q=>q.id===zid),fx=Math.floor(zp.x),fz=Math.floor(zp.z-1.2);W.npcs.push({id:npc,x:fx+2.5,z:fz-1.5,yaw:0})}
+ // entrée de la Grotte du Champidou, au fond du bois (gardée par Bernard)
+ {const gx=N-11,gz=cz+14;for(let dz=-3;dz<=4;dz++)for(let dx=-3;dx<=3;dx++){const k=I(gx+dx,gz+dz);prop[k]=P.none;if(type[k]===T.water){type[k]=T.dark}h[k]=h[I(gx,gz)]}
+  road(gx,gz+2,N-24,cz);prop[I(gx,gz)]=P.cave;for(const dx of [-1,1])prop[I(gx+dx,gz)]=P.rock;W.cave={x:gx+.5,z:gz+1.6};W.npcs.push({id:'bernard',x:gx+2.5,z:gz+2.5,yaw:0})}
  const want={meadow:16,beach:9,woods:12,hills:12};for(const zn in want){let tries=0,got=0;while(got<want[zn]&&tries++<4000){const x=2+Math.floor(r()*(N-4)),z=2+Math.floor(r()*(N-4));
   if(zoneAt(x,z)!==zn||!walkable(W,x,z)||W.spawns.some(s=>Math.hypot(s.x-x,s.z-z)<7)||W.zaaps.some(s=>Math.hypot(s.x-x,s.z-z)<6))continue;W.spawns.push({zone:zn,x:x+.5,z:z+.5});got++}}
  W.spawns.push({zone:'throne',x:cx+.5,z:tz+.5});
@@ -120,3 +125,15 @@ function arenaStarts(A,ip,ig){const free=[];for(let i=0;i<A.grid.length;i++)if(A
  let g=ig;if(d(ip,g)<5)g=free.slice().sort((a,b)=>d(b,ip)-d(a,ip))[0];
  const mine=free.filter(c=>d(c,ip)<d(c,g)-2).sort((a,b)=>d(a,ip)-d(b,ip)).slice(0,6),theirs=free.filter(c=>d(c,g)<d(c,ip)-2&&!mine.some(m=>m[0]===c[0]&&m[1]===c[1])).sort((a,b)=>d(a,g)-d(b,g)).slice(0,8);
  A.start=[mine.length?mine:[ip],theirs.length?theirs:[g]];return A}
+
+// ---- donjon : arène d'une salle, posée hors du monde (le rendu dessine la grotte à la place du terrain)
+export function dungeonArena(room){const R=DUNGEON.rooms[room],grid=[],start=[[],[]];
+ R.map.forEach((line,y)=>[...line].forEach((ch,x)=>{grid.push(ch==='#'?1:ch==='~'?2:0);if(ch==='A')start[0].push([x,y]);if(ch==='B')start[1].push([x,y])}));
+ // assez de cases de départ pour 4 joueurs et tous les monstres
+ for(const [t,y0] of [[0,10],[1,1]])for(let y=y0;start[t].length<6&&y<y0+3;y++)for(let x=1;x<12&&start[t].length<6;x++)if(grid[y*13+x]===0&&!start[t].some(c=>c[0]===x&&c[1]===y))start[t].push([x,y]);
+ return {w:13,h:13,grid,hs:grid.map(()=>0),ox:400+room*30,oz:400,h0:0,start,dungeon:true,room}}
+// ce que donne une case touchée (décor récoltable ou eau de pêche), sinon null
+export function harvestAt(W,x,z){x=Math.floor(x);z=Math.floor(z);if(x<0||z<0||x>=W.N||z>=W.N)return null;const k=z*W.N+x,pr=W.prop[k],zn=zoneAt(x,z);
+ if(W.type[k]===T.water&&W.h[k]===0)return {...HARVEST[zn==='beach'?'sea':'river'],k,x,z,fish:true};
+ const name=pr===P.tree?'tree':pr===P.pine?'pine':pr===P.palm?'palm':pr===P.rock?(zn==='hills'?'rock_hills':'rock'):pr===P.bush?'bush':pr===P.deco?'deco':pr===P.shroom?'shroom':null;
+ return name&&zn!=='town'?{...HARVEST[name],k,x,z,prop:pr}:null}

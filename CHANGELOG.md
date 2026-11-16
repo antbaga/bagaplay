@@ -1,3 +1,13 @@
+# 5.17.0 — 17 novembre 2026
+
+- BagaWorld, étape 3 :
+  - 4 métiers à apprendre gratuitement auprès de leur maître, à côté du Bagaap de chaque zone : Bûcheron (Josette, Bois des Champis), Mineur (Gros Léon, Collines), Herboriste (Tata Ortie, Prairie), Pêcheur (Papi Marcel, Plage). Niveaux 1 à 30.
+  - Récolte en touchant les ressources dans le monde : arbres (frêne, pin, palmier), rochers (cuivre, fer), buissons, fleurs et champignons, rivière et mer (goujons, sardines). Les ressources repoussent au bout d’une minute ou deux ; les meilleures demandent un niveau de métier.
+  - Ateliers chez les maîtres : 17 recettes (planches, lingots, arcs, bâtons, épées, dagues, anneaux, collier, potions, brochettes, soupe, ceinture, et la Clé moisie du donjon). Onglet « Métiers » dans le panneau ⭐.
+  - Panoplies : porter plusieurs pièces d’un même ensemble donne un bonus (Moutoufou, et la nouvelle panoplie du Champidou, jusqu’à +1 PM).
+  - Donjon : la Grotte du Champidou, au fond du Bois des Champis, gardée par Bernard. Quatre salles à la suite sans repos (Champinous, moustiques et araignées, champignonnière), puis le Grand Champidou, boss niveau 18. Il faut une Clé moisie (fabriquée, gagnée chez Bernard ou trouvée sur les Champi-Champions). En ligne, le groupe a 30 s pour suivre, chacun avec sa clé.
+  - 2 nouveaux monstres (Champinou, Grand Champidou) et 9 nouvelles quêtes (bois, cuivre, tisane, goujons, brochettes, défenses de sanglier, araignées, clé et boss de la grotte).
+
 # 5.16.0 — 17 novembre 2026
 
 - BagaWorld en ligne (étape 2 ; nécessite le SQL 5.15 et un pseudo BagaPlay) :

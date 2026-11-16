@@ -66,6 +66,10 @@ export const SPELLS={
  morsure:{mob:1,fr:'Morsure',en:'Bite',ic:'🕷️',pa:3,range:[1,1],target:'enemy',perTurn:2,fx:[{t:'poison',el:'earth',v:3,dur:2}]},
  pince:{mob:1,fr:'Pince',en:'Pinch',ic:'🦀',pa:3,range:[1,1],target:'enemy',perTurn:2,fx:[{t:'dmg',el:'water',min:4,max:7}]},
  carapace:{mob:1,fr:'Carapace',en:'Shell',ic:'🛡️',pa:2,range:[0,0],target:'self',cd:3,fx:[{t:'buff',stat:'res',v:30,dur:2}]},
+ sporee:{mob:1,fr:'Nuage de spores',en:'Spore Cloud',ic:'☁️',pa:4,range:[1,4],los:true,target:'any',aoe:{s:'circle',r:1},perTurn:1,fx:[{t:'poison',el:'earth',v:5,dur:3}]},
+ rebond:{mob:1,fr:'Chapeau rebondissant',en:'Bouncy Cap',ic:'🍄',pa:3,range:[1,1],target:'enemy',perTurn:2,fx:[{t:'dmg',el:'earth',min:10,max:14},{t:'push',n:3}]},
+ mycelium:{mob:1,fr:'Mycélium',en:'Mycelium',ic:'🕸️',pa:3,range:[1,5],los:true,target:'enemy',perTurn:1,cd:2,fx:[{t:'dmg',el:'water',min:6,max:9},{t:'debuff',stat:'pa',v:2,dur:1}]},
+ petitspore:{mob:1,fr:'Petit spore',en:'Tiny Spore',ic:'🟤',pa:3,range:[1,3],los:true,target:'enemy',perTurn:2,fx:[{t:'dmg',el:'earth',min:4,max:7}]},
  belement:{mob:1,fr:'Bêlement royal',en:'Royal Bleat',ic:'👑',pa:4,range:[1,4],los:true,target:'any',aoe:{s:'circle',r:1},perTurn:1,fx:[{t:'dmg',el:'earth',min:8,max:11,enemiesOnly:true},{t:'push',n:2}]}};
 export const classSpells=cls=>Object.entries(SPELLS).filter(([,s])=>s.cls===cls).map(([id])=>id);
 
@@ -80,13 +84,17 @@ export const MOBS={
  crabouillon:{fr:'Crabouillon',en:'Crabroth',lvl:[4,9],hp0:24,hp:6,pa:6,pm:2,init:7,stat:12,res:{water:20,earth:10},spells:['pince','carapace'],ai:'melee',col:'#e8573f',col2:'#ffd9b3',
   xp:18,kamas:[5,12],drops:[{i:'pince_crabe',p:.5},{i:'ceinture_crabe',p:.05}],d:['Un crabe qui rêvait de finir en bouillon de luxe.','A crab that dreamt of ending up as a fancy broth.']},
  champi:{fr:'Champi-Champion',en:'Champ-ignon',lvl:[6,12],hp0:30,hp:5,pa:7,pm:2,init:6,stat:14,res:{earth:15,fire:-10},spells:['spores','champisoin'],ai:'healer',col:'#d94a3a',col2:'#fff3dc',
-  xp:26,kamas:[8,16],drops:[{i:'spore',p:.55},{i:'amulette_champi',p:.05}],d:['Champion régional de lancer de spores. Soigne ses copains.','Regional spore-throwing champion. Heals its buddies.']},
+  xp:26,kamas:[8,16],drops:[{i:'spore',p:.55},{i:'amulette_champi',p:.05},{i:'cle_grotte',p:.03}],d:['Champion régional de lancer de spores. Soigne ses copains.','Regional spore-throwing champion. Heals its buddies.']},
  moustikouille:{fr:'Moustikouille',en:'Mosquitchy',lvl:[6,12],hp0:20,hp:4,pa:6,pm:4,init:12,stat:14,res:{air:15},spells:['piqure'],ai:'ranged',col:'#5a5f6b',col2:'#c9e3ff',
   xp:22,kamas:[6,14],drops:[{i:'dard',p:.55},{i:'cape_moustik',p:.05}],d:['Pique, aspire, et revient. Insupportable.','Stings, sucks, comes back. Unbearable.']},
  sanglier:{fr:'Sanglier Boudeur',en:'Sulky Boar',lvl:[10,16],hp0:38,hp:6,pa:7,pm:3,init:10,stat:18,res:{earth:15,neutral:10},spells:['charge','defense'],ai:'melee',col:'#7a5236',col2:'#efe2c9',aggro:true,
   xp:40,kamas:[12,24],drops:[{i:'defense',p:.5},{i:'coiffe_sanglier',p:.05},{i:'hache_sanglier',p:.04}],d:['Il boude depuis 1987. Ne lui parle pas, il charge.','Sulking since 1987. Don’t talk to him, he charges.']},
  araknee:{fr:'Araknée',en:'Spidernet',lvl:[12,18],hp0:34,hp:5,pa:6,pm:4,init:13,stat:18,res:{air:15,water:10},spells:['toile','morsure'],ai:'ranged',col:'#3b2f4a',col2:'#e2453c',aggro:true,
   xp:44,kamas:[14,26],drops:[{i:'soie',p:.5},{i:'bottes_arak',p:.05}],d:['Tisse des toiles et des rumeurs.','Spins webs and rumours.']},
+ champinou:{fr:'Champinou',en:'Little Shroom',lvl:[10,15],hp0:22,hp:5,pa:6,pm:3,init:9,stat:15,res:{earth:10,fire:-10},spells:['petitspore','champisoin'],ai:'healer',col:'#e8b04a',col2:'#fff3dc',
+  xp:30,kamas:[8,16],drops:[{i:'champignon',p:.5},{i:'spore',p:.3}],d:['Le petit cousin des Champi-Champions. Il soigne tout le monde sauf toi.','The Champ-ignons’ little cousin. Heals everyone except you.']},
+ champidou:{fr:'Le Grand Champidou',en:'The Great Shroomdaddy',lvl:[18,18],hp0:300,hp:12,pa:8,pm:3,init:18,stat:28,res:{earth:25,water:10,fire:-15,air:5},spells:['rebond','sporee','mycelium'],ai:'melee',col:'#8a3bd9',col2:'#ffe9a8',boss:true,
+  xp:600,kamas:[200,320],drops:[{i:'coiffe_champidou',p:.25},{i:'cape_champidou',p:.25},{i:'anneau_champidou',p:.2},{i:'champignon',p:1}],d:['Le roi de la grotte. Il pense que les champignons vont gouverner le monde. Il n’a pas complètement tort.','King of the cave. He thinks mushrooms will rule the world. He’s not entirely wrong.']},
  moutonroyal:{fr:'Mouton Royal',en:'Royal Sheep',lvl:[20,20],hp0:260,hp:10,pa:8,pm:3,init:20,stat:30,res:{earth:20,fire:10,water:10,air:10},spells:['belement','coupdeboule'],ai:'melee',col:'#fff8e8',col2:'#f2c14e',boss:true,
   xp:400,kamas:[150,250],drops:[{i:'couronne',p:.3},{i:'laine',p:1}],d:['Le roi des Moutoufous. Sa couronne est en carton, sa colère est réelle.','King of the Mad Sheep. Cardboard crown, very real anger.']}};
 
@@ -115,8 +123,8 @@ export const ITEMS={
  dague:{fr:'Dague de poche',en:'Pocket Dagger',ic:'🔪',slot:'weapon',lvl:3,price:60,stats:{agi:5},weapon:{pa:3,range:[1,1],el:'air',min:6,max:9},d:['Se range dans la poche. Attention en s’asseyant.','Fits in a pocket. Careful when sitting.']},
  hache_sanglier:{fr:'Hache du Sanglier',en:'Boar Axe',ic:'🪓',slot:'weapon',lvl:12,price:300,stats:{str:20,vit:15},weapon:{pa:4,range:[1,1],el:'earth',min:14,max:20},d:['Boude aussi, mais tape fort.','Sulks too, but hits hard.']},
  // équipements des mobs (panoplies)
- coiffe_mouton:{fr:'Coiffe du Moutoufou',en:'Mad Sheep Hat',ic:'🐑',slot:'hat',lvl:2,price:40,stats:{vit:15,wis:5},d:['Avec les cornes. Fait bêêêh au vent.','With horns. Goes baaa in the wind.']},
- cape_mouton:{fr:'Cape en laine',en:'Wool Cloak',ic:'🧥',slot:'cape',lvl:3,price:40,stats:{vit:10,str:5},d:['Gratte un peu.','A bit itchy.']},
+ coiffe_mouton:{fr:'Coiffe du Moutoufou',en:'Mad Sheep Hat',ic:'🐑',slot:'hat',lvl:2,price:40,set:'mouton',stats:{vit:15,wis:5},d:['Avec les cornes. Fait bêêêh au vent.','With horns. Goes baaa in the wind.']},
+ cape_mouton:{fr:'Cape en laine',en:'Wool Cloak',ic:'🧥',slot:'cape',lvl:3,price:40,set:'mouton',stats:{vit:10,str:5},d:['Gratte un peu.','A bit itchy.']},
  anneau_poultoss:{fr:'Anneau Poultoss',en:'Chirpy Ring',ic:'💍',slot:'ring',lvl:2,price:35,stats:{agi:8,init:20},d:['Fait piou-piou quand on bouge le doigt.','Goes tweet-tweet when you move your finger.']},
  bottes_vermi:{fr:'Bottes gluantes',en:'Slimy Boots',ic:'🥾',slot:'boots',lvl:4,price:50,stats:{cha:8,vit:8},d:['Collent au sol. Pratique contre le vent.','Stick to the ground. Handy against the wind.']},
  ceinture_crabe:{fr:'Ceinture du Crabouillon',en:'Crabroth Belt',ic:'🦀',slot:'belt',lvl:6,price:70,stats:{vit:20,cha:6},d:['Avec une boucle qui pince.','With a pinching buckle.']},
@@ -125,6 +133,37 @@ export const ITEMS={
  coiffe_sanglier:{fr:'Coiffe du Sanglier Boudeur',en:'Sulky Boar Hat',ic:'🐗',slot:'hat',lvl:12,price:160,stats:{str:18,vit:25},d:['Donne envie de bouder.','Makes you want to sulk.']},
  bottes_arak:{fr:'Bottes d’Araknée',en:'Spidernet Boots',ic:'🕷️',slot:'boots',lvl:14,price:180,stats:{agi:15,pm:1},d:['Huit lacets à faire chaque matin. +1 PM.','Eight laces to tie every morning. +1 MP.']},
  couronne:{fr:'Couronne en carton',en:'Cardboard Crown',ic:'👑',slot:'hat',lvl:18,price:500,stats:{vit:40,str:15,int:15,cha:15,agi:15,pa:1},d:['Le Mouton Royal en était très fier. +1 PA.','The Royal Sheep was very proud of it. +1 AP.']},
+ // ressources des métiers
+ frene:{fr:'Bois de frêne',en:'Ash Wood',ic:'🪵',price:2,res:1,d:['Du bois honnête, sans histoire.','Honest wood, no drama.']},
+ pin:{fr:'Bois de pin',en:'Pine Wood',ic:'🌲',price:5,res:1,d:['Sent le sapin de Noël. Ce n’en est pas un.','Smells like a Christmas tree. It isn’t one.']},
+ palmier:{fr:'Bois de palmier',en:'Palm Wood',ic:'🌴',price:9,res:1,d:['Souple, solide, un peu vantard.','Flexible, sturdy, a bit of a show-off.']},
+ planche:{fr:'Planche',en:'Plank',ic:'🟫',price:5,res:1,d:['Bien droite. Fierté du bûcheron.','Nice and straight. The lumberjack’s pride.']},
+ cuivre:{fr:'Minerai de cuivre',en:'Copper Ore',ic:'🟠',price:3,res:1,d:['Brille un peu quand on le regarde gentiment.','Shines a little when you look at it kindly.']},
+ fer:{fr:'Minerai de fer',en:'Iron Ore',ic:'⚙️',price:8,res:1,d:['Lourd. Très lourd. Pourquoi tu l’as ramassé ?','Heavy. Very heavy. Why did you pick it up?']},
+ lingot_cuivre:{fr:'Lingot de cuivre',en:'Copper Ingot',ic:'🧈',price:12,res:1,d:['Ce n’est pas du beurre. Ne pas tartiner.','It’s not butter. Do not spread.']},
+ lingot_fer:{fr:'Lingot de fer',en:'Iron Ingot',ic:'🔩',price:30,res:1,d:['Momo dit que c’est « du sérieux ».','Momo says it’s “serious stuff”.']},
+ ortie:{fr:'Ortie',en:'Nettle',ic:'🌿',price:2,res:1,d:['Pique. Soigne. Pique encore.','Stings. Heals. Stings again.']},
+ fleur:{fr:'Fleur de prairie',en:'Meadow Flower',ic:'🌼',price:4,res:1,d:['Les Moutoufous adorent. Garde-la loin d’eux.','Mad Sheep love them. Keep it away from them.']},
+ champignon:{fr:'Champignon des bois',en:'Wood Mushroom',ic:'🍄‍🟫',price:8,res:1,d:['Comestible. Probablement.','Edible. Probably.']},
+ goujon:{fr:'Goujon',en:'Gudgeon',ic:'🐟',price:3,res:1,d:['Petit poisson de rivière, grand rêveur.','Small river fish, big dreamer.']},
+ sardine:{fr:'Sardine de Baga',en:'Baga Sardine',ic:'🐠',price:7,res:1,d:['Vient de la mer. A vu des choses.','From the sea. Has seen things.']},
+ cle_grotte:{fr:'Clé moisie',en:'Mouldy Key',ic:'🗝️',price:60,res:1,d:['Ouvre la Grotte du Champidou. Une seule fois : elle s’effrite.','Opens the Shroomdaddy’s Cave. Only once: it crumbles.']},
+ brochette:{fr:'Brochette de goujon',en:'Gudgeon Skewer',ic:'🍢',price:20,use:{heal:70},d:['Rend 70 PV. Recette de Papi Marcel.','Restores 70 HP. Grandpa Marcel’s recipe.']},
+ soupe:{fr:'Soupe de sardines',en:'Sardine Soup',ic:'🍲',price:50,use:{heal:180},d:['Rend 180 PV. L’haleine, par contre…','Restores 180 HP. The breath, though…']},
+ // équipements fabriqués
+ arc_frene:{fr:'Arc de frêne',en:'Ash Bow',ic:'🏹',slot:'weapon',lvl:5,price:110,stats:{agi:10,vit:8},weapon:{pa:4,range:[2,7],el:'air',min:7,max:10},d:['Fait main, ça se voit.','Handmade, and it shows.']},
+ baton_pin:{fr:'Bâton de pin',en:'Pine Staff',ic:'🪄',slot:'weapon',lvl:8,price:160,stats:{int:12,vit:12},weapon:{pa:3,range:[1,4],el:'fire',min:7,max:11},d:['Brûle bien. Normal, c’est du pin.','Burns nicely. Of course, it’s pine.']},
+ arc_palmier:{fr:'Arc en palmier',en:'Palm Bow',ic:'🏹',slot:'weapon',lvl:14,price:380,stats:{agi:22,vit:20,range:1},weapon:{pa:4,range:[2,8],el:'air',min:12,max:17},d:['+1 portée. Les cocotiers en tremblent.','+1 range. Coconut trees tremble.']},
+ epee_cuivre:{fr:'Épée de cuivre',en:'Copper Sword',ic:'🗡️',slot:'weapon',lvl:6,price:130,stats:{str:12,vit:10},weapon:{pa:4,range:[1,1],el:'earth',min:10,max:14},d:['Brillante, et elle coupe vraiment.','Shiny, and it actually cuts.']},
+ epee_fer:{fr:'Épée de fer',en:'Iron Sword',ic:'⚔️',slot:'weapon',lvl:13,price:360,stats:{str:22,vit:20},weapon:{pa:4,range:[1,1],el:'earth',min:15,max:21},d:['« Du sérieux », dit Momo.','“Serious stuff,” says Momo.']},
+ dague_fer:{fr:'Dague de fer',en:'Iron Dagger',ic:'🔪',slot:'weapon',lvl:12,price:330,stats:{agi:20,vit:15},weapon:{pa:3,range:[1,1],el:'air',min:11,max:15},d:['Pour les Fourbes qui ont un budget.','For Sneaks on a budget.']},
+ anneau_cuivre:{fr:'Anneau de cuivre',en:'Copper Ring',ic:'💍',slot:'ring',lvl:5,price:90,stats:{vit:12,cha:8,str:4},d:['Laisse une trace verte. C’est la preuve qu’il est vrai.','Leaves a green mark. Proof it’s real.']},
+ amulette_fleurs:{fr:'Collier de fleurs',en:'Flower Necklace',ic:'🌸',slot:'amulet',lvl:7,price:120,stats:{int:12,wis:10,heal:4},d:['Les Moutoufous te suivent partout.','Mad Sheep follow you everywhere.']},
+ ceinture_ecailles:{fr:'Ceinture en écailles',en:'Scale Belt',ic:'🐠',slot:'belt',lvl:9,price:150,stats:{cha:14,vit:18},d:['Sent la marée. Résiste à tout, sauf au savon.','Smells of the tide. Resists everything but soap.']},
+ // panoplie du donjon
+ coiffe_champidou:{fr:'Chapeau du Champidou',en:'Shroomdaddy Cap',ic:'🍄',slot:'hat',lvl:15,price:400,set:'champidou',stats:{vit:35,str:12,int:12,cha:12},d:['Un chapeau qui pousse tout seul.','A hat that grows by itself.']},
+ cape_champidou:{fr:'Cape mycélienne',en:'Mycelium Cloak',ic:'🧣',slot:'cape',lvl:15,price:400,set:'champidou',stats:{vit:30,agi:14,wis:10},d:['Douce, chaude, légèrement vivante.','Soft, warm, slightly alive.']},
+ anneau_champidou:{fr:'Anneau sporé',en:'Spore Ring',ic:'💍',slot:'ring',lvl:15,price:400,set:'champidou',stats:{vit:20,str:10,int:10,agi:10},d:['Éternue quand il pleut.','Sneezes when it rains.']},
  // boutique
  coiffe_paille:{fr:'Chapeau de paille',en:'Straw Hat',ic:'👒',slot:'hat',lvl:1,price:25,stats:{vit:8},d:['Le style Bagatown.','Bagatown style.']},
  bottes_cuir:{fr:'Bottes en cuir',en:'Leather Boots',ic:'👢',slot:'boots',lvl:1,price:25,stats:{vit:5,agi:3},d:['Elles ont fait la guerre. Enfin, le marché.','They’ve been to war. Well, to the market.']},
@@ -146,7 +185,26 @@ export const QUESTS={
  q_sanglier:{fr:'Le boudeur',en:'The Sulker',giver:'robert',kill:{sanglier:4},reward:{xp:900,kamas:300,item:'anneau_force'},
   d:['Au nord, les Sangliers boudent et chargent les passants. Je suis garde, mais j’ai peur. Vas-y, toi.','Up north, Boars sulk and charge at passers-by. I’m a guard, but I’m scared. You go.']},
  q_royal:{fr:'Lèse-majesté',en:'Treason',giver:'maire',kill:{moutonroyal:1},need:'q_moutons',reward:{xp:3000,kamas:800,item:'couronne'},
-  d:['Le Mouton Royal s’est proclamé maire de la prairie. Il n’y a qu’un maire ici. Va le détrôner (au fond de la prairie, au sud).','The Royal Sheep declared himself mayor of the meadow. There’s only one mayor here. Go dethrone him (deep in the meadow, south).']}};
+  d:['Le Mouton Royal s’est proclamé maire de la prairie. Il n’y a qu’un maire ici. Va le détrôner (au fond de la prairie, au sud).','The Royal Sheep declared himself mayor of the meadow. There’s only one mayor here. Go dethrone him (deep in the meadow, south).']},
+ q_bois:{fr:'Bois de chauffage',en:'Firewood',giver:'josette',bring:{frene:8},reward:{xp:150,kamas:60,item:'pain'},
+  d:['L’hiver arrive, et Mamie Kamas a encore froid. Coupe-moi 8 bûches de frêne.','Winter is coming, and Granny Kamas is cold again. Cut me 8 ash logs.']},
+ q_cuivre:{fr:'Ça brille !',en:'Shiny!',giver:'leon',bring:{cuivre:8},reward:{xp:180,kamas:70,item:'lingot_cuivre'},
+  d:['J’ai promis une bague à ma chérie. Ramène 8 minerais de cuivre, je ferai le reste. Elle ne saura rien.','I promised my sweetheart a ring. Bring 8 copper ores, I’ll do the rest. She’ll never know.']},
+ q_herbes:{fr:'Tisane de Tata',en:'Auntie’s Tea',giver:'tata',bring:{ortie:6,fleur:3},reward:{xp:200,kamas:60,item:'grandepotion'},
+  d:['Ma tisane « remède à tout » a besoin de 6 orties et 3 fleurs de prairie. Ça soigne même la timidité.','My “cure-all” tea needs 6 nettles and 3 meadow flowers. It even cures shyness.']},
+ q_peche:{fr:'Le goujon de la discorde',en:'The Gudgeon Dispute',giver:'marcel',bring:{goujon:6},reward:{xp:180,kamas:60,item:'brochette'},
+  d:['Gégé dit que je ne sais plus pêcher. Ramène-moi 6 goujons de la rivière, qu’on rigole.','Gégé says I can’t fish anymore. Bring me 6 gudgeons from the river, we’ll see who laughs.']},
+ q_brochettes:{fr:'Menu du jour',en:'Today’s Special',giver:'gege',bring:{brochette:3},need:'q_peche',reward:{xp:450,kamas:150,item:'ceinture_ecailles'},
+  d:['Bon, d’accord, Marcel sait pêcher. Mais sait-il cuisiner ? Rapporte 3 brochettes, je goûte.','Fine, Marcel can fish. But can he cook? Bring 3 skewers, I’ll taste.']},
+ q_defenses:{fr:'Ivoire de bouderie',en:'Sulky Ivory',giver:'momo',bring:{defense:5,lingot_fer:2},reward:{xp:1200,kamas:300,item:'hache_sanglier'},
+  d:['Avec 5 défenses de Sanglier et 2 lingots de fer, je te forge une hache qui boude aussi fort qu’eux.','With 5 Boar tusks and 2 iron ingots, I’ll forge you an axe that sulks as hard as they do.']},
+ q_araknees:{fr:'Toile de fond',en:'Backdrop',giver:'josette',kill:{araknee:4},reward:{xp:1300,kamas:320,item:'bottes_arak'},
+  d:['Les Araknées tissent dans mes pins, au nord. Je ne peux plus rien couper. Débarrasse-m’en.','Spidernets weave in my pines up north. I can’t cut anything anymore. Get rid of them.']},
+ q_grotte:{fr:'Le roi sous la terre',en:'King Underground',giver:'bernard',kill:{champidou:1},reward:{xp:4000,kamas:1000,item:'cle_grotte'},
+  d:['Au fond de la grotte, le Grand Champidou prépare la révolution des champignons. Arrête-le avant le dessert.','Deep in the cave, the Great Shroomdaddy is plotting the mushroom revolution. Stop him before dessert.']},
+ q_cle:{fr:'Clé de voûte',en:'Keystone',giver:'bernard',bring:{champignon:4,spore:3},reward:{xp:600,kamas:100,item:'cle_grotte'},
+  d:['Tu veux entrer ? Il te faut une clé moisie. Rapporte-moi 4 champignons des bois et 3 spores, je t’en moisis une.','Want in? You need a mouldy key. Bring me 4 wood mushrooms and 3 spores, I’ll mould you one.']}};
+
 
 // ---- PNJ de Bagatown
 export const NPCS={
@@ -156,6 +214,11 @@ export const NPCS={
   lines:[['Mes armes sont garanties à vie. La tienne, pas la mienne.','My weapons have a lifetime guarantee. Yours, not mine.']]},
  gege:{fr:'Tavernier Gégé',en:'Gégé the Innkeeper',col:'#c9853a',hat:'none',lines:[['Une limonade ? On n’a que ça et du bouillon.','Lemonade? That’s all we have, and broth.'],['Le Bourrin du coin a perdu un bras de fer contre un Moutoufou. On en parle encore.','The local Brute lost an arm wrestle to a Mad Sheep. People still talk about it.']]},
  robert:{fr:'Garde Robert',en:'Guard Robert',col:'#4a6b8a',hat:'helmet',lines:[['Halte ! … Ah non, c’est bon, vas-y. Je dis ça pour m’entraîner.','Halt! … Oh no, it’s fine, go ahead. I’m just practising.']]},
+ josette:{fr:'Bûcheronne Josette',en:'Josette the Lumberjack',col:'#a83b2f',hat:'band',job:'bucheron',lines:[['Un arbre, ça se respecte. Après, ça se coupe.','A tree deserves respect. Then it gets chopped.'],['Je parle aux arbres. Ils ne répondent pas, c’est reposant.','I talk to trees. They don’t answer, it’s relaxing.']]},
+ leon:{fr:'Gros Léon le mineur',en:'Big Léon the Miner',col:'#55555c',hat:'helmet',job:'mineur',lines:[['Le fer, c’est la vie. Le cuivre, c’est pour les amoureux.','Iron is life. Copper is for lovers.'],['J’ai creusé un trou une fois. Je suis toujours dedans, en quelque sorte.','I dug a hole once. I’m still in it, sort of.']]},
+ tata:{fr:'Tata Ortie',en:'Auntie Nettle',col:'#5c8f3c',hat:'bun',job:'herboriste',lines:[['Une ortie par jour éloigne le médecin. Et tout le monde, en fait.','A nettle a day keeps the doctor away. And everyone else, really.'],['Les fleurs, ça ne se cueille pas, ça se convainc.','You don’t pick flowers, you convince them.']]},
+ marcel:{fr:'Papi Marcel',en:'Grandpa Marcel',col:'#3a6fa8',hat:'top',job:'pecheur',lines:[['J’ai pêché une sardine grande comme ça. Non, plus grande.','I caught a sardine this big. No, bigger.'],['La patience, petit. Et un bon pique-nique.','Patience, kid. And a good picnic.']]},
+ bernard:{fr:'Bernard, gardien de la grotte',en:'Bernard, Cave Keeper',col:'#6b3b8a',hat:'wizard',lines:[['La Grotte du Champidou, quatre salles, un roi champignon. On y entre avec une clé moisie, on en sort avec des spores partout.','The Shroomdaddy’s Cave: four rooms, one mushroom king. You go in with a mouldy key, you come out with spores everywhere.'],['Vas-y en groupe. Seul, c’est pour les héros. Ou les têtus.','Go as a group. Alone is for heroes. Or the stubborn.']]},
  prof:{fr:'Maître Bagaclasse',en:'Master Bagaclass',col:'#2f6b4a',hat:'wizard',reset:true,lines:[['Je peux te réapprendre tes caractéristiques. Gratuitement, parce que je suis gentil.','I can reset your characteristics. For free, because I’m nice.']]}};
 
 // ---- zones du monde (repères pour le générateur et les noms affichés)
@@ -163,3 +226,51 @@ export const ZONES={town:{fr:'Bagatown',en:'Bagatown',lvl:'—',music:'town'},me
  beach:{fr:'Plage de Baga',en:'Baga Beach',lvl:'4-9',music:'field'},woods:{fr:'Bois des Champis',en:'Mushroom Woods',lvl:'6-12',music:'woods'},
  hills:{fr:'Collines Boudeuses',en:'Sulky Hills',lvl:'10-18',music:'woods'},throne:{fr:'Trône du Mouton Royal',en:'Royal Sheep’s Throne',lvl:'20',music:'woods'}};
 export const SPAWNS={meadow:['moutoufou','moutoufou','poultoss','vermichelle'],beach:['crabouillon','crabouillon','vermichelle'],woods:['champi','moustikouille','vermichelle'],hills:['sanglier','araknee','sanglier'],throne:['moutonroyal']};
+
+// ---- métiers : récolte dans le monde, fabrication auprès du maître de métier
+export const JOB_MAX=30;
+export const jobXpFor=l=>Math.floor(25*Math.pow(Math.max(0,l-1),1.75));
+export const jobLevelOf=xp=>{let l=1;while(l<JOB_MAX&&xp>=jobXpFor(l+1))l++;return l};
+export const JOBS={
+ bucheron:{fr:'Bûcheron',en:'Lumberjack',ic:'🪓',master:'josette',shop:['Scierie','Sawmill'],d:['Coupe les arbres. Fabrique des planches et des armes en bois.','Chops trees. Makes planks and wooden weapons.']},
+ mineur:{fr:'Mineur',en:'Miner',ic:'⛏️',master:'leon',shop:['Forge','Forge'],d:['Casse les rochers. Fond des lingots, forge des épées et des anneaux.','Breaks rocks. Smelts ingots, forges swords and rings.']},
+ herboriste:{fr:'Herboriste',en:'Herbalist',ic:'🌿',master:'tata',shop:['Alambic','Still'],d:['Cueille orties, fleurs et champignons. Prépare potions et colliers (et la clé du donjon).','Picks nettles, flowers and mushrooms. Brews potions and necklaces (and the dungeon key).']},
+ pecheur:{fr:'Pêcheur',en:'Fisher',ic:'🎣',master:'marcel',shop:['Cuisine','Kitchen'],d:['Pêche dans la rivière et la mer. Cuisine des plats qui rendent beaucoup de PV.','Fishes in the river and the sea. Cooks dishes that restore lots of HP.']}};
+// ce qu'on récolte : selon le décor (et la zone), le niveau de métier requis, l'XP de métier
+export const HARVEST={
+ tree:{job:'bucheron',item:'frene',lvl:1,xp:8},pine:{job:'bucheron',item:'pin',lvl:5,xp:14},palm:{job:'bucheron',item:'palmier',lvl:10,xp:22},
+ rock:{job:'mineur',item:'cuivre',lvl:1,xp:8},rock_hills:{job:'mineur',item:'fer',lvl:8,xp:18},
+ bush:{job:'herboriste',item:'ortie',lvl:1,xp:7},deco:{job:'herboriste',item:'fleur',lvl:3,xp:10},shroom:{job:'herboriste',item:'champignon',lvl:8,xp:18},
+ river:{job:'pecheur',item:'goujon',lvl:1,xp:8},sea:{job:'pecheur',item:'sardine',lvl:6,xp:15}};
+export const RECIPES={
+ planche:{job:'bucheron',lvl:1,in:{frene:2},xp:6},
+ arc_frene:{job:'bucheron',lvl:3,in:{planche:6,plume:4},xp:30},
+ baton_pin:{job:'bucheron',lvl:6,in:{pin:6,spore:3},xp:45},
+ arc_palmier:{job:'bucheron',lvl:12,in:{palmier:8,soie:3,dard:2},xp:90},
+ lingot_cuivre:{job:'mineur',lvl:1,in:{cuivre:3},xp:8},
+ anneau_cuivre:{job:'mineur',lvl:2,in:{lingot_cuivre:3,bave:2},xp:25},
+ epee_cuivre:{job:'mineur',lvl:3,in:{lingot_cuivre:5,pince_crabe:2},xp:35},
+ lingot_fer:{job:'mineur',lvl:8,in:{fer:3},xp:20},
+ dague_fer:{job:'mineur',lvl:10,in:{lingot_fer:4,dard:3},xp:70},
+ epee_fer:{job:'mineur',lvl:10,in:{lingot_fer:6,defense:3},xp:80},
+ potion:{job:'herboriste',lvl:1,in:{ortie:3},xp:8},
+ amulette_fleurs:{job:'herboriste',lvl:4,in:{fleur:6,laine:4},xp:35},
+ grandepotion:{job:'herboriste',lvl:6,in:{ortie:4,fleur:3,spore:1},xp:30},
+ cle_grotte:{job:'herboriste',lvl:8,in:{champignon:3,spore:2,soie:2},xp:60},
+ brochette:{job:'pecheur',lvl:1,in:{goujon:2,pain:1},xp:10},
+ soupe:{job:'pecheur',lvl:6,in:{sardine:3,ortie:2},xp:28},
+ ceinture_ecailles:{job:'pecheur',lvl:8,in:{sardine:8,pince_crabe:3},xp:60}};
+// panoplies : bonus quand on porte plusieurs pièces du même ensemble
+export const SETS={
+ mouton:{fr:'Panoplie du Moutoufou',en:'Mad Sheep Set',bonus:{2:{vit:10,wis:5}}},
+ champidou:{fr:'Panoplie du Champidou',en:'Shroomdaddy Set',bonus:{2:{vit:20,str:8,int:8,cha:8,agi:8},3:{vit:40,str:15,int:15,cha:15,agi:15,pm:1}}}};
+// ---- donjon : la Grotte du Champidou, 4 salles à la suite (# pilier, ~ trou, A départ joueurs, B départ monstres)
+export const DUNGEON={id:'grotte',fr:'Grotte du Champidou',en:'Shroomdaddy’s Cave',key:'cle_grotte',lvl:'14-20',rooms:[
+ {fr:'Salle des Champinous',en:'Little Shroom Hall',mobs:[['champinou',11],['champinou',12],['champi',12]],map:[
+  '~~~~~~~~~~~~~','~...B...B...~','~.#.......#.~','~....B......~','~...........~','~..#.....#..~','~.....#.....~','~..#.....#..~','~...........~','~.#.......#.~','~...A...A...~','~.....A.A...~','~~~~~~~~~~~~~']},
+ {fr:'Galerie des Bourdonnements',en:'Buzzing Gallery',mobs:[['moustikouille',13],['moustikouille',13],['araknee',14]],map:[
+  '~~~~~~~~~~~~~','~..B.....B..~','~...........~','~.##..B..##.~','~...........~','~...#...#...~','~~.........~~','~...#...#...~','~...........~','~.##.....##.~','~..A.....A..~','~....A.A....~','~~~~~~~~~~~~~']},
+ {fr:'Champignonnière',en:'Mushroom Farm',mobs:[['champinou',14],['champinou',14],['champi',15],['champinou',15]],map:[
+  '~~~~~~~~~~~~~','~.B..B.B..B.~','~...........~','~.#.#...#.#.~','~...........~','~.....~.....~','~...#.~.#...~','~.....~.....~','~...........~','~.#.#...#.#.~','~...A...A...~','~....A.A....~','~~~~~~~~~~~~~']},
+ {fr:'Trône du Champidou',en:'Shroomdaddy’s Throne',mobs:[['champidou',18],['champinou',15],['champinou',15]],map:[
+  '~~~~~~~~~~~~~','~....B.B....~','~.#...B...#.~','~...........~','~..#.....#..~','~...........~','~.#...#...#.~','~...........~','~..#.....#..~','~...........~','~.#.A...A.#.~','~....A.A....~','~~~~~~~~~~~~~']}]};
