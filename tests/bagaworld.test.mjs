@@ -81,3 +81,23 @@ test('world: same world for everyone, town reachable from every zaap and spawn, 
  for(const g of groups.slice(0,12)){const ar=W.arenaAt(A,g.x-2,g.z,g.x,g.z);assert.ok(ar.start[0].length>=1&&ar.start[1].length>=1);assert.ok(ar.grid.filter(c=>c===0).length>=30,'arène trop petite');
   const S=F.newFight(ar,[[C.fighterOf(C.newChar('K','bourrin'),'p0')],g.members.map(([m,l],i)=>C.mobFighter(m,l,'m'+i))],1);const p=S.f[0];assert.ok(F.walkable(S,p.x,p.y));
   for(const m of S.f.slice(1))assert.ok(F.walkable(S,m.x,m.y),'monstre placé sur une case libre')}});
+
+test('en ligne : rejoindre, forcer le départ, abandonner, rejouer le journal à l’identique', async()=>{
+ const F=await import('../bagaworld-fight.js'),C=await import('../bagaworld-char.js'),WW=await import('../bagaworld-world.js');
+ const W=WW.genWorld(),g=WW.spawnGroups(W).find(g=>g.zone==='meadow');const A=WW.arenaAt(W,g.x+1,g.z,g.x,g.z);
+ const a=C.newChar('A','bourrin'),b=C.newChar('B','bisou');const fa=C.fighterOf(a,'pa'),fb=C.fighterOf(b,'pb');
+ const init=()=>F.newFight(A,[[fa],g.members.map(([m,l],i)=>C.mobFighter(m,l,'m'+i))],777);
+ const S=init(),log=[];const play=(S,x)=>{const ok=F.act(S,x);return ok};
+ const push=x=>{assert.ok(play(S,x),JSON.stringify(x));log.push(x)};
+ push({a:'join',f:fb});assert.equal(S.f.filter(f=>f.kind==='player').length,2);
+ assert.equal(F.act(S,{a:'join',f:fb}),false,'pas deux fois');
+ push({a:'ready',id:'pa'});assert.equal(S.phase,'place');push({a:'go'});assert.equal(S.phase,'fight');
+ // une action au nom d'un autre que celui qui joue est refusée
+ const cur=F.current(S),other=S.f.find(f=>f.kind==='player'&&f!==cur);if(other)assert.equal(F.act(S,{a:'end',id:other.id}),false);
+ // dérouler : IA locale entre les actions humaines du journal
+ const drain=S=>{let n=0;while(S.phase==='fight'&&F.current(S)?.kind==='mob'&&n++<200){const x=F.aiAction(S)||{a:'end'};if(!F.act(S,x))F.act(S,{a:'end'})}};
+ for(let k=0;k<30&&S.phase==='fight';k++){drain(S);if(S.phase!=='fight')break;const c=F.current(S);push(k===6&&c.id==='pb'?{a:'quit',id:'pb'}:{a:'end',id:c.id})}
+ // un second client rejoue le même journal et arrive au même état
+ const S2=init();for(const x of log){drain(S2);assert.ok(F.act(S2,x))}drain(S2);drain(S);
+ assert.deepEqual(S2.f.map(f=>[f.id,f.hp,f.x,f.y,f.alive]),S.f.map(f=>[f.id,f.hp,f.x,f.y,f.alive]));assert.equal(S2.phase,S.phase);
+});

@@ -8,6 +8,7 @@ import * as WW from './bagaworld-world.js';
 import * as MD from './bagaworld-models.js';
 import {createGL,M4,project,hex} from './urssaf-gl.js';
 import {setMusicTheme} from './rewards.js';
+import * as online_ from './online.js';
 
 const SAVE='bagaplay-bagaworld',BH=MD.BH;
 const load=()=>{try{return JSON.parse(localStorage.getItem(SAVE))||null}catch{return null}};
@@ -33,6 +34,8 @@ export function bagaworld(c){
  const P={x:W.start.x,z:W.start.z,y:BH,yaw:0,path:[],walk:0,sit:false,goal:null};if(save0?.pos&&WW.walkable(W,save0.pos.x,save0.pos.z)){P.x=save0.pos.x;P.z=save0.pos.z}
  const cam={yaw:0,dist:12,el:.92,x:P.x,z:P.z,shake:0},view={VP:null,eye:null,w:1,h:1};
  const M={chunks:new Map(),water:null,cube:MD.cubeMesh(R),tile:MD.tileMesh(R),mobs:{},chars:new Map(),npcs:{}};
+ const NET={on:false,pub:null,others:new Map(),chat:[],lastChat:0,group:[],fights:[],inv:[],shown:new Set(),ignore:new Set(),t:0,busy:false,err:0,now:false,grp:false,leader:false,first:true,scope:'local',myBubble:null};
+ try{NET.on=online_.enabled()&&online_.registered()}catch{}
  const fx=[],floats=[];let fight=null,zoneNow=null,dialogOpen=false,panelOpen=null,regenT=0;
  const buzz=p=>{try{navigator.vibrate?.(p)}catch{}};
  const store=()=>{if(!ch)return;try{localStorage.setItem(SAVE,JSON.stringify({char:ch,zaaps:[...disc],pos:{x:P.x,z:P.z}}))}catch{}};
@@ -74,7 +77,7 @@ export function bagaworld(c){
  // point du sol (ou de la grille de combat) sous le doigt : on avance le long du rayon jusqu'à passer sous le terrain
  function groundAt(px,py,hf=(x,z)=>WW.tileH(W,x,z)*BH){const r=ray(px,py);if(!r)return null;const L=Math.hypot(...r.d),d=r.d.map(v=>v/L);
   for(let s=0;s<120;s+=.08){const x=r.o[0]+d[0]*s,y=r.o[1]+d[1]*s,z=r.o[2]+d[2]*s;if(y<=hf(x,z))return {x,z}}return null}
- const scr=(x,y,z)=>project(view.VP,view.w,view.h,x,y,z);
+ const scr=(x,y,z)=>view.VP?project(view.VP,view.w,view.h,x,y,z):null;
 
  // ---- entrées : toucher = aller / attaquer / parler ; glisser = tourner la caméra ; pincer = zoomer
  const pts=new Map();let tap=null,pinch=null;
@@ -93,11 +96,13 @@ export function bagaworld(c){
  function worldTap(x,y){if(panelOpen||dialogOpen)return;P.sit=false;
   // un groupe de monstres, un PNJ ou un Bagaap sous le doigt ? (au plus près à l'écran)
   let best=null;const cand=[];
-  for(const g of groups)if(g.dead<=0&&!g.busy)cand.push({k:'mob',o:g,x:g.x,z:g.z,y:WW.tileH(W,g.x,g.z)*BH+.5});
+  for(const g of groups)if(g.dead<=0&&!g.busy&&!g.remote)cand.push({k:'mob',o:g,x:g.x,z:g.z,y:WW.tileH(W,g.x,g.z)*BH+.5});
   for(const n of W.npcs)cand.push({k:'npc',o:n,x:n.x,z:n.z,y:WW.tileH(W,n.x,n.z)*BH+.8});
+  for(const o of NET.others.values())if(o.d.state!=='fight')cand.push({k:'player',o,x:o.x,z:o.z,y:WW.tileH(W,o.x,o.z)*BH+.8});
+  for(const f2 of NET.fights)cand.push({k:'fightm',o:f2,x:f2.x,z:f2.z,y:WW.tileH(W,f2.x,f2.z)*BH+.8});
   for(const zp of W.zaaps)cand.push({k:'zaap',o:zp,x:zp.x,z:zp.z-1.2,y:WW.tileH(W,zp.x,zp.z)*BH+.8});
   for(const q of cand){const s=scr(q.x,q.y,q.z);if(!s)continue;const d=Math.hypot(s[0]-x,s[1]-y);if(d<46&&(!best||d<best.d))best={...q,d}}
-  if(best){goTo(best.x,best.z,best);SFX.click();return}
+  if(best){SFX.click();if(best.k==='player'){playerCard(best.o);return}if(best.k==='fightm'){fightCard(best.o);return}goTo(best.x,best.z,best);return}
   const g=groundAt(x,y);if(g)goTo(g.x,g.z,null)}
  function goTo(x,z,goal){let tx=x,tz=z;if(!WW.walkable(W,tx,tz)){const near=[];for(let r=1;r<=2;r++)for(let dz=-r;dz<=r;dz++)for(let dx=-r;dx<=r;dx++){const xx=Math.floor(x)+dx+.5,zz=Math.floor(z)+dz+.5;if(WW.walkable(W,xx,zz))near.push([xx,zz,Math.hypot(xx-P.x,zz-P.z)])}
    near.sort((a,b)=>a[2]-b[2]);if(!near.length)return;[tx,tz]=near[0]}
@@ -113,11 +118,11 @@ export function bagaworld(c){
   P.y+=(WW.tileH(W,P.x,P.z)*BH-P.y)*Math.min(1,dt*12);
   // arrivée près d'une cible
   if(P.goal){const g=P.goal,d=Math.hypot(g.x-P.x,g.z-P.z);
-   if(g.k==='mob'&&g.o.dead<=0&&!g.o.busy){if(d<1.4){P.path=[];P.goal=null;startFight(g.o)}else if(!P.path.length||Math.hypot(P.path.at(-1)[0]-g.o.x,P.path.at(-1)[1]-g.o.z)>1.5)goTo(g.o.x,g.o.z,g)}
+   if(g.k==='mob'&&g.o.dead<=0&&!g.o.busy&&!g.o.remote){if(d<1.4){P.path=[];P.goal=null;startFight(g.o)}else if(!P.path.length||Math.hypot(P.path.at(-1)[0]-g.o.x,P.path.at(-1)[1]-g.o.z)>1.5)goTo(g.o.x,g.o.z,g)}
    else if(g.k==='npc'&&d<1.8){P.path=[];P.goal=null;talk(g.o.id)}else if(g.k==='zaap'&&d<2.2){P.path=[];P.goal=null;zaapPanel(g.o)}
    else if(!P.path.length)P.goal=null}
   // groupes agressifs
-  for(const g of groups)if(g.aggro&&g.dead<=0&&!g.busy&&Math.hypot(g.x-P.x,g.z-P.z)<2.2&&WW.zoneAt(Math.floor(P.x),Math.floor(P.z))!=='town'){toastMsg(T('Tu t’es fait agresser !','You got ambushed!'));startFight(g);return}
+  for(const g of groups)if(g.aggro&&g.dead<=0&&!g.busy&&!g.remote&&!starting&&Math.hypot(g.x-P.x,g.z-P.z)<2.2&&WW.zoneAt(Math.floor(P.x),Math.floor(P.z))!=='town'){toastMsg(T('Tu t’es fait agresser !','You got ambushed!'));startFight(g);return}
   WW.tickGroups(W,groups,dt,wr);
   // Bagaaps découverts, zone courante
   for(const zp of W.zaaps)if(!disc.has(zp.id)&&Math.hypot(zp.x-P.x,zp.z-P.z)<4){disc.add(zp.id);toastMsg(T('Nouveau Bagaap découvert : ','New Bagaap found: ')+nm(D.ZONES[zp.id]),'good');SFX.zap();store()}
@@ -133,7 +138,8 @@ export function bagaworld(c){
   // PNJ
   for(const n of W.npcs){if(Math.hypot(n.x-cam.x,n.z-cam.z)>26)continue;const y=WW.tileH(W,n.x,n.z)*BH,yaw=Math.atan2(-(P.x-n.x),-(P.z-n.z));MD.drawChar(R,M4,npcParts(n.id),M4.trs(n.x,y,n.z,Math.hypot(P.x-n.x,P.z-n.z)<5?yaw:n.yaw,1.4),{bob:Math.sin(t*2+n.x)*.01,armR:Math.sin(t*1.5+n.z)*.2})}
   // groupes de monstres : le chef au centre, les autres autour
-  for(const g of groups){if(g.dead>0||Math.hypot(g.x-cam.x,g.z-cam.z)>26)continue;const y=WW.tileH(W,g.x,g.z)*BH;
+  drawNet();
+  for(const g of groups){if(g.dead>0||g.remote||Math.hypot(g.x-cam.x,g.z-cam.z)>26)continue;const y=WW.tileH(W,g.x,g.z)*BH;
    g.members.forEach(([id],i)=>{const a=i*2.1,r=i?.75:0,x=g.x+Math.cos(a)*r,z=g.z+Math.sin(a)*r,hop=Math.abs(Math.sin(t*3+i+g.home.x))*.08;drawMob(id,x,y+hop,z,g.yaw,1)})}
   // Bagaaps : étincelles
   for(const zp of W.zaaps)if(Math.random()<dt*6&&Math.hypot(zp.x-cam.x,zp.z-cam.z)<20)fx.push({x:zp.x+(Math.random()-.5)*.6,y:WW.tileH(W,zp.x,zp.z-1.2)*BH+.6,z:zp.z-1.2+(Math.random()-.5)*.6,vx:0,vy:.8,vz:0,life:1,col:hex('#c9b8ff'),s:.06,g:-.3})
@@ -148,30 +154,79 @@ export function bagaworld(c){
  function burst(x,y,z,col,n=10,sp=2,up=2.5){const c3=hex(col);for(let i=0;i<n;i++){const a=Math.random()*6.28;fx.push({x,y,z,vx:Math.cos(a)*sp*Math.random(),vy:up*(.4+Math.random()),vz:Math.sin(a)*sp*Math.random(),life:.5+Math.random()*.5,col:c3,s:.06+Math.random()*.06,g:7})}}
 
  // ================= COMBAT =================
- let F_=null;   // état de l'interface de combat
- function startFight(g){if(fight)return;g.busy=true;P.path=[];P.goal=null;P.sit=false;
-  const A=WW.arenaAt(W,P.x,P.z,g.x,g.z),seed=(Math.random()*2**31)|0;
-  const S=F.newFight(A,[[C.fighterOf(ch,'me')],g.members.map(([m,l],i)=>C.mobFighter(m,l,'m'+i))],seed);
-  fight={S,A,g,seed};F_={sel:null,disp:new Map(),queue:[],aiT:0,busy:0,over:false,timer:60,hover:null};
-  for(const f of S.f)F_.disp.set(f.id,{x:f.x,y:f.y,path:[],yaw:f.team?0:Math.PI,hit:0});
-  mode='fight';music('fight');SFX.bleat();buzz([40,40,40]);cam.x=A.ox+A.w/2;cam.z=A.oz+A.h/2;cam.dist=fitDist();
-  banner(T('Combat !','Fight!'),T('Place-toi sur une case bleue, puis « Prêt »','Pick a blue cell, then “Ready”'));fightUI()}
+ // Solo : tout est local. En ligne : la description de départ (arène, graine, combattants) et le journal des actions
+ // des joueurs sont sur le serveur ; chaque client rejoue ce journal, les tours des monstres étant recalculés à l'identique.
+ // Règle d'or : une action du journal ne s'applique qu'entre deux tours de monstres (jamais au milieu), partout pareil.
+ let F_=null,starting=false;
+ const myFid=()=>NET.on&&NET.pub?NET.pub:'me';
+ const meF=()=>fight?fight.S.f.find(f=>f.id===fight.me):null;
+ const myTeam=()=>meF()?.team??0;
+ function buildFight(init,meId,g,online){const S=F.newFight(init.arena,init.teams,init.seed);
+  fight={S,A:init.arena,g,seed:init.seed,me:meId,kind:init.kind||'pve',online,init};
+  F_={sel:null,disp:new Map(),aiT:0,busy:0,over:false,timer:60,hover:null,queue:[],posting:false,t0:t,went:false};return S}
+ function dispAll(){for(const f of fight.S.f){const d=F_.disp.get(f.id);if(!d)F_.disp.set(f.id,{x:f.x,y:f.y,path:[],yaw:f.team?0:Math.PI,hit:0});else if(!d.path.length&&d.tx==null){d.x=f.x;d.y=f.y}}}
+ function enterFight(){mode='fight';music('fight');SFX.bleat();buzz([40,40,40]);const A=fight.A;cam.x=A.ox+A.w/2;cam.z=A.oz+A.h/2;cam.dist=fitDist();P.path=[];P.goal=null;P.sit=false;closePanel();
+  dispAll();if(fight.S.phase==='place')banner(fight.kind==='pvp'?T('Duel !','Duel!'):T('Combat !','Fight!'),T('Place-toi sur une case bleue, puis « Prêt »','Pick a blue cell, then “Ready”'));fightUI()}
+ // les tours des monstres d'un coup, sans animation (pour rattraper un combat en cours)
+ function drainAI(S){let n=0;while(S.phase==='fight'&&F.current(S)?.kind==='mob'&&n++<300){const a=F.aiAction(S)||{a:'end'};if(!F.act(S,a))F.act(S,{a:'end'})}}
+ function replay(list){const S=fight.S;for(const a of list){drainAI(S);F.act(S,a);fight.online.applied++}S.ev.length=0;fight.online.recv=fight.online.applied}
+ async function startFight(g){if(fight||starting)return;g.busy=true;P.path=[];P.goal=null;
+  let meId=myFid();const A=WW.arenaAt(W,P.x,P.z,g.x,g.z),seed=(Math.random()*2**31)|0,
+   init={kind:'pve',arena:A,seed,teams:[[C.fighterOf(ch,meId)],g.members.map(([m,l],i)=>C.mobFighter(m,l,'m'+i))],gid:g.gid};
+  let on=null;if(NET.on&&NET.pub){starting=true;try{const id=await online_.bwFightCreate('pve',init,g.x,g.z,g.gid);on={id,applied:0,recv:0}}catch(e){toastMsg(T('Combat hors ligne : ','Offline fight: ')+e.message)}starting=false;if(!alive)return}
+  if(!on&&meId!=='me'){meId='me';init.teams[0][0]={...init.teams[0][0],id:'me'}}
+  buildFight(init,meId,g,on);enterFight();
+  if(on&&NET.group.some(m=>m.online&&m.id!==NET.pub))toastMsg(T('Ton groupe a 30 s pour te rejoindre.','Your group has 30 s to join you.'),'good')}
+ // rejoindre un combat (resume : on y était déjà, après une coupure ou une invitation en duel acceptée par l'autre)
+ async function joinFight(id,resume=false){if(fight||starting)return;starting=true;
+  try{for(let k=0;k<4;k++){const r=await online_.bwSync(netState(),NET.lastChat,id,0);const fd=r.fight;if(!fd||!fd.init)throw new Error(T('Combat introuvable.','Fight not found.'));
+    if(fd.status!=='active')throw new Error(T('Combat terminé.','Fight over.'));
+    let log=fd.log;const pub=r.me.id;NET.pub=pub;
+    if(!resume){const me=C.fighterOf(ch,pub);try{await online_.bwFightAct(id,fd.n,{a:'join',f:me});log=[...log,{a:'join',f:{...me,id:pub}}]}catch(e){if(/conflit/.test(e.message))continue;throw e}}
+    if(!alive)return;const g=groups.find(q=>q.gid===fd.init.gid)||null;if(g)g.busy=true;
+    buildFight(fd.init,pub,g,{id,applied:0,recv:0});replay(log);
+    if(fight.S.phase==='over'){online_.bwFightDone(id).catch(()=>{});NET.ignore.add(id);fight=null;F_=null;return}
+    if(!meF()){const why=T('Trop tard, le combat a commencé.','Too late, the fight has started.');online_.bwFightDone(id).catch(()=>{});fight=null;F_=null;throw new Error(why)}
+    P.x=fight.A.ox+meF().x+.5;P.z=fight.A.oz+meF().y+.5;enterFight();if(!resume)toastMsg(T('Tu rejoins le combat !','You join the fight!'),'good');return}
+   throw new Error(T('Trop de monde en même temps, réessaie.','Too busy, try again.'))}
+  catch(e){NET.ignore.add(id);toastMsg(e.message)}finally{starting=false}}
+ // duel accepté : celui qui accepte prépare l'arène entre les deux joueurs et crée le combat
+ async function createDuel(r){if(fight||starting)return;starting=true;try{const meId=NET.pub,mine=C.fighterOf(ch,meId),theirs={...r.data,id:r.from};mine.hp=mine.maxHp;theirs.hp=theirs.maxHp;
+   const A=WW.arenaAt(W,r.x??P.x,r.z??P.z,P.x,P.z),seed=(Math.random()*2**31)|0,init={kind:'pvp',arena:A,seed,teams:[[theirs],[mine]]};
+   const id=await online_.bwFightCreate('pvp',init,P.x,P.z,null,r.from);if(!alive)return;buildFight(init,meId,null,{id,applied:0,recv:0});enterFight()}
+  catch(e){toastMsg(e.message)}finally{starting=false}}
+ // une action du joueur : directe en solo, envoyée puis appliquée en ligne (le serveur garde l'ordre)
+ function doAct(a){if(!fight)return;const S=fight.S,o=fight.online;
+  if(!o){if(F.act(S,a))afterAct();return}
+  if(F_.posting)return;if(a.a!=='quit'&&(F_.queue.length||o.recv!==o.applied))return;
+  const sent=a.a==='go'?{a:'go'}:{...a,id:a.id||fight.me},seq=o.recv;F_.posting=true;
+  online_.bwFightAct(o.id,seq,sent).then(()=>{F_&&(F_.posting=false);if(!fight||fight.online!==o)return;
+   if(o.recv>seq)return;   // déjà reçue par la synchro : elle sera appliquée depuis la file, pas deux fois
+   drainAI(S);afterAct();F.act(S,sent);o.applied++;o.recv=o.applied;dispAll();afterAct()})
+   .catch(e=>{if(F_)F_.posting=false;if(/conflit/.test(e.message)){NET.now=true;if(F_&&(sent.a==='ready'||sent.a==='place'))F_.retry=sent}else toastMsg(e.message)})}
  const worldDist=()=>{const asp=Math.max(.3,wrap.clientWidth/Math.max(1,wrap.clientHeight));return Math.max(11,Math.min(22,4.6/(Math.tan(.4)*Math.min(1.3,asp))))};
  function fitDist(){const asp=Math.max(.3,wrap.clientWidth/Math.max(1,wrap.clientHeight));return Math.max(11,Math.min(30,3.7/(Math.tan(.4)*Math.min(1.3,asp))))}
  const cellY=(x,y)=>(fight.A.hs[y*fight.A.w+x]??fight.A.h0)*BH;
  const cw=(x,y)=>[fight.A.ox+x+.5,cellY(x,y),fight.A.oz+y+.5];
+ const myTurnNow=()=>{const S=fight.S,me=meF();return !!me&&S.phase==='fight'&&F.current(S)===me&&!F_.busy&&!F_.queue.length&&!F_.posting};
  function fightTap(px,py){if(panelOpen)return;const S=fight.S,A=fight.A;const g=groundAt(px,py,(x,z)=>{const cx=Math.floor(x-A.ox),cz=Math.floor(z-A.oz);return cx>=0&&cz>=0&&cx<A.w&&cz<A.h?cellY(cx,cz):WW.tileH(W,x,z)*BH});if(!g)return;
-  const x=Math.floor(g.x-A.ox),y=Math.floor(g.z-A.oz);if(!F.inside(S,x,y))return;const me=S.f.find(f=>f.id==='me');
-  if(S.phase==='place'){if(F.act(S,{a:'place',id:'me',x,y})){SFX.click();syncDisp()}return}
-  if(F.current(S)!==me||F_.busy||F_.queue.length)return;
-  if(F_.sel){const why=F.canCast(S,me,F_.sel,x,y);if(why){toastMsg(whyText(why));SFX.click();return}F.act(S,{a:'cast',spell:F_.sel,x,y});F_.sel=null;afterAct();return}
-  const P2=F.paths(S,me),path=P2.path(x,y);if(path&&path.length){F.act(S,{a:'move',path});afterAct()}else{const o=F.at(S,x,y);if(o)showFighter(o)}}
+  const x=Math.floor(g.x-A.ox),y=Math.floor(g.z-A.oz);if(!F.inside(S,x,y))return;const me=meF();if(!me)return;
+  if(S.phase==='place'){if(!me.ready&&S.start[me.team].some(q=>q[0]===x&&q[1]===y)){SFX.click();doAct({a:'place',id:me.id,x,y});if(!fight.online)syncDisp()}else{const o=F.at(S,x,y);if(o)showFighter(o)}return}
+  if(!myTurnNow()){const o=F.at(S,x,y);if(o)showFighter(o);return}
+  if(F_.sel){const why=F.canCast(S,me,F_.sel,x,y);if(why){toastMsg(whyText(why));SFX.click();return}const sp=F_.sel;F_.sel=null;doAct({a:'cast',spell:sp,x,y});return}
+  const P2=F.paths(S,me),path=P2.path(x,y);if(path&&path.length)doAct({a:'move',path});else{const o=F.at(S,x,y);if(o)showFighter(o)}}
  const whyText=w=>({pa:T('Pas assez de PA','Not enough AP'),cd:T('Sort en recharge','Spell on cooldown'),relance:T('Plus de relance ce tour','No more casts this turn'),portee:T('Hors de portée','Out of range'),
   ligne:T('En ligne droite seulement','Straight line only'),vue:T('Pas de ligne de vue','No line of sight'),cible:T('Cible invalide','Invalid target'),tour:T('Ce n’est pas ton tour','Not your turn')})[w]||w;
- function syncDisp(){for(const f of fight.S.f){const d=F_.disp.get(f.id);if(!d.path.length){d.x=f.x;d.y=f.y}}}
+ function syncDisp(){for(const f of fight.S.f){const d=F_.disp.get(f.id);if(d&&!d.path.length){d.x=f.x;d.y=f.y}}}
+ const fname=f=>f.kind==='mob'?nm(D.MOBS[f.mob]):f.name;
  // les événements du moteur deviennent des animations
- function afterAct(){const S=fight.S;for(const e of S.ev.splice(0)){const f=S.f.find(o=>o.id===e.id),d=f&&F_.disp.get(f.id);
+ function afterAct(){if(!fight)return;const S=fight.S;dispAll();for(const e of S.ev.splice(0)){const f=S.f.find(o=>o.id===e.id),d=f&&F_.disp.get(f.id);
+  if(e.id&&!d&&e.t!=='quit')continue;
   switch(e.t){
+   case 'place':syncDisp();break;
+   case 'join':toastMsg(`${f.name} ${T('rejoint le combat !','joins the fight!')}`,'good');SFX.buff();break;
+   case 'quit':toastMsg(T('Un joueur a quitté le combat.','A player left the fight.'));break;
+   case 'start':syncDisp();break;
    case 'step':d.path.push([e.x,e.y]);break;
    case 'tp':case 'dash':case 'push':d.path=[];d.tx=e.x;d.ty=e.y;d.slide=0;d.fx=d.x;d.fy=d.y;if(e.t==='push')cam.shake=.3;break;
    case 'cast':{const sp=F.spellOf(f,e.spell),from=cw(f.x,f.y),to=cw(e.x,e.y);d.cast=.35;d.yaw=Math.atan2(-(e.x-f.x),-(e.y-f.y));F_.busy+=.45;
@@ -180,52 +235,66 @@ export function bagaworld(c){
     for(const [cx,cy] of F.zone(S,sp.aoe,e.x,e.y,f)){const p=cw(cx,cy);setTimeout(()=>burst(p[0],p[1]+.3,p[2],col,6,1.4,2),300)}
     (el==='fire'?SFX.fire:el==='air'&&f.cls==='viseur'?SFX.arrow:sp.fx.some(q=>q.t==='heal'||q.t==='hot')?SFX.heal:sp.fx.some(q=>q.t==='buff'||q.t==='invis')?SFX.buff:SFX.hit)();
     if(e.crit){floatAt(e.x,e.y,T('Critique !','Critical!'),'crit');SFX.crit()}break}
-   case 'dmg':setTimeout(()=>{if(!fight)return;floatAt(f.x,f.y,'−'+e.v,e.el,e.push?T(' (poussée)',' (push)'):'');d.hit=.3;if(f.id==='me')buzz(30)},280);break;
-   case 'heal':if(e.v>0)setTimeout(()=>floatAt(f.x,f.y,'+'+e.v,'heal'),280);break;
+   case 'dmg':setTimeout(()=>{if(!fight)return;floatAt(f.x,f.y,'−'+e.v,e.el,e.push?T(' (poussée)',' (push)'):'');d.hit=.3;if(f.id===fight.me)buzz(30)},280);break;
+   case 'heal':if(e.v>0)setTimeout(()=>fight&&floatAt(f.x,f.y,'+'+e.v,'heal'),280);break;
    case 'tackle':floatAt(f.x,f.y,`−${e.pm} PM${e.pa?` −${e.pa} PA`:''}`,'pm',T(' tacle !',' tackled!'));break;
    case 'buff':case 'debuff':floatAt(f.x,f.y,`${e.t==='debuff'?'−':'+'}${e.v} ${nm(D.STATS[e.stat])}`,e.t==='debuff'?'pm':'buff');break;
    case 'poison':floatAt(f.x,f.y,'☠️','pm');break;case 'hot':floatAt(f.x,f.y,'🌿','heal');break;
    case 'invis':floatAt(f.x,f.y,'👻','buff');break;case 'trap':SFX.click();break;
    case 'boom':{const p=cw(e.x,e.y);burst(p[0],p[1]+.3,p[2],'#ff8a3a',20,3,3);SFX.boom();cam.shake=.5;break}
    case 'die':setTimeout(()=>{if(!fight)return;const p=cw(f.x,f.y);burst(p[0],p[1]+.4,p[2],f.kind==='mob'?'#ffffff':'#e2453c',18,2,3);SFX.die()},350);F_.busy+=.3;break;
-   case 'turn':if(f.id==='me'){SFX.turn();buzz(20);F_.timer=60;F_.sel=null;banner(T('À toi !','Your turn!'),'',1)}F_.aiT=.5;break;
-   case 'over':F_.over=true;setTimeout(endFight,1300);break}}
+   case 'turn':if(f.id===fight.me){SFX.turn();buzz(20);F_.timer=60;F_.sel=null;banner(T('À toi !','Your turn!'),'',1)}else if(f.kind==='player')banner(`${T('Au tour de','Turn:')} ${f.name}`,'',1);F_.aiT=.5;break;
+   case 'over':if(!F_.over){F_.over=true;setTimeout(endFight,1300)}break}}
   fightUI()}
  function floatAt(x,y,text,kind,extra=''){const p=cw(x,y);floats.push({x:p[0],y:p[1]+1.7,z:p[2],text:text+extra,kind,t:1.3})}
- function fightTick(){const S=fight.S;F_.busy=Math.max(0,F_.busy-dt);
+ function fightTick(){const S=fight.S,o=fight.online;F_.busy=Math.max(0,F_.busy-dt);
   // animation des déplacements (case par case, glissades pour les poussées et bonds)
-  let moving=false;for(const f of S.f){const d=F_.disp.get(f.id);d.hit=Math.max(0,d.hit-dt);d.cast=Math.max(0,(d.cast||0)-dt);
+  let moving=false;for(const f of S.f){const d=F_.disp.get(f.id);if(!d)continue;d.hit=Math.max(0,d.hit-dt);d.cast=Math.max(0,(d.cast||0)-dt);
    if(d.tx!=null){d.slide+=dt*5;const u=Math.min(1,d.slide);d.x=d.fx+(d.tx-d.fx)*u;d.y=d.fy+(d.ty-d.fy)*u;if(u>=1){d.tx=null}moving=true}
    else if(d.path.length){const [tx,ty]=d.path[0],dx=tx-d.x,dy=ty-d.y,dd=Math.hypot(dx,dy),sp=dt*4.2;d.yaw=Math.atan2(-dx,-dy);d.walk=(d.walk||0)+dt*10;if(dd<=sp){d.x=tx;d.y=ty;d.path.shift();SFX.step()}else{d.x+=dx/dd*sp;d.y+=dy/dd*sp}moving=true}}
-  if(S.phase==='fight'&&!F_.over&&!moving&&F_.busy<=0){const c=F.current(S);
-   if(c&&c.id!=='me'){F_.aiT-=dt;if(F_.aiT<=0){F_.aiT=.35;const a=F.aiAction(S)||{a:'end'};if(!F.act(S,a))F.act(S,{a:'end'});afterAct()}}
-   else if(c&&c.id==='me'){F_.timer-=dt;if(F_.timer<=0){F.act(S,{a:'end'});afterAct()}}}
+  if(!F_.over&&!moving&&F_.busy<=0&&!F_.posting){const c=F.current(S);
+   if(S.phase==='fight'&&c?.kind==='mob'){F_.aiT-=dt;if(F_.aiT<=0){F_.aiT=.35;const a=F.aiAction(S)||{a:'end'};if(!F.act(S,a))F.act(S,{a:'end'});afterAct()}}
+   else if(F_.queue.length){F.act(S,F_.queue.shift());o.applied++;afterAct()}
+   else if(F_.retry&&o&&o.recv===o.applied){const a=F_.retry;F_.retry=null;const me=meF();if(S.phase==='place'&&me&&!(a.a==='ready'&&me.ready))doAct(a)}   // envoi perdu dans un conflit : on renvoie
+   else if(S.phase==='fight'&&c&&c.id===fight.me){F_.timer-=dt;if(F_.timer<=0){F_.timer=60;doAct({a:'end',id:c.id})}}
+   else if(o&&S.phase==='fight'&&c?.kind==='player'&&(o.quiet||0)>65&&o.recv===o.applied){o.quiet=0;doAct({a:'end',id:c.id})}   // joueur absent
+   else if(o&&S.phase==='place'&&fight.kind==='pve'&&!F_.went&&t-F_.t0>32&&fight.S.f[0]?.id===fight.me){F_.went=true;doAct({a:'go'})}}
   hud();fightHud()}
  function drawFight(){const S=fight.S,A=fight.A;drawWorld(true);
-  const me=S.f.find(f=>f.id==='me'),myTurn=F.current(S)===me&&!F_.busy&&!F_.queue.length;
+  const me=meF(),mt=myTeam(),myTurn=myTurnNow();
   // grille : cases de placement, de déplacement, de portée et de zone
   const marks=new Map();const mark=(x,y,col,a)=>marks.set(x+','+y,[x,y,col,a]);
   for(let y=0;y<A.h;y++)for(let x=0;x<A.w;x++)if(S.grid[y*A.w+x]===0)mark(x,y,[1,1,1,1],.3);
-  if(S.phase==='place'){for(const [x,y] of S.start[0])mark(x,y,[.25,.55,1,1],.55);for(const [x,y] of S.start[1])mark(x,y,[1,.3,.25,1],.45)}
+  if(S.phase==='place'){for(const [x,y] of S.start[mt])mark(x,y,[.25,.55,1,1],.55);for(const [x,y] of S.start[1-mt])mark(x,y,[1,.3,.25,1],.45)}
   else if(myTurn&&F_.sel){const rc=F.rangeCells(S,me,F_.sel);for(const [x,y] of rc.blocked)mark(x,y,[.5,.5,.55,1],.4);for(const [x,y] of rc.ok)mark(x,y,[.3,.55,1,1],.45);
    if(F_.hover&&!F.canCast(S,me,F_.sel,F_.hover[0],F_.hover[1]))for(const [x,y] of F.zone(S,F.spellOf(me,F_.sel).aoe,F_.hover[0],F_.hover[1],me))mark(x,y,[1,.35,.2,1],.6)}
   else if(myTurn&&me.pm>0){const P2=F.paths(S,me);for(const [k,d] of P2.D)if(d>0){const [x,y]=k.split(',').map(Number);mark(x,y,[.3,.85,.35,1],.45)}}
-  for(const tr of S.traps)if(tr.team===0)mark(tr.x,tr.y,[.7,.3,.9,1],.6);
+  for(const tr of S.traps)if(tr.team===mt)mark(tr.x,tr.y,[.7,.3,.9,1],.6);
   for(const [x,y,col,a] of marks.values())R.draw(M.tile,M4.t(A.ox+x,cellY(x,y)+.02,A.oz+y),col,a);
-  // combattants (cercle de couleur d'équipe, celui qui joue est surligné)
-  const cur=F.current(S);for(const f of S.f){const d=F_.disp.get(f.id);if(!f.alive&&!d.dying){d.dying=1}if(d.dying){d.dying-=dt*1.2;if(d.dying<=0)continue}
-   const x=A.ox+d.x+.5,z=A.oz+d.y+.5,y=cellY(Math.round(d.x),Math.round(d.y)),a=(f.invis&&f.team===1?0:f.invis?.45:1)*(d.dying?Math.max(0,d.dying):1),tint=d.hit>0?[1,1,1,d.hit*2]:null;
-   R.draw(M.tile,M4.mul(M4.t(x-.45,y+.025,z-.45),M4.sc(.98,1,.98)),f.team?[1,.3,.25,1]:[.25,.55,1,1],f===cur?.85:.45);if(a<=0)continue;
+  // combattants (case de couleur d'équipe, celui qui joue est surligné)
+  const cur=F.current(S);for(const f of S.f){const d=F_.disp.get(f.id);if(!d)continue;if(!f.alive&&!d.dying){d.dying=1}if(d.dying){d.dying-=dt*1.2;if(d.dying<=0)continue}
+   const ally=f.team===mt,x=A.ox+d.x+.5,z=A.oz+d.y+.5,y=cellY(Math.round(d.x),Math.round(d.y)),a=(f.invis&&!ally?0:f.invis?.45:1)*(d.dying?Math.max(0,d.dying):1),tint=d.hit>0?[1,1,1,d.hit*2]:null;
+   R.draw(M.tile,M4.mul(M4.t(x-.45,y+.025,z-.45),M4.sc(.98,1,.98)),ally?[.25,.55,1,1]:[1,.3,.25,1],f===cur?.85:.45);if(a<=0)continue;
    if(f.kind==='mob')drawMob(f.mob,x,y+(d.cast?Math.sin(d.cast*9)*.15:0),z,d.yaw??0,a,tint);
-   else{const w=d.path.length||d.tx!=null;MD.drawChar(R,M4,charParts(f.look||myLook()),M4.trs(x,y,z,d.yaw??Math.PI,1.4),w?{legL:Math.sin(d.walk)*.7,legR:-Math.sin(d.walk)*.7,armL:-Math.sin(d.walk)*.5,armR:Math.sin(d.walk)*.5,bob:Math.abs(Math.sin(d.walk))*.05}:d.cast?{armR:1.6,armL:.4,lean:-.15}:{bob:Math.sin(t*2)*.01},tint&&[1,.4,.4,tint[3]],a)}}}
+   else{const w=d.path.length||d.tx!=null;MD.drawChar(R,M4,charParts(f.look||myLook()),M4.trs(x,y,z,d.yaw??(f.team?0:Math.PI),1.4),w?{legL:Math.sin(d.walk)*.7,legR:-Math.sin(d.walk)*.7,armL:-Math.sin(d.walk)*.5,armR:Math.sin(d.walk)*.5,bob:Math.abs(Math.sin(d.walk))*.05}:d.cast?{armR:1.6,armL:.4,lean:-.15}:{bob:Math.sin(t*2)*.01},tint&&[1,.4,.4,tint[3]],a)}}}
 
- function endFight(){if(!fight)return;const S=fight.S,g=fight.g,won=S.winner===0,me=S.f.find(f=>f.id==='me');
-  const [r]=C.rewards(S,[{ch}],F.rng(fight.seed^0x5bd1));ch.hp=won?Math.max(1,me.hp):null;
-  let lv=null;if(won){lv=C.applyRewards(ch,r,S);g.dead=40;g.busy=false;SFX.win()}else{g.busy=false;SFX.lose()}
+ // combattant fictif pour calculer la part d'XP des autres joueurs du groupe
+ const pseudoChar=f=>({cls:f.cls,xp:D.xpFor(f.lvl),base:{wis:f.stats?.wis||0},eq:{}});
+ const hashId=s=>{let h=0;for(const ch2 of String(s))h=(h*31+ch2.charCodeAt(0))|0;return h};
+ function endFight(){if(!fight)return;const S=fight.S,g=fight.g,me=meF(),mt=me?.team??0,won=S.winner===mt,pvp=fight.kind==='pvp';
+  if(fight.online){NET.ignore.add(fight.online.id);online_.bwFightDone(fight.online.id).catch(()=>{})}
+  if(pvp){const foe=S.f.find(f=>f.team!==mt);panel(`<div class="bw-result ${won?'win':'lose'}"><h2>${won?T('Duel gagné !','Duel won!'):T('Duel perdu…','Duel lost…')}</h2>
+    <p>${won?T(`${esc(foe?.name)} mord la poussière. Tu peux frimer à Bagatown.`,`${esc(foe?.name)} bites the dust. You may now show off in Bagatown.`):T(`${esc(foe?.name)} t’a eu. Revanche ?`,`${esc(foe?.name)} got you. Rematch?`)}</p>
+    <p class="bw-small">${T('Un duel ne fait rien perdre : tes PV reviennent comme avant.','A duel costs nothing: your HP is back to what it was.')}</p><button class="bw-b primary" data-close>${T('Continuer','Continue')}</button></div>`,'result');
+   (won?SFX.win:SFX.lose)();fight=null;F_=null;mode='world';cam.x=P.x;cam.z=P.z;cam.dist=worldDist();zoneNow=null;fightUI();return}
+  const humans=S.f.filter(f=>f.kind==='player'&&f.team===0),idx=Math.max(0,humans.findIndex(f=>f.id===fight.me));
+  const r=C.rewards(S,humans.map(f=>({ch:f.id===fight.me?ch:pseudoChar(f)})),F.rng((fight.seed^0x5bd1^hashId(fight.me))>>>0))[idx]||{xp:0,kamas:0,drops:[]};
+  ch.hp=won?Math.max(1,me?.hp||1):null;
+  let lv=null;if(won){lv=C.applyRewards(ch,r,S);if(g){g.dead=40;g.busy=false}SFX.win()}else{if(g)g.busy=false;SFX.lose()}
   if(!won){const ph=W.phoenix;P.x=ph.x;P.z=ph.z;ch.hp=Math.round(C.derived(ch).maxHp*.15)}
   store();const items=r.drops.reduce((m,i)=>(m[i]=(m[i]||0)+1,m),{});
   panel(`<div class="bw-result ${won?'win':'lose'}"><h2>${won?T('Victoire !','Victory!'):T('Défaite…','Defeat…')}</h2>
-   ${won?`<p>${T('Tu as battu','You beat')} ${S.f.filter(f=>f.kind==='mob').map(f=>`${esc(nm(D.MOBS[f.mob]))} (${f.lvl})`).join(', ')}.</p>
+   ${won?`<p>${humans.length>1?T('Vous avez battu','You beat'):T('Tu as battu','You beat')} ${S.f.filter(f=>f.kind==='mob').map(f=>`${esc(nm(D.MOBS[f.mob]))} (${f.lvl})`).join(', ')}.</p>${humans.length>1?`<p class="bw-small">${T('Avec','With')} ${humans.filter(f=>f.id!==fight.me).map(f=>esc(f.name)).join(', ')}</p>`:''}
    <div class="bw-gains"><span>✨ +${r.xp} XP</span><span>🪙 +${r.kamas} kamas</span></div>
    ${Object.keys(items).length?`<div class="bw-drops">${Object.entries(items).map(([i,n])=>`<span title="${esc(nm(D.ITEMS[i]))}">${D.ITEMS[i].ic}<b>×${n}</b><small>${esc(nm(D.ITEMS[i]))}</small></span>`).join('')}</div>`:''}
    ${lv&&lv.after>lv.before?`<div class="bw-lvup">🎉 ${T('Niveau','Level')} ${lv.after} ! +${(lv.after-lv.before)*C.POINTS_PER_LVL} ${T('points de caractéristiques','characteristic points')}${lv.newSpells.length?`<br>${T('Nouveaux sorts','New spells')} : ${lv.newSpells.map(id=>D.SPELLS[id].ic+' '+nm(D.SPELLS[id])).join(', ')}`:''}</div>`:''}`
@@ -240,42 +309,45 @@ export function bagaworld(c){
  function banner(a,b='',dur=2.2){const el=ui.querySelector('.bw-banner');if(!el)return;el.innerHTML=`<b>${esc(a)}</b>${b?`<small>${esc(b)}</small>`:''}`;el.classList.remove('show');void el.offsetWidth;el.classList.add('show');clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove('show'),dur*1000)}
  function frame(){ui.innerHTML=`<div class="bw-top"><button class="bw-me"><span class="bw-ic">${D.CLASSES[ch.cls].ic}</span><span class="bw-nm"><b>${esc(ch.name)}</b><small></small></span></button>
    <div class="bw-bars"><div class="bw-hp"><i></i><span></span></div><div class="bw-xp"><i></i></div></div><div class="bw-kamas">🪙 <b></b></div></div>
-   <div class="bw-zone"></div><div class="bw-labels"></div><div class="bw-floats"></div><div class="bw-banner"></div><div class="bw-toast"></div>
+   <div class="bw-zone"></div><div class="bw-net-ic" hidden></div><div class="bw-labels"></div><div class="bw-floats"></div><div class="bw-banner"></div><div class="bw-toast"></div>
    <div class="bw-fight" hidden><div class="bw-timeline"></div><div class="bw-fbot"><div class="bw-turn"><span class="bw-pa"></span><span class="bw-pm"></span><span class="bw-timer"></span></div><div class="bw-spells"></div><button class="bw-end">${T('Fin du tour','End turn')}</button><button class="bw-ready">${T('Prêt !','Ready!')}</button></div></div>
-   <div class="bw-menu"><button data-p="bag">🎒<em>${T('Sac','Bag')}</em></button><button data-p="stats">⭐<em>${T('Carac.','Stats')}</em></button><button data-p="spells">✨<em>${T('Sorts','Spells')}</em></button><button data-p="quests">📜<em>${T('Quêtes','Quests')}</em></button><button data-p="map">🗺️<em>${T('Carte','Map')}</em></button><button data-p="sit">🪑<em>${T('Assis','Sit')}</em></button></div>
+   <div class="bw-menu"><button data-p="bag">🎒<em>${T('Sac','Bag')}</em></button><button data-p="stats">⭐<em>${T('Carac.','Stats')}</em></button><button data-p="spells">✨<em>${T('Sorts','Spells')}</em></button><button data-p="quests">📜<em>${T('Quêtes','Quests')}</em></button><button data-p="map">🗺️<em>${T('Carte','Map')}</em></button><button data-p="chat" class="bw-net">💬<em>${T('Chat','Chat')}</em></button><button data-p="group" class="bw-net">👥<em>${T('Groupe','Group')}</em></button><button data-p="online" class="bw-off">🌐<em>${T('En ligne','Online')}</em></button><button data-p="sit">🪑<em>${T('Assis','Sit')}</em></button></div>
+   <div class="bw-feed"></div><div class="bw-joinbar" hidden></div>
    <div class="bw-panel" hidden></div>`;
-  ui.querySelectorAll('.bw-menu [data-p]').forEach(b=>c.listen(b,'click',()=>{SFX.click();const p=b.dataset.p;if(p==='sit'){if(mode==='world'){P.sit=!P.sit;P.path=[];toastMsg(P.sit?T('Tu t’assois. Les PV remontent plus vite.','You sit down. HP regenerates faster.'):T('Debout !','Up!'))}return}openPanel(p)}));
+  ui.querySelectorAll('.bw-menu [data-p]').forEach(b=>c.listen(b,'click',()=>{SFX.click();const p=b.dataset.p;if(p==='sit'){if(mode==='world'){P.sit=!P.sit;P.path=[];toastMsg(P.sit?T('Tu t’assois. Les PV remontent plus vite.','You sit down. HP regenerates faster.'):T('Debout !','Up!'))}return}
+   if(p==='online'){goOnline();return}openPanel(p)}));netMenu();
   c.listen(ui.querySelector('.bw-me'),'click',()=>openPanel('stats'));
-  c.listen(ui.querySelector('.bw-end'),'click',()=>{if(fight&&F.current(fight.S)?.id==='me'&&!F_.busy){F.act(fight.S,{a:'end'});F_.sel=null;afterAct()}});
-  c.listen(ui.querySelector('.bw-ready'),'click',()=>{if(fight&&fight.S.phase==='place'){F.act(fight.S,{a:'ready',id:'me'});afterAct();SFX.click()}})}
- function hud(){if(!ch)return;const d=C.derived(ch),hp=mode==='fight'&&fight?fight.S.f.find(f=>f.id==='me').hp:(ch.hp??d.maxHp),mx=d.maxHp;
+  c.listen(ui.querySelector('.bw-end'),'click',()=>{if(fight&&myTurnNow()){F_.sel=null;doAct({a:'end',id:fight.me})}});
+  c.listen(ui.querySelector('.bw-ready'),'click',()=>{const me=meF();if(fight&&fight.S.phase==='place'&&me&&!me.ready){doAct({a:'ready',id:me.id});SFX.click()}})}
+ function hud(){if(!ch)return;const d=C.derived(ch),hp=mode==='fight'&&fight&&meF()?meF().hp:(ch.hp??d.maxHp),mx=d.maxHp;
   const q=s=>ui.querySelector(s);if(!q('.bw-hp'))return;q('.bw-hp i').style.width=(100*hp/mx).toFixed(1)+'%';q('.bw-hp span').textContent=`${hp} / ${mx}`;
   const L=d.lvl,x0=D.xpFor(L),x1=D.xpFor(L+1);q('.bw-xp i').style.width=L>=D.MAX_LVL?'100%':(100*(ch.xp-x0)/Math.max(1,x1-x0)).toFixed(1)+'%';
   q('.bw-nm small').textContent=`${nm(D.CLASSES[ch.cls])} · ${T('niv.','lvl')} ${L}${ch.points?` · ⭐${ch.points}`:''}`;q('.bw-kamas b').textContent=ch.kamas;
   q('.bw-zone').textContent=zoneNow?`${nm(D.ZONES[zoneNow])}${D.ZONES[zoneNow].lvl!=='—'?` · ${D.ZONES[zoneNow].lvl}`:''}`:'';
   q('.bw-menu').hidden=mode==='fight';
   // étiquettes au-dessus des groupes de monstres proches et des PNJ, textes flottants
-  if(mode==='world'){let html='';for(const g of groups){if(g.dead>0||g.busy)continue;const dd=Math.hypot(g.x-P.x,g.z-P.z);if(dd>11)continue;const s=scr(g.x,WW.tileH(W,g.x,g.z)*BH+1.5,g.z);if(!s)continue;
+  if(mode==='world'){let html='';for(const g of groups){if(g.dead>0||g.busy||g.remote)continue;const dd=Math.hypot(g.x-P.x,g.z-P.z);if(dd>11)continue;const s=scr(g.x,WW.tileH(W,g.x,g.z)*BH+1.5,g.z);if(!s)continue;
      const lvl=WW.groupLevel(g),danger=lvl>L*1.8?'hard':lvl>L*1.1?'mid':'easy';html+=`<span class="bw-lab ${danger}" style="transform:translate(${s[0].toFixed(0)}px,${s[1].toFixed(0)}px)">${g.aggro?'😡 ':''}${esc(nm(D.MOBS[g.members[0][0]]))}${g.members.length>1?` +${g.members.length-1}`:''} · ${lvl}</span>`}
+    html+=netLabels(L);
     for(const n of W.npcs){if(Math.hypot(n.x-P.x,n.z-P.z)>9)continue;const s=scr(n.x,WW.tileH(W,n.x,n.z)*BH+2.1,n.z);if(!s)continue;const qm=questMark(n.id);html+=`<span class="bw-lab npc" style="transform:translate(${s[0].toFixed(0)}px,${s[1].toFixed(0)}px)">${qm}${esc(nm(D.NPCS[n.id]))}</span>`}
-    q('.bw-labels').innerHTML=html}else if(mode==='fight'&&fight&&F_){let html='';for(const f of fight.S.f){if(!f.alive||(f.invis&&f.team===1))continue;const d=F_.disp.get(f.id),p=cw(Math.round(d.x),Math.round(d.y)),s=scr(fight.A.ox+d.x+.5,p[1]+(f.kind==='mob'?1.1*(MD.MOB_SCALE[f.mob]||1):1.45),fight.A.oz+d.y+.5);if(!s)continue;
-     html+=`<span class="bw-lab hpb ${f.team?'red':'blue'}" style="transform:translate(${s[0].toFixed(0)}px,${s[1].toFixed(0)}px)"><i style="width:${(100*f.hp/f.maxHp).toFixed(0)}%"></i>${f.hp}</span>`}q('.bw-labels').innerHTML=html}else q('.bw-labels').innerHTML='';
+    q('.bw-labels').innerHTML=html}else if(mode==='fight'&&fight&&F_){let html='';for(const f of fight.S.f){if(!f.alive||(f.invis&&f.team!==myTeam()))continue;const d=F_.disp.get(f.id);if(!d)continue;const p=cw(Math.round(d.x),Math.round(d.y)),s=scr(fight.A.ox+d.x+.5,p[1]+(f.kind==='mob'?1.1*(MD.MOB_SCALE[f.mob]||1):1.45),fight.A.oz+d.y+.5);if(!s)continue;
+     html+=`<span class="bw-lab hpb ${f.team!==myTeam()?'red':'blue'}${f.id===fight.me?' me':''}" style="transform:translate(${s[0].toFixed(0)}px,${s[1].toFixed(0)}px)"><i style="width:${(100*f.hp/f.maxHp).toFixed(0)}%"></i>${f.kind==='player'&&f.id!==fight.me?esc(f.name)+' · ':''}${f.hp}</span>`}q('.bw-labels').innerHTML=html}else q('.bw-labels').innerHTML='';
   let fh='';for(const f of floats){f.t-=dt;const s=scr(f.x,f.y+(1.3-f.t)*.8,f.z);if(!s||f.t<=0)continue;fh+=`<span class="bw-float ${f.kind}" style="transform:translate(${s[0].toFixed(0)}px,${s[1].toFixed(0)}px);opacity:${Math.min(1,f.t*2).toFixed(2)}">${esc(f.text)}</span>`}
   for(let i=floats.length-1;i>=0;i--)if(floats[i].t<=0)floats.splice(i,1);q('.bw-floats').innerHTML=fh}
  const questMark=npc=>{for(const qid in D.QUESTS){if(D.QUESTS[qid].giver!==npc)continue;const s=C.questState(ch,qid);if(s==='ready')return '❓ ';if(s==='available')return '❗ '}return ''};
- function fightUI(){const box=ui.querySelector('.bw-fight');if(!box)return;box.hidden=!fight;if(!fight)return;const S=fight.S,me=S.f.find(f=>f.id==='me');
-  box.querySelector('.bw-ready').hidden=S.phase!=='place';box.querySelector('.bw-end').hidden=S.phase!=='fight';
-  box.querySelector('.bw-timeline').innerHTML=(S.phase==='place'?S.f:S.order.map(id=>S.f.find(f=>f.id===id))).map(f=>`<span class="bw-tl ${f.team?'red':'blue'}${f===F.current(S)?' cur':''}${f.alive?'':' dead'}" data-id="${f.id}">${f.kind==='mob'?mobIcon(f.mob):D.CLASSES[f.cls].ic}<i style="width:${(100*f.hp/f.maxHp).toFixed(0)}%"></i></span>`).join('');
+ function fightUI(){const box=ui.querySelector('.bw-fight');if(!box)return;box.hidden=!fight;if(!fight)return;const S=fight.S,me=meF();if(!me)return;const mt=me.team;
+  box.querySelector('.bw-ready').hidden=S.phase!=='place';box.querySelector('.bw-ready').disabled=!!me.ready;box.querySelector('.bw-ready').textContent=me.ready?T('En attente…','Waiting…'):T('Prêt !','Ready!');box.querySelector('.bw-end').hidden=S.phase!=='fight';
+  box.querySelector('.bw-timeline').innerHTML=(S.phase==='place'?S.f:S.order.map(id=>S.f.find(f=>f.id===id))).map(f=>`<span class="bw-tl ${f.team!==mt?'red':'blue'}${f===F.current(S)?' cur':''}${f.alive?'':' dead'}" data-id="${f.id}">${f.kind==='mob'?mobIcon(f.mob):D.CLASSES[f.cls].ic}${f.kind==='player'&&f.ready&&S.phase==='place'?'<u>✓</u>':''}<i style="width:${(100*f.hp/f.maxHp).toFixed(0)}%"></i></span>`).join('');
   box.querySelectorAll('.bw-tl').forEach(el=>c.listen(el,'click',()=>showFighter(S.f.find(f=>f.id===el.dataset.id))));
   const list=[...me.spells,...(me.weapon?['weapon']:[])];
-  box.querySelector('.bw-spells').innerHTML=list.map(id=>{const sp=F.spellOf(me,id),cd=me.cds[id]||0,used=sp.perTurn&&(me.uses[id]||0)>=sp.perTurn,off=S.phase!=='fight'||F.current(S)!==me||sp.pa>me.pa||cd>0||used;
+  box.querySelector('.bw-spells').innerHTML=list.map(id=>{const sp=F.spellOf(me,id),cd=me.cds[id]||0,used=sp.perTurn&&(me.uses[id]||0)>=sp.perTurn,off=!myTurnNow()||sp.pa>me.pa||cd>0||used;
    return `<button class="bw-sp${F_.sel===id?' on':''}${off?' off':''}" data-s="${id}"><span>${sp.ic}</span><b>${sp.pa}</b>${cd>0?`<i>${cd}</i>`:''}</button>`}).join('');
   box.querySelectorAll('.bw-sp').forEach(b=>{let lp=null;c.listen(b,'pointerdown',()=>{lp=setTimeout(()=>{lp=null;spellInfo(b.dataset.s,me)},500)});
    c.listen(b,'pointerup',()=>{if(!lp)return;clearTimeout(lp);lp=null;const id=b.dataset.s;if(b.classList.contains('off')){spellInfo(id,me);return}F_.sel=F_.sel===id?null:id;SFX.click();fightUI()})})}
  const mobIcon=id=>({moutoufou:'🐑',poultoss:'🐤',vermichelle:'🐛',crabouillon:'🦀',champi:'🍄',moustikouille:'🦟',sanglier:'🐗',araknee:'🕷️',moutonroyal:'👑'})[id]||'👾';
- function fightHud(){const box=ui.querySelector('.bw-fight');if(!box||!fight)return;const S=fight.S,me=S.f.find(f=>f.id==='me');
+ function fightHud(){const box=ui.querySelector('.bw-fight');if(!box||!fight)return;const S=fight.S,me=meF();if(!me)return;
   box.querySelector('.bw-pa').textContent=`⭐ ${me.pa} ${T('PA','AP')}`;box.querySelector('.bw-pm').textContent=`👟 ${me.pm} ${T('PM','MP')}`;
-  const c2=F.current(S);box.querySelector('.bw-timer').textContent=S.phase==='place'?T('Placement','Placement'):c2===me?`⏱ ${Math.ceil(F_.timer)}`:`${T('Tour de','Turn:')} ${esc(c2?nm(D.MOBS[c2.mob]||{fr:c2.name,en:c2.name}):'')}`;
+  const c2=F.current(S);box.querySelector('.bw-timer').textContent=S.phase==='place'?(fight.online&&fight.kind==='pve'?`${T('Placement','Placement')} · ${Math.max(0,Math.ceil(32-(t-F_.t0)))}`:T('Placement','Placement')):c2===me?`⏱ ${Math.ceil(F_.timer)}`:`${T('Tour de','Turn:')} ${esc(c2?fname(c2):'')}`;
   if(!fightHud.n||fightHud.n++%10===0){fightHud.n=1;const tl=[...box.querySelectorAll('.bw-tl')];tl.forEach(el=>{const f=S.f.find(o=>o.id===el.dataset.id);if(!f)return;el.querySelector('i').style.width=(100*f.hp/f.maxHp).toFixed(0)+'%';el.classList.toggle('cur',f===c2);el.classList.toggle('dead',!f.alive)})}}
  function showFighter(f){if(!f)return;const isMob=f.kind==='mob',M2=isMob?D.MOBS[f.mob]:null;
   panel(`<h3>${isMob?mobIcon(f.mob):D.CLASSES[f.cls].ic} ${esc(isMob?nm(M2):f.name)} <small>${T('niv.','lvl')} ${f.lvl}</small></h3>${isMob?`<p class="bw-flav">${esc(X(M2.d))}</p>`:''}
@@ -294,8 +366,8 @@ export function bagaworld(c){
  // ---- panneaux
  function panel(html,cls=''){const el=ui.querySelector('.bw-panel');el.className='bw-panel '+cls;el.innerHTML=`<div class="bw-card">${html}</div>`;el.hidden=false;panelOpen=cls||'panel';
   el.querySelectorAll('[data-close]').forEach(b=>c.listen(b,'click',closePanel));c.listen(el,'click',e=>{if(e.target===el)closePanel()});return el.querySelector('.bw-card')}
- function closePanel(){const el=ui.querySelector('.bw-panel');if(el){el.hidden=true;el.innerHTML=''}panelOpen=null;dialogOpen=false;hud()}
- function openPanel(p){({bag,stats,spells,quests,map})[p]?.()}
+ function closePanel(){const el=ui.querySelector('.bw-panel');if(el){el.hidden=true;el.innerHTML=''}panelOpen=null;dialogOpen=false;hud();setTimeout(nextInvite,50)}
+ function openPanel(p){({bag,stats,spells,quests,map,chat:chatPanel,group:groupPanel})[p]?.()}
  function itemLine(id,n){const it=D.ITEMS[id];return `<button class="bw-it" data-i="${id}"><span>${it.ic}</span><b>${esc(nm(it))}</b>${n>1?`<i>×${n}</i>`:''}</button>`}
  function bag(){const eqHtml=D.SLOTS.map(s=>{const id=ch.eq[s];return `<button class="bw-slot" data-s="${s}">${id?D.ITEMS[id].ic:'·'}<small>${X(D.SLOT_FR[s])}</small></button>`}).join('');
   const inv=Object.entries(ch.inv).sort(([a],[b])=>(D.ITEMS[a].slot?0:D.ITEMS[a].use?1:2)-(D.ITEMS[b].slot?0:D.ITEMS[b].use?1:2));
@@ -325,6 +397,8 @@ export function bagaworld(c){
   const x=card.querySelector('canvas').getContext('2d'),N=W.N,s=224/N,col={0:'#7cc45a',1:'#4f8f45',2:'#ecd9a0',3:'#3f97d8',4:'#b9935f',5:'#c9c3b6',6:'#86c95e',7:'#9a6b3e',8:'#8ab069'};
   for(let z=0;z<N;z++)for(let xx=0;xx<N;xx++){const k=z*N+xx;x.fillStyle=W.prop[k]===WW.P.wall?'#8a5e35':[WW.P.tree,WW.P.pine,WW.P.shroom].includes(W.prop[k])?'#3b7a35':col[W.type[k]];x.fillRect(xx*s,z*s,s+.5,s+.5)}
   for(const zp of W.zaaps){x.fillStyle=disc.has(zp.id)?'#8c7cd9':'#666';x.beginPath();x.arc(zp.x*s,zp.z*s,4,0,7);x.fill()}
+  for(const o of NET.others.values()){x.fillStyle=o.d.mate?'#3fdc6a':'#ffffff';x.beginPath();x.arc(o.x*s,o.z*s,3.5,0,7);x.fill()}
+  for(const m of NET.group)if(m.id!==NET.pub&&m.online&&!NET.others.has(m.id)){x.fillStyle='#3fdc6a';x.beginPath();x.arc(m.x*s,m.z*s,3.5,0,7);x.fill()}
   x.fillStyle='#e2453c';x.beginPath();x.arc(P.x*s,P.z*s,5,0,7);x.fill();x.strokeStyle='#fff';x.lineWidth=2;x.stroke()}
  function zaapPanel(zp){const list=W.zaaps.filter(z=>z.id!==zp.id);const card=panel(`<h3>🌀 Bagaap · ${esc(nm(D.ZONES[zp.id]))}</h3><p class="bw-small">${T('Voyage instantané vers un Bagaap déjà découvert. 10 kamas (gratuit vers Bagatown).','Instant travel to a Bagaap you already found. 10 kamas (free to Bagatown).')}</p>
    <div class="bw-zlist">${list.map(z=>`<button class="bw-b" data-z="${z.id}" ${disc.has(z.id)?'':'disabled'}>${disc.has(z.id)?'🌀':'🔒'} ${esc(nm(D.ZONES[z.id]))} <small>${D.ZONES[z.id].lvl}</small></button>`).join('')}</div><button class="bw-b" data-close>${T('Fermer','Close')}</button>`);
@@ -363,6 +437,96 @@ export function bagaworld(c){
  function drawCreate(){cam.x=W.start.x;cam.z=W.start.z-1;cam.yaw=t*.25;cam.dist=6.2;cam.el=.3;cam.oy=-1.25;camera();R.frame(cv.width,cv.height,view.VP,view.eye,[.62,.82,.95],[30,70]);drawWorld(true);
   MD.drawChar(R,M4,charParts({cls:create.cls,skin:create.skin,hair:create.hair,sex:create.sex,eq:{weapon:{bourrin:'epee_rouillee',viseur:'arc_bois',bisou:'baguette',fourbe:'dague'}[create.cls]}}),M4.trs(W.start.x,WW.tileH(W,W.start.x,W.start.z)*BH,W.start.z-1,0,1.4),{bob:Math.sin(t*2)*.02,armR:Math.sin(t*1.5)*.3+.3,armL:-.1})}
 
+ // ================= EN LIGNE =================
+ // Toutes les ~1 s : on envoie sa position, on reçoit les joueurs proches, le chat, le groupe, les invitations et les combats
+ // autour. Sans pseudo enregistré (ou hors ligne), on joue en solo ; le bouton 🌐 permet de passer en ligne.
+ function netState(){return {x:+P.x.toFixed(2),z:+P.z.toFixed(2),yaw:+P.yaw.toFixed(2),zone:zoneNow,state:mode==='fight'?'fight':P.sit?'sit':'walk',look:ch?myLook():null,lvl:ch?C.level(ch):1,cname:ch?.name||''}}
+ function netTick(){if(!NET.on||!ch||mode==='create')return;NET.t-=dt;if((NET.t>0&&!NET.now)||NET.busy)return;
+  const fo=fight?.online||null,since=fo?fo.recv:0;NET.t=fo?.75:1.1;NET.now=false;NET.busy=true;
+  online_.bwSync(netState(),NET.lastChat,fo?.id||null,since).then(r=>{NET.busy=false;if(NET.err>=3)toastMsg(T('Connexion retrouvée.','Back online.'),'good');NET.err=0;if(alive)netApply(r,fo,since)})
+   .catch(e=>{NET.busy=false;NET.err++;NET.t=Math.min(8,1.5*NET.err);if(NET.err===3)toastMsg(T('Connexion perdue, je réessaie…','Connection lost, retrying…'));if(/pseudo|pris/.test(e.message)){NET.on=false;netMenu()}})}
+ function netApply(r,fo,since){NET.pub=r.me.id;NET.grp=r.me.grp;NET.leader=r.me.leader;
+  // joueurs proches (positions lissées à l'affichage)
+  const seen=new Set();for(const p of r.players){seen.add(p.id);let o=NET.others.get(p.id);if(!o){o={x:p.x,z:p.z,yaw:p.yaw,walk:0,bubble:null};NET.others.set(p.id,o)}o.d=p;o.tx=p.x;o.tz=p.z;o.tyaw=p.yaw;o.seen=t}
+  for(const [id,o] of NET.others)if(!seen.has(id)&&t-o.seen>3)NET.others.delete(id);
+  // chat (au premier passage : l'historique récent, sans bulles)
+  for(const m of r.chat){if(m.id<=NET.lastChat)continue;NET.lastChat=m.id;NET.chat.push({...m,t});if(NET.chat.length>80)NET.chat.shift();
+   if(!NET.first){if(m.from===NET.pub)NET.myBubble={text:m.text,t:6};else{const o=NET.others.get(m.from);if(o)o.bubble={text:m.text,t:6};if(m.scope==='group')SFX.click()}}}
+  if(NET.first&&!r.chat.length)NET.lastChat=Math.max(NET.lastChat,r.chatTop||0);
+  NET.first=false;if(panelOpen==='chat')chatLog();feed();
+  // groupe
+  const before=new Set(NET.group.map(m=>m.id));NET.group=r.group;
+  for(const m of r.group)if(!before.has(m.id)&&before.size&&m.id!==NET.pub)toastMsg(`${m.cname||m.name} ${T('rejoint le groupe !','joins the group!')}`,'good');
+  if(before.size>1&&r.group.length<=1&&before.has(NET.pub))toastMsg(T('Le groupe est dissous.','The group was disbanded.'));
+  if(panelOpen==='group')groupPanel();
+  // combats autour : le groupe de monstres attaqué disparaît chez tout le monde ; prévenir si un membre du groupe se bat
+  NET.fights=r.fights;const busyG=new Set(r.fights.filter(f=>f.kind==='pve').map(f=>f.gid));for(const g of groups)g.remote=busyG.has(g.gid);
+  const mate=!fight&&r.fights.find(f=>f.mate&&f.joinable);const jb=ui.querySelector('.bw-joinbar');
+  if(jb){if(mate){if(jb.dataset.id!==mate.id){jb.dataset.id=mate.id;jb.innerHTML=`<button class="bw-b primary">⚔️ ${esc(mate.by)} ${T('se bat · Rejoindre','is fighting · Join')}</button>`;c.listen(jb.firstChild,'click',()=>joinFight(mate.id));SFX.bleat()}jb.hidden=false}else{jb.hidden=true;jb.dataset.id=''}}
+  // invitations
+  for(const inv of r.invites)if(!NET.shown.has(inv.id)){NET.shown.add(inv.id);NET.inv.push(inv);SFX.buff();buzz([30,30,30])}nextInvite();
+  // combat à reprendre (coupure, duel accepté par l'autre)
+  if(r.myFight&&!fight&&!starting&&!NET.ignore.has(r.myFight))joinFight(r.myFight,true);
+  // actions des autres joueurs dans mon combat
+  if(r.fight&&fight&&fight.online&&fight.online===fo&&r.fight.id===fo.id){fo.quiet=r.fight.quiet;if(r.fight.since===since&&since===fo.recv){F_.queue.push(...r.fight.log);fo.recv+=r.fight.log.length}}
+  netIc()}
+ function netIc(){const el=ui.querySelector('.bw-net-ic');if(!el)return;el.hidden=!NET.on;el.textContent=`🌐 ${NET.others.size+1}${NET.group.length>1?` · 👥 ${NET.group.length}`:''}`}
+ function netMenu(){ui.querySelectorAll('.bw-net').forEach(b=>b.hidden=!NET.on);ui.querySelectorAll('.bw-off').forEach(b=>b.hidden=NET.on||!online_.enabled());netIc()}
+ function goOnline(){if(!online_.enabled())return;c.needPseudo(()=>{NET.on=true;NET.first=true;NET.now=true;netMenu();toastMsg(T('Tu es en ligne ! Les autres joueurs apparaissent autour de toi.','You’re online! Other players show up around you.'),'good')})}
+ // rendu des autres joueurs et des combats en cours
+ function drawNet(){for(const o of NET.others.values()){const k=Math.min(1,dt*6),dx=o.tx-o.x,dz=o.tz-o.z,dd=Math.hypot(dx,dz);
+   if(dd>12){o.x=o.tx;o.z=o.tz}else{o.x+=dx*k;o.z+=dz*k}const moving=dd>.06;if(moving){o.yaw=Math.atan2(-dx,-dz);o.walk+=dt*8}else o.yaw+=(((o.tyaw-o.yaw+Math.PI)%(2*Math.PI)+2*Math.PI)%(2*Math.PI)-Math.PI)*k;
+   if(o.bubble){o.bubble.t-=dt;if(o.bubble.t<=0)o.bubble=null}
+   if(o.d.state==='fight'||!o.d.look||Math.hypot(o.x-cam.x,o.z-cam.z)>26)continue;const y=WW.tileH(W,o.x,o.z)*BH,sit=o.d.state==='sit'&&!moving;
+   shadow(o.x,y,o.z,.5);MD.drawChar(R,M4,charParts(o.d.look),M4.trs(o.x,y,o.z,o.yaw,1.4),sit?{legL:-1.5,legR:-1.5,bob:-.2,armL:.3,armR:.3}:moving?{legL:Math.sin(o.walk)*.7,legR:-Math.sin(o.walk)*.7,armL:-Math.sin(o.walk)*.6,armR:Math.sin(o.walk)*.6,bob:Math.abs(Math.sin(o.walk))*.05}:{bob:Math.sin(t*2+o.x)*.01})}
+  if(NET.myBubble){NET.myBubble.t-=dt;if(NET.myBubble.t<=0)NET.myBubble=null}
+  for(const f2 of NET.fights){if(Math.hypot(f2.x-cam.x,f2.z-cam.z)>26)continue;const y=WW.tileH(W,f2.x,f2.z)*BH+.9+Math.sin(t*3)*.08,M0=M4.trs(f2.x,y,f2.z,t*1.2,1);
+   for(const s2 of [1,-1]){const Mb=M4.mul(M0,M4.rz(s2*.7));R.draw(M.cube,M4.mul(Mb,M4.sc(.07,.7,.07)),[.85,.88,.92,1]);R.draw(M.cube,M4.mul(Mb,M4.mul(M4.t(0,-.24,0),M4.sc(.26,.06,.08))),[.6,.42,.2,1])}}}
+ function netLabels(L){let html='';const at=(x,y,z)=>{const s=scr(x,y,z);return s?`transform:translate(${s[0].toFixed(0)}px,${s[1].toFixed(0)}px)`:null};
+  for(const o of NET.others.values()){if(o.d.state==='fight'||Math.hypot(o.x-P.x,o.z-P.z)>14)continue;const y=WW.tileH(W,o.x,o.z)*BH,st=at(o.x,y+2.05,o.z);if(!st)continue;
+   html+=`<span class="bw-lab pl${o.d.mate?' mate':''}" style="${st}">${o.d.mate?'👥 ':''}${esc(o.d.cname||o.d.name)} · ${o.d.lvl}</span>`;
+   if(o.bubble){const sb=at(o.x,y+2.5,o.z);if(sb)html+=`<span class="bw-lab bubble" style="${sb}">${esc(o.bubble.text)}</span>`}}
+  if(NET.myBubble){const sb=at(P.x,P.y+2.3,P.z);if(sb)html+=`<span class="bw-lab bubble" style="${sb}">${esc(NET.myBubble.text)}</span>`}
+  for(const f2 of NET.fights){if(Math.hypot(f2.x-P.x,f2.z-P.z)>16)continue;const st=at(f2.x,WW.tileH(W,f2.x,f2.z)*BH+1.9,f2.z);if(st)html+=`<span class="bw-lab fightm${f2.mate?' mate':''}" style="${st}">⚔️ ${esc(f2.by||'')}${f2.kind==='pvp'?' · '+T('duel','duel'):` · ${f2.n}/4`}</span>`}
+  return html}
+ function feed(){const el=ui.querySelector('.bw-feed');if(!el)return;const now=NET.chat.filter(m=>t-m.t<10).slice(-4);
+  el.innerHTML=now.map(m=>`<p class="${m.scope}"><b>${esc(m.name)}</b> ${esc(m.text)}</p>`).join('');clearTimeout(el._t);el._t=setTimeout(feed,10500)}
+ // fiches : un joueur, un combat en cours
+ function playerCard(o){const p=o.d,mate=p.mate,full=NET.group.length>=4;
+  const card=panel(`<h3>${D.CLASSES[p.look?.cls]?.ic||'🙂'} ${esc(p.cname||p.name)} <small>${T('niv.','lvl')} ${p.lvl} · ${esc(p.name)}</small></h3><p class="bw-small">${p.look?.cls?nm(D.CLASSES[p.look.cls]):''}${mate?' · '+T('dans ton groupe','in your group'):''}</p>
+   <div class="bw-btns">${!mate?`<button class="bw-b primary" data-a="group" ${full?'disabled':''}>👥 ${T('Inviter dans le groupe','Invite to group')}</button>`:''}<button class="bw-b" data-a="duel">⚔️ ${T('Défier en duel','Challenge to a duel')}</button>
+   ${mate&&NET.leader?`<button class="bw-b" data-a="kick">🚪 ${T('Exclure du groupe','Remove from group')}</button>`:''}<button class="bw-b" data-close>${T('Fermer','Close')}</button></div>`);
+  card.querySelectorAll('[data-a]').forEach(b=>c.listen(b,'click',async()=>{const a=b.dataset.a;b.disabled=true;
+   try{if(a==='group'){await online_.bwInvite(p.id,'group');toastMsg(T('Invitation envoyée.','Invite sent.'),'good')}
+    else if(a==='duel'){const mf=C.fighterOf(ch,NET.pub);await online_.bwInvite(p.id,'duel',mf);toastMsg(T('Défi envoyé !','Challenge sent!'),'good')}
+    else if(a==='kick'){await online_.bwLeave(p.id);NET.now=true}closePanel()}catch(e){toastMsg(e.message);b.disabled=false}}))}
+ function fightCard(f2){const near=Math.hypot(f2.x-P.x,f2.z-P.z)<30;
+  const card=panel(`<h3>⚔️ ${f2.kind==='pvp'?T('Duel en cours','Duel in progress'):T('Combat en cours','Fight in progress')}</h3><p>${T('Lancé par','Started by')} <b>${esc(f2.by||'?')}</b>${f2.kind==='pve'?` · ${f2.n}/4 ${T('joueurs','players')}`:''}</p>
+   ${f2.joinable?(near?'':`<p class="bw-small">${T('Approche-toi pour le rejoindre.','Get closer to join.')}</p>`):`<p class="bw-small">${f2.kind==='pvp'?T('Les duels se regardent de loin.','Duels are watched from afar.'):T('Trop tard pour rejoindre.','Too late to join.')}</p>`}
+   <div class="bw-btns">${f2.joinable&&near?`<button class="bw-b primary" data-j>⚔️ ${T('Rejoindre','Join')}</button>`:''}<button class="bw-b" data-close>${T('Fermer','Close')}</button></div>`);
+  const j=card.querySelector('[data-j]');if(j)c.listen(j,'click',()=>{closePanel();joinFight(f2.id)})}
+ function nextInvite(){if(panelOpen||mode!=='world'||fight||starting)return;const inv=NET.inv.shift();if(!inv)return;
+  const card=panel(`<h3>${inv.kind==='group'?'👥':'⚔️'} ${inv.kind==='group'?T('Invitation','Invite'):T('Défi !','Challenge!')}</h3><p>${inv.kind==='group'?T(`<b>${esc(inv.name)}</b> t’invite dans son groupe.`,`<b>${esc(inv.name)}</b> invites you to their group.`):T(`<b>${esc(inv.name)}</b> te défie en duel. Ça ne coûte rien, à part ta fierté.`,`<b>${esc(inv.name)}</b> challenges you to a duel. It costs nothing but your pride.`)}</p>
+   <div class="bw-btns"><button class="bw-b primary" data-y>${T('Accepter','Accept')}</button><button class="bw-b" data-n>${T('Refuser','Decline')}</button></div>`,'invite');
+  c.listen(card.querySelector('[data-y]'),'click',async()=>{try{const r=await online_.bwAnswer(inv.id,true);closePanel();if(r.kind==='group'){toastMsg(T('Tu rejoins le groupe !','You join the group!'),'good');NET.now=true}else if(r.kind==='duel')createDuel(r)}catch(e){toastMsg(e.message);closePanel()}});
+  c.listen(card.querySelector('[data-n]'),'click',()=>{online_.bwAnswer(inv.id,false).catch(()=>{});closePanel()})}
+ // chat : local (autour de soi) ou groupe
+ function chatPanel(){if(!NET.scope||(NET.scope==='group'&&!NET.grp))NET.scope='local';
+  const card=panel(`<h3>💬 Chat</h3><div class="bw-tabs"><button data-sc="local" class="${NET.scope==='local'?'on':''}">${T('Autour de moi','Nearby')}</button><button data-sc="group" class="${NET.scope==='group'?'on':''}" ${NET.grp?'':'disabled'}>${T('Groupe','Group')}</button></div>
+   <div class="bw-chatlog"></div><form class="bw-chatform"><input maxlength="140" placeholder="${T('Écris un message…','Type a message…')}" enterkeyhint="send"><button class="bw-b primary">➤</button></form><button class="bw-b" data-close>${T('Fermer','Close')}</button>`,'chat');
+  card.querySelectorAll('[data-sc]').forEach(b=>c.listen(b,'click',()=>{NET.scope=b.dataset.sc;chatPanel()}));
+  const form=card.querySelector('form'),inp=form.querySelector('input');
+  c.listen(form,'submit',async e=>{e.preventDefault();const txt=inp.value.trim();if(!txt)return;inp.value='';try{await online_.bwSay(txt,NET.scope);NET.now=true;SFX.click()}catch(err){toastMsg(err.message);inp.value=txt}});chatLog()}
+ function chatLog(){const el=ui.querySelector('.bw-chatlog');if(!el)return;const list=NET.chat.filter(m=>m.scope===NET.scope).slice(-40);
+  el.innerHTML=list.length?list.map(m=>`<p class="${m.from===NET.pub?'mine':''}"><b>${esc(m.name)}</b> ${esc(m.text)}</p>`).join(''):`<p class="bw-small">${NET.scope==='group'?T('Rien pour l’instant dans le groupe.','Nothing in the group yet.'):T('Personne n’a encore parlé par ici. Lance-toi !','Nobody has talked around here yet. Go ahead!')}</p>`;el.scrollTop=el.scrollHeight}
+ function groupPanel(){const g=NET.group;
+  const card=panel(`<h3>👥 ${T('Groupe','Group')} <small>${g.length?`${g.length}/4`:''}</small></h3>${g.length?`<div class="bw-glist">${g.map(m=>`<div class="${m.online?'':'off'}"><span>${m.leader?'👑':'·'}</span><b>${esc(m.cname||m.name)}${m.id===NET.pub?` (${T('toi','you')})`:''}</b><small>${T('niv.','lvl')} ${m.lvl} · ${m.zone?esc(nm(D.ZONES[m.zone]||{fr:m.zone,en:m.zone})):'—'}${m.state==='fight'?' · ⚔️':''}${m.online?'':' · '+T('absent','away')}</small>${NET.leader&&m.id!==NET.pub?`<button class="bw-b" data-k="${m.id}">🚪</button>`:''}</div>`).join('')}</div>
+   <p class="bw-small">${T('Quand un membre attaque des monstres, les autres ont 30 s pour le rejoindre. L’XP est partagée (avec un bonus de groupe).','When a member attacks monsters, the others have 30 s to join. XP is shared (with a group bonus).')}</p>
+   <div class="bw-btns"><button class="bw-b" data-leave>${T('Quitter le groupe','Leave the group')}</button><button class="bw-b" data-close>${T('Fermer','Close')}</button></div>`
+   :`<p>${T('Tu n’as pas de groupe.','You have no group.')}</p><p class="bw-small">${T('Touche un joueur dans le monde pour l’inviter (4 au maximum). En groupe, vous combattez ensemble et vous avez un chat rien qu’à vous.','Tap a player in the world to invite them (4 max). In a group, you fight together and get your own chat.')}</p><button class="bw-b" data-close>${T('Fermer','Close')}</button>`}`,'group');
+  card.querySelectorAll('[data-k]').forEach(b=>c.listen(b,'click',async()=>{try{await online_.bwLeave(b.dataset.k);NET.now=true}catch(e){toastMsg(e.message)}}));
+  const lv=card.querySelector('[data-leave]');if(lv)c.listen(lv,'click',async()=>{try{await online_.bwLeave();NET.group=[];NET.grp=false;NET.now=true;closePanel();toastMsg(T('Tu as quitté le groupe.','You left the group.'))}catch(e){toastMsg(e.message)}})}
+
  // ================= BOUCLE =================
  function frameDraw(){const w=wrap.clientWidth,h=wrap.clientHeight,dpr=Math.min(window.devicePixelRatio||1,1.75);const W2=Math.round(w*dpr),H2=Math.round(h*dpr);if(cv.width!==W2||cv.height!==H2){cv.width=W2;cv.height=H2}
   if(mode==='create'){drawCreate();return}
@@ -370,9 +534,9 @@ export function bagaworld(c){
   if(mode==='fight'&&fight)drawFight();else drawWorld();
   M.water??=MD.waterMesh(R,W);R.draw(M.water,M4.t(0,Math.sin(t*1.2)*.02,0),null,.82);drawFx();cam.shake=Math.max(0,cam.shake-dt*2)}
  function tick(d){dt=Math.min(d,.05);t+=dt;if(!alive)return;
-  if(mode==='world'&&ch)worldTick();else if(mode==='fight'&&fight)fightTick();frameDraw()}
+  if(mode==='world'&&ch)worldTick();else if(mode==='fight'&&fight)fightTick();netTick();frameDraw()}
  // test automatique
- if(window.__bwTest)window.__bw={get ch(){return ch},get fight(){return fight},get F_(){return F_},get mode(){return mode},P,W,groups,startFight,talk,openPanel,tick,F,C,D,WW,worldTap,fightTap,view,cam,store,fightTapCell(x,y){const p=cw(x,y),q=scr(p[0],p[1],p[2]);if(q)fightTap(q[0],q[1]);return q}};
+ if(window.__bwTest)window.__bw={get ch(){return ch},get fight(){return fight},get F_(){return F_},get mode(){return mode},P,W,groups,startFight,talk,openPanel,tick,F,C,D,WW,worldTap,fightTap,view,cam,store,NET,joinFight,netApply,scr,myTurnNow,playerCardTest(){playerCard([...NET.others.values()][0])},fightTapCell(x,y){const p=cw(x,y),q=scr(p[0],p[1],p[2]);if(q)fightTap(q[0],q[1]);return q}};
  if(mode==='create')createUI();else{frame();music('town');requestAnimationFrame(()=>{cam.dist=worldDist()})}
- return {update(d){tick(d)},destroy(){alive=false;store();setMusicTheme(null);for(const m of M.chunks.values())R.free(m);R.free(M.water)}};
+ return {update(d){tick(d)},destroy(){alive=false;store();if(NET.on){try{if(fight?.online&&!F_?.over)online_.bwFightAct(fight.online.id,fight.online.recv,{a:'quit',id:fight.me}).catch(()=>{});online_.bwBye().catch(()=>{})}catch{}}setMusicTheme(null);for(const m of M.chunks.values())R.free(m);R.free(M.water)}};
 }

@@ -1,3 +1,14 @@
+# 5.16.0 — 17 novembre 2026
+
+- BagaWorld en ligne (étape 2 ; nécessite le SQL 5.15 et un pseudo BagaPlay) :
+  - Monde partagé : on voit les autres joueurs autour de soi (classe, équipement, niveau), qui marchent ou s’assoient en direct. Bouton 🌐 pour passer en ligne si on n’a pas encore de pseudo.
+  - Chat « Autour de moi » et chat de groupe, avec bulles au-dessus des têtes et fil des derniers messages à l’écran.
+  - Toucher un joueur : l’inviter dans son groupe (4 au maximum) ou le défier en duel. Panneau 👥 pour voir son groupe (niveau, zone, en combat ou non), le quitter, ou exclure quelqu’un si on est chef.
+  - Combats en groupe : quand un membre attaque des monstres, les autres voient un bouton « Rejoindre » et ont 30 s pour entrer dans le combat. Chacun joue son tour sur son téléphone ; l’XP est partagée avec un bonus de groupe et chacun a son propre butin. Les combats en cours sont marqués par des épées dans le monde, et tout joueur proche peut aussi les rejoindre.
+  - Duels 1 contre 1, partout, sans rien perdre : les PV reviennent comme avant.
+  - Si un joueur ne joue pas pendant 60 s, son tour passe ; s’il quitte le jeu, il abandonne le combat. Après une coupure, on revient automatiquement dans son combat.
+- BagaWorld : correction d’un plantage au lancement quand on revenait avec un personnage déjà créé.
+
 # 5.15.0 — 16 novembre 2026
 
 - Nouveau jeu : BagaWorld, un MMO tactique à la Dofus en 3D façon cubes (étape 1, en solo) :

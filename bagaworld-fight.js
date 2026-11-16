@@ -79,7 +79,15 @@ export function act(S,a){if(S.phase==='over')return false;const ev=e=>S.ev.push(
   const o=at(S,a.x,a.y);if(o){o.x=f.x;o.y=f.y}f.x=a.x;f.y=a.y;ev({t:'place',id:f.id});return true}
  if(a.a==='ready'){if(S.phase!=='place')return false;const f=a.id?S.f.find(o=>o.id===a.id):null;if(f)f.ready=true;
   if(a.id&&S.f.some(o=>o.kind==='player'&&!o.ready))return true;start(S);return true}
- const f=current(S);if(!f)return false;
+ // en ligne : un joueur rejoint pendant le placement, le placement est forcé à la fin du délai, un joueur abandonne
+ if(a.a==='join'){if(S.phase!=='place'||!a.f||S.f.some(o=>o.id===a.f.id))return false;const team=a.team??0;
+  if(S.f.filter(o=>o.team===team&&o.kind==='player').length>=4)return false;const nf=fighter(S,{...a.f,kind:'player'},team);
+  const c=S.start[team].find(([x,y])=>!S.f.some(o=>o.alive&&o.x===x&&o.y===y));if(!c)return false;nf.x=c[0];nf.y=c[1];S.f.push(nf);ev({t:'join',id:nf.id});return true}
+ if(a.a==='go'){if(S.phase!=='place')return false;start(S);return true}
+ if(a.a==='quit'){const q=S.f.find(o=>o.id===a.id&&o.alive);if(!q)return false;
+  if(S.phase==='place'){S.f=S.f.filter(o=>o!==q);ev({t:'quit',id:q.id});if(S.f.filter(o=>o.kind==='player').length&&S.f.filter(o=>o.kind==='player').every(o=>o.ready))start(S);return true}
+  ev({t:'quit',id:q.id});kill(S,q);return true}
+ const f=current(S);if(!f)return false;if(a.id&&a.id!==f.id)return false;
  if(a.a==='end'){endTurn(S);return true}
  if(a.a==='move'){let ok=false;for(const [x,y] of a.path){if(f.pm<1||!free(S,x,y)||Math.abs(x-f.x)+Math.abs(y-f.y)!==1)break;
    // tacle : on perd une partie de ses PA/PM en quittant le contact

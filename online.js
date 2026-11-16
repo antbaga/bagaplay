@@ -126,3 +126,14 @@ export const linkCode=()=>{named();return rpc('link_code',{p_player:me()})};
 // Remplace l'identité de cet appareil par celle du code. Les records locaux restent sur l'appareil.
 export async function redeemLink(code){const r=await rpc('link_redeem',{p_code:String(code||'').trim().slice(0,12)});
  store({id:r.secret,name:r.name,pub:r.id,registered:true});nativeSession();return player()}
+
+// ---- BagaWorld en ligne (server/delta-5.15.sql)
+export const bwSync=(state,chat=0,fight=null,since=0)=>rpc('bw_sync',{p_player:me(),p_name:named(),p_state:state,p_chat:chat,p_fight:fight,p_since:since});
+export const bwSay=(text,scope='local')=>rpc('bw_say',{p_player:me(),p_text:String(text||'').slice(0,140),p_scope:scope});
+export const bwInvite=(to,kind,data=null)=>rpc('bw_invite',{p_player:me(),p_to:to,p_kind:kind,p_data:data});
+export const bwAnswer=(id,yes)=>rpc('bw_answer',{p_player:me(),p_invite:id,p_yes:!!yes});
+export const bwLeave=(kick=null)=>rpc('bw_group_leave',{p_player:me(),p_kick:kick});
+export const bwFightCreate=(kind,init,x,z,gid=null,withId=null)=>rpc('bw_fight_create',{p_player:me(),p_kind:kind,p_init:init,p_x:x,p_z:z,p_gid:gid,p_with:withId});
+export const bwFightAct=(fight,seq,action)=>rpc('bw_fight_act',{p_player:me(),p_fight:fight,p_seq:seq,p_action:action});
+export const bwFightDone=fight=>rpc('bw_fight_done',{p_player:me(),p_fight:fight});
+export const bwBye=()=>rpc('bw_bye',{p_player:me()});
