@@ -164,6 +164,13 @@ function nextWave(S){const w=S.waves[S.wave++],A=w.arena;S.arena=A;S.grid=A.grid
  w.mobs.forEach((src,i)=>{const m=fighter(S,src,1),c=A.start[1][i%A.start[1].length];m.x=c[0];m.y=c[1];S.f.push(m)});
  S.phase='place';S.ev.push({t:'wave',n:S.wave+1,of:S.waves.length+1})}
 
+// distance de marche jusqu'au contact des cibles (en contournant obstacles, trous et ennemis ; les alliés bougeront)
+function approachField(S,f,targets){const D=new Map(),q=[],key=(x,y)=>x+','+y;
+ const passable=(x,y)=>{if(!walkable(S,x,y))return false;const o=at(S,x,y);return !o||o===f||o.team===f.team};
+ for(const o of targets)for(const [dx,dy] of DIRS){const x=o.x+dx,y=o.y+dy;if(!passable(x,y))continue;const k=key(x,y);if(!D.has(k)){D.set(k,1);q.push([x,y])}}
+ for(let i=0;i<q.length;i++){const [x,y]=q[i],d=D.get(key(x,y));for(const [dx,dy] of DIRS){const nx=x+dx,ny=y+dy,k=key(nx,ny);if(D.has(k)||!passable(nx,ny))continue;D.set(k,d+1);q.push([nx,ny])}}
+ return (x,y)=>D.get(key(x,y))??(99+Math.min(...targets.map(o=>Math.abs(o.x-x)+Math.abs(o.y-y))))}
+
 // ---- IA des monstres : renvoie les actions de son tour (une par une, pour pouvoir les animer)
 export function aiAction(S){const f=current(S);if(!f||S.phase!=='fight')return null;
  // un ennemi invisible n'est visé que s'il est collé au monstre (il le « sent »)
@@ -182,12 +189,12 @@ export function aiAction(S){const f=current(S);if(!f||S.phase!=='fight')return n
  // 3) se déplacer vers une case d'où une attaque est possible (ou se rapprocher / s'éloigner)
  if(f.pm>0&&targets.length){const P=paths(S,f);let best=null;
   const dmgSpells=castable.filter(([,sp])=>sp.fx.some(e=>e.t==='dmg'||e.t==='poison'));
-  const struck=Object.keys(f.uses).length>0;
+  const struck=Object.keys(f.uses).length>0,walk=approachField(S,f,targets);
   for(const [k,d] of P.D){const [x,y]=k.split(',').map(Number);const near=Math.min(...targets.map(o=>Math.abs(o.x-x)+Math.abs(o.y-y)));
    let can=false;for(const [id,sp] of dmgSpells){const [a,b]=spellRange(f,sp);for(const o of targets){const dd=Math.abs(o.x-x)+Math.abs(o.y-y);if(dd<a||dd>b)continue;if(sp.line&&o.x!==x&&o.y!==y)continue;
      if(sp.los&&dd>0){const ox=f.x,oy=f.y;f.x=x;f.y=y;const ok=los(S,x,y,o.x,o.y);f.x=ox;f.y=oy;if(!ok)continue}can=true;break}if(can)break}
    // peureux : s'approche pour taper, puis s'enfuit une fois qu'il a tapé ; à distance : garde 3-4 cases
-   let score=(can?100:0)-d*.5;if(f.ai==='melee')score-=near*3;else if(f.ai==='ranged'||f.ai==='healer')score+=!dmgSpells.length?Math.min(near,7)*3:can?Math.min(near,5)*2:-near*2;else if(f.ai==='coward')score+=struck?near*4:can?near:-near*3;
+   const path=walk(x,y);let score=(can?100:0)-d*.5;if(f.ai==='melee')score-=path*3;else if(f.ai==='ranged'||f.ai==='healer')score+=!dmgSpells.length?Math.min(near,7)*3:can?Math.min(near,5)*2:-path*2;else if(f.ai==='coward')score+=struck?near*4:can?near:-path*3;
    if(!best||score>best.score+1e-9)best={score,x,y,d}}
   if(best&&best.d>0){const path=P.path(best.x,best.y);if(path&&path.length)return {a:'move',path}}}
  // 4) les peureux s'éloignent après avoir tapé

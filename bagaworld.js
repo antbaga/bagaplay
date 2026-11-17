@@ -71,7 +71,19 @@ export function bagaworld(c){
  // ---- caméra et sélection au doigt
  function camera(){const w=wrap.clientWidth,h=wrap.clientHeight,tx=cam.x,tz=cam.z,ty=WW.tileH(W,tx,tz)*BH+.6+(cam.oy||0);let sx=0,sz=0;if(cam.shake>0){sx=(Math.random()-.5)*cam.shake*.3;sz=(Math.random()-.5)*cam.shake*.3}
   const e=[tx+sx+Math.sin(cam.yaw)*Math.cos(cam.el)*cam.dist,ty+Math.sin(cam.el)*cam.dist,tz+sz+Math.cos(cam.yaw)*Math.cos(cam.el)*cam.dist];
-  view.VP=M4.mul(M4.persp(.8,w/h,.3,120),M4.look(e,[tx+sx,ty,tz+sz]));view.eye=e;view.w=w;view.h=h}
+  view.VP=M4.mul(M4.persp(.8,w/h,.3,120),M4.look(e,[tx+sx,ty,tz+sz]));view.eye=e;view.w=w;view.h=h;if(mode==='fight'&&fight)fightCamera(w,h,sx,sz)}
+ // combat : on cherche la distance qui fait tenir tout le plateau dans la zone libre de l'écran, puis on le centre dans cette zone
+ function fightCamera(w,h,sx,sz){const A=fight.A,cx=A.ox+A.w/2+(cam.fpx||0),cz=A.oz+A.h/2+(cam.fpz||0),el=A.board?.98:1.02,P0=M4.persp(.8,w/h,.3,160);
+  const tl=ui.querySelector('.bw-timeline'),fb=ui.querySelector('.bw-fbot'),wr=wrap.getBoundingClientRect();
+  const top=Math.max(64,tl?tl.getBoundingClientRect().bottom-wr.top+6:110),bot=Math.max(120,fb?wr.bottom-fb.getBoundingClientRect().top+6:170);
+  const aT=1-2*top/h,aB=-1+2*bot/h,aW=2-2*16/w,pts=[[A.ox,0,A.oz],[A.ox+A.w,0,A.oz],[A.ox,0,A.oz+A.h],[A.ox+A.w,0,A.oz+A.h],[A.ox,1.4,A.oz],[A.ox+A.w,1.4,A.oz]];
+  let dist=cam.fd||24,VP,bb;
+  for(let it=0;it<5;it++){const e=[cx+sx,Math.sin(el)*dist,cz+sz+Math.cos(el)*dist];VP=M4.mul(P0,M4.look(e,[cx+sx,0,cz+sz]));view.eye=e;
+   bb=[9,9,-9,-9];for(const [x,y,z] of pts){const X=VP[0]*x+VP[4]*y+VP[8]*z+VP[12],Y=VP[1]*x+VP[5]*y+VP[9]*z+VP[13],Wc=VP[3]*x+VP[7]*y+VP[11]*z+VP[15];bb[0]=Math.min(bb[0],X/Wc);bb[1]=Math.min(bb[1],Y/Wc);bb[2]=Math.max(bb[2],X/Wc);bb[3]=Math.max(bb[3],Y/Wc)}
+   if(it===4)break;const k=Math.min(aW/(bb[2]-bb[0]),(aT-aB)/(bb[3]-bb[1]));dist=Math.max(6,Math.min(80,dist/Math.pow(k,.9)))}
+  if(!cam.fzoom||cam.fzoom<=1.001)cam.fd=dist;
+  const z=Math.max(1,cam.fzoom||1);if(z>1){const e=[cx+sx,Math.sin(el)*dist/z,cz+sz+Math.cos(el)*dist/z];VP=M4.mul(P0,M4.look(e,[cx+sx,0,cz+sz]));view.eye=e}
+  const tx=z>1?0:-(bb[0]+bb[2])/2,ty=z>1?(aT+aB)/2:(aT+aB)/2-(bb[1]+bb[3])/2;view.VP=M4.mul([1,0,0,0,0,1,0,0,0,0,1,0,tx,ty,0,1],VP)}
  function ray(px,py){const I=inv(view.VP);if(!I)return null;const nx=px/view.w*2-1,ny=1-py/view.h*2,un=(x,y,z)=>{const X=I[0]*x+I[4]*y+I[8]*z+I[12],Y=I[1]*x+I[5]*y+I[9]*z+I[13],Z=I[2]*x+I[6]*y+I[10]*z+I[14],Wd=I[3]*x+I[7]*y+I[11]*z+I[15];return [X/Wd,Y/Wd,Z/Wd]};
   const a=un(nx,ny,-1),b=un(nx,ny,1);return {o:a,d:[b[0]-a[0],b[1]-a[1],b[2]-a[2]]}}
  // point du sol (ou de la grille de combat) sous le doigt : on avance le long du rayon jusqu'à passer sous le terrain
@@ -81,10 +93,10 @@ export function bagaworld(c){
 
  // ---- entrées : toucher = aller / attaquer / parler ; glisser = tourner la caméra ; pincer = zoomer
  const pts=new Map();let tap=null,pinch=null;
- c.listen(cv,'pointerdown',e=>{pts.set(e.pointerId,{x:e.clientX,y:e.clientY});cv.setPointerCapture?.(e.pointerId);if(pts.size===1)tap={x:e.clientX,y:e.clientY,t:performance.now(),moved:0};if(pts.size===2){const [a,b]=[...pts.values()];pinch={d:Math.hypot(a.x-b.x,a.y-b.y),dist:cam.dist};tap=null}});
+ c.listen(cv,'pointerdown',e=>{pts.set(e.pointerId,{x:e.clientX,y:e.clientY});cv.setPointerCapture?.(e.pointerId);if(pts.size===1)tap={x:e.clientX,y:e.clientY,t:performance.now(),moved:0};if(pts.size===2){const [a,b]=[...pts.values()];pinch={d:Math.hypot(a.x-b.x,a.y-b.y),dist:cam.dist,z:cam.fzoom||1};tap=null}});
  c.listen(cv,'pointermove',e=>{const p=pts.get(e.pointerId);if(!p)return;const dx=e.clientX-p.x;p.x=e.clientX;p.y=e.clientY;
-  if(pts.size===2&&pinch){const [a,b]=[...pts.values()];cam.dist=Math.max(6,Math.min(mode==='fight'?36:24,pinch.dist*pinch.d/Math.max(20,Math.hypot(a.x-b.x,a.y-b.y))));return}
-  if(tap){tap.moved+=Math.abs(dx);if(tap.moved>10)cam.yaw-=dx*.008}});
+  if(pts.size===2&&pinch){const [a,b]=[...pts.values()],dd=Math.hypot(a.x-b.x,a.y-b.y);if(mode==='fight'){cam.fzoom=Math.max(1,Math.min(2.4,pinch.z*dd/Math.max(20,pinch.d)));if(cam.fzoom<=1.001){cam.fpx=cam.fpz=0}}else cam.dist=Math.max(6,Math.min(24,pinch.dist*pinch.d/Math.max(20,dd)));return}
+  if(tap){const dy=e.clientY-(tap.ly??e.clientY);tap.ly=e.clientY;tap.moved+=Math.abs(dx)+Math.abs(dy);if(tap.moved>10){if(mode==='fight'){if((cam.fzoom||1)>1.001&&fight){const k=(cam.fd||20)/(cam.fzoom*wrap.clientHeight)*1.1;cam.fpx=Math.max(-fight.A.w/2,Math.min(fight.A.w/2,(cam.fpx||0)-dx*k));cam.fpz=Math.max(-fight.A.h/2,Math.min(fight.A.h/2,(cam.fpz||0)-dy*k))}}else cam.yaw-=dx*.008}}});
  const up=e=>{pts.delete(e.pointerId);if(pts.size<2)pinch=null;if(tap&&tap.moved<10&&performance.now()-tap.t<600){const r=cv.getBoundingClientRect();onTap(e.clientX-r.left,e.clientY-r.top)}tap=null};
  c.listen(cv,'pointerup',up);c.listen(cv,'pointercancel',e=>{pts.delete(e.pointerId);tap=null});
  c.listen(cv,'wheel',e=>{cam.dist=Math.max(6,Math.min(mode==='fight'?36:24,cam.dist*(e.deltaY>0?1.1:.9)));e.preventDefault()});
@@ -103,11 +115,11 @@ export function bagaworld(c){
   cand.push({k:'cave',o:W.cave,x:W.cave.x,z:W.cave.z-1.4,y:WW.tileH(W,W.cave.x,W.cave.z)*BH+1});
   for(const zp of W.zaaps)cand.push({k:'zaap',o:zp,x:zp.x,z:zp.z-1.2,y:WW.tileH(W,zp.x,zp.z)*BH+.8});
   for(const q of cand){const s=scr(q.x,q.y,q.z);if(!s)continue;const d=Math.hypot(s[0]-x,s[1]-y);if(d<46&&(!best||d<best.d))best={...q,d}}
-  if(best){SFX.click();if(best.k==='player'){playerCard(best.o);return}if(best.k==='fightm'){fightCard(best.o);return}goTo(best.x,best.z,best);return}
+  if(best){SFX.click();if(best.k==='player'){playerCard(best.o);return}if(best.k==='fightm'){fightCard(best.o);return}if(best.k==='mob'){groupCard(best.o);return}goTo(best.x,best.z,best);return}
   const g=groundAt(x,y);if(!g)return;if(harvestTap(g))return;goTo(g.x,g.z,null)}
  function goTo(x,z,goal){let tx=x,tz=z;if(!WW.walkable(W,tx,tz)){const near=[];for(let r=1;r<=2;r++)for(let dz=-r;dz<=r;dz++)for(let dx=-r;dx<=r;dx++){const xx=Math.floor(x)+dx+.5,zz=Math.floor(z)+dz+.5;if(WW.walkable(W,xx,zz))near.push([xx,zz,Math.hypot(xx-P.x,zz-P.z)])}
    near.sort((a,b)=>a[2]-b[2]);if(!near.length)return;[tx,tz]=near[0]}
-  const path=WW.findPath(W,P.x,P.z,tx,tz,6000);if(!path){toastMsg(T('Je ne peux pas aller là-bas.','I can’t get there.'));return}
+  const path=WW.findPath(W,P.x,P.z,tx,tz,40000);if(!path){toastMsg(T('Je ne peux pas aller là-bas.','I can’t get there.'));return}
   P.path=path.map(([a,b])=>[a+.5,b+.5]);if(!goal&&P.path.length)P.path[P.path.length-1]=[tx,tz];P.goal=goal;marker={x:tx,z:tz,t:0}}
  let marker=null;
  function worldTick(){
@@ -167,14 +179,14 @@ export function bagaworld(c){
  function buildFight(init,meId,g,online){const S=F.newFight(init.arena,init.teams,init.seed,{waves:init.waves||[]});
   fight={S,A:S.arena,g,seed:init.seed,me:meId,kind:init.kind||'pve',online,init};
   F_={sel:null,disp:new Map(),aiT:0,busy:0,over:false,timer:60,hover:null,queue:[],posting:false,t0:t,went:false};return S}
- function dispAll(){for(const f of fight.S.f){const d=F_.disp.get(f.id);if(!d)F_.disp.set(f.id,{x:f.x,y:f.y,path:[],yaw:f.team?0:Math.PI,hit:0});else if(!d.path.length&&d.tx==null){d.x=f.x;d.y=f.y}}}
- function enterFight(){mode='fight';music('fight');SFX.bleat();buzz([40,40,40]);const A=fight.A;cam.x=A.ox+A.w/2;cam.z=A.oz+A.h/2;cam.dist=fitDist();P.path=[];P.goal=null;P.sit=false;closePanel();
+ function dispAll(){for(const f of fight.S.f)if(!F_.disp.has(f.id))F_.disp.set(f.id,{x:f.x,y:f.y,path:[],yaw:f.team?0:Math.PI,hit:0})}
+ function enterFight(){cam.fzoom=1;cam.fpx=cam.fpz=0;cam.fd=0;mode='fight';music('fight');SFX.bleat();buzz([40,40,40]);const A=fight.A;cam.x=A.ox+A.w/2;cam.z=A.oz+A.h/2;cam.dist=fitDist();P.path=[];P.goal=null;P.sit=false;closePanel();
   dispAll();if(fight.S.phase==='place')banner(fight.kind==='pvp'?T('Duel !','Duel!'):T('Combat !','Fight!'),T('Place-toi sur une case bleue, puis « Prêt »','Pick a blue cell, then “Ready”'));fightUI()}
  // les tours des monstres d'un coup, sans animation (pour rattraper un combat en cours)
  function drainAI(S){let n=0;while(S.phase==='fight'&&F.current(S)?.kind==='mob'&&n++<300){const a=F.aiAction(S)||{a:'end'};if(!F.act(S,a))F.act(S,{a:'end'})}}
  function replay(list){const S=fight.S;for(const a of list){drainAI(S);F.act(S,a);fight.online.applied++}S.ev.length=0;fight.online.recv=fight.online.applied;fight.A=S.arena}
  async function startFight(g){if(fight||starting)return;g.busy=true;P.path=[];P.goal=null;
-  let meId=myFid();const A=WW.arenaAt(W,P.x,P.z,g.x,g.z),seed=(Math.random()*2**31)|0,
+  let meId=myFid();const seed=(Math.random()*2**31)|0,A=WW.fieldArena(WW.zoneAt(Math.floor(g.x),Math.floor(g.z)),seed),
    init={kind:'pve',arena:A,seed,teams:[[C.fighterOf(ch,meId)],g.members.map(([m,l],i)=>C.mobFighter(m,l,'m'+i))],gid:g.gid};
   let on=null;if(NET.on&&NET.pub){starting=true;try{const id=await online_.bwFightCreate('pve',init,g.x,g.z,g.gid);on={id,applied:0,recv:0}}catch(e){toastMsg(T('Combat hors ligne : ','Offline fight: ')+e.message)}starting=false;if(!alive)return}
   if(!on&&meId!=='me'){meId='me';init.teams[0][0]={...init.teams[0][0],id:'me'}}
@@ -196,7 +208,7 @@ export function bagaworld(c){
   catch(e){NET.ignore.add(id);toastMsg(e.message)}finally{starting=false}}
  // duel accepté : celui qui accepte prépare l'arène entre les deux joueurs et crée le combat
  async function createDuel(r){if(fight||starting)return;starting=true;try{const meId=NET.pub,mine=C.fighterOf(ch,meId),theirs={...r.data,id:r.from};mine.hp=mine.maxHp;theirs.hp=theirs.maxHp;
-   const A=WW.arenaAt(W,r.x??P.x,r.z??P.z,P.x,P.z),seed=(Math.random()*2**31)|0,init={kind:'pvp',arena:A,seed,teams:[[theirs],[mine]]};
+   const seed=(Math.random()*2**31)|0,A=WW.fieldArena(WW.zoneAt(Math.floor(P.x),Math.floor(P.z)),seed),init={kind:'pvp',arena:A,seed,teams:[[theirs],[mine]]};
    const id=await online_.bwFightCreate('pvp',init,P.x,P.z,null,r.from);if(!alive)return;buildFight(init,meId,null,{id,applied:0,recv:0});enterFight()}
   catch(e){toastMsg(e.message)}finally{starting=false}}
  // une action du joueur : directe en solo, envoyée puis appliquée en ligne (le serveur garde l'ordre)
@@ -216,9 +228,12 @@ export function bagaworld(c){
  function fightTap(px,py){if(panelOpen)return;const S=fight.S,A=fight.A;const g=groundAt(px,py,(x,z)=>{const cx=Math.floor(x-A.ox),cz=Math.floor(z-A.oz);return cx>=0&&cz>=0&&cx<A.w&&cz<A.h?cellY(cx,cz):WW.tileH(W,x,z)*BH});if(!g)return;
   const x=Math.floor(g.x-A.ox),y=Math.floor(g.z-A.oz);if(!F.inside(S,x,y))return;const me=meF();if(!me)return;
   if(S.phase==='place'){if(!me.ready&&S.start[me.team].some(q=>q[0]===x&&q[1]===y)){SFX.click();doAct({a:'place',id:me.id,x,y});if(!fight.online)syncDisp()}else{const o=F.at(S,x,y);if(o)showFighter(o)}return}
-  if(!myTurnNow()){const o=F.at(S,x,y);if(o)showFighter(o);return}
-  if(F_.sel){const why=F.canCast(S,me,F_.sel,x,y);if(why){toastMsg(whyText(why));SFX.click();return}const sp=F_.sel;F_.sel=null;doAct({a:'cast',spell:sp,x,y});return}
-  const P2=F.paths(S,me),path=P2.path(x,y);if(path&&path.length)doAct({a:'move',path});else{const o=F.at(S,x,y);if(o)showFighter(o)}}
+  const o=F.at(S,x,y);
+  if(F_.sel){const rc=F.rangeCells(S,me,F_.sel),inRange=rc.ok.some(c=>c[0]===x&&c[1]===y);
+   if(!inRange){F_.sel=null;fightUI();if(o&&o!==me&&!rc.blocked.some(c=>c[0]===x&&c[1]===y))showFighter(o);else SFX.click();return}
+   if(!myTurnNow())return;const why=F.canCast(S,me,F_.sel,x,y);if(why){toastMsg(whyText(why));SFX.click();return}const sp=F_.sel;F_.sel=null;doAct({a:'cast',spell:sp,x,y});return}
+  if(o){showFighter(o);return}
+  if(!myTurnNow())return;const P2=F.paths(S,me),path=P2.path(x,y);if(path&&path.length)doAct({a:'move',path})}
  const whyText=w=>({pa:T('Pas assez de PA','Not enough AP'),cd:T('Sort en recharge','Spell on cooldown'),relance:T('Plus de relance ce tour','No more casts this turn'),portee:T('Hors de portée','Out of range'),
   ligne:T('En ligne droite seulement','Straight line only'),vue:T('Pas de ligne de vue','No line of sight'),cible:T('Cible invalide','Invalid target'),tour:T('Ce n’est pas ton tour','Not your turn')})[w]||w;
  function syncDisp(){for(const f of fight.S.f){const d=F_.disp.get(f.id);if(d&&!d.path.length){d.x=f.x;d.y=f.y}}}
@@ -265,8 +280,9 @@ export function bagaworld(c){
    else if(S.phase==='fight'&&c&&c.id===fight.me){F_.timer-=dt;if(F_.timer<=0){F_.timer=60;doAct({a:'end',id:c.id})}}
    else if(o&&S.phase==='fight'&&c?.kind==='player'&&(o.quiet||0)>65&&o.recv===o.applied){o.quiet=0;doAct({a:'end',id:c.id})}   // joueur absent
    else if(o&&S.phase==='place'&&fight.kind==='pve'&&!F_.went&&t-F_.t0>32&&fight.S.f[0]?.id===fight.me){F_.went=true;doAct({a:'go'})}}
+  const ready=myTurnNow();if(ready!==F_.wasReady){F_.wasReady=ready;fightUI()}
   hud();fightHud()}
- function drawFight(){const S=fight.S,A=fight.A;if(A.dungeon)R.draw(M.dung[A.room]||(M.dung[A.room]=MD.dungeonMesh(R,A)),M4.id());else drawWorld(true);
+ function drawFight(){const S=fight.S,A=fight.A;if(A.dungeon)R.draw(M.dung[A.room]||(M.dung[A.room]=MD.dungeonMesh(R,A)),M4.id());else if(A.board){if(!fight.mesh)fight.mesh=MD.arenaMesh(R,A);R.draw(fight.mesh,M4.id())}else drawWorld(true);
   const me=meF(),mt=myTeam(),myTurn=myTurnNow();
   // grille : cases de placement, de déplacement, de portée et de zone
   const marks=new Map();const mark=(x,y,col,a)=>marks.set(x+','+y,[x,y,col,a]);
@@ -287,7 +303,7 @@ export function bagaworld(c){
  // combattant fictif pour calculer la part d'XP des autres joueurs du groupe
  const pseudoChar=f=>({cls:f.cls,xp:D.xpFor(f.lvl),base:{wis:f.stats?.wis||0},eq:{}});
  const hashId=s=>{let h=0;for(const ch2 of String(s))h=(h*31+ch2.charCodeAt(0))|0;return h};
- function endFight(){if(!fight)return;const S=fight.S,g=fight.g,me=meF(),mt=me?.team??0,won=S.winner===mt,pvp=fight.kind==='pvp';
+ function endFight(){if(!fight)return;if(fight.mesh){R.free(fight.mesh);fight.mesh=null}const S=fight.S,g=fight.g,me=meF(),mt=me?.team??0,won=S.winner===mt,pvp=fight.kind==='pvp';
   if(fight.online){NET.ignore.add(fight.online.id);online_.bwFightDone(fight.online.id).catch(()=>{})}
   if(pvp){const foe=S.f.find(f=>f.team!==mt);panel(`<div class="bw-result ${won?'win':'lose'}"><h2>${won?T('Duel gagné !','Duel won!'):T('Duel perdu…','Duel lost…')}</h2>
     <p>${won?T(`${esc(foe?.name)} mord la poussière. Tu peux frimer à Bagatown.`,`${esc(foe?.name)} bites the dust. You may now show off in Bagatown.`):T(`${esc(foe?.name)} t’a eu. Revanche ?`,`${esc(foe?.name)} got you. Rematch?`)}</p>
@@ -346,23 +362,29 @@ export function bagaworld(c){
   box.querySelector('.bw-timeline').innerHTML=(S.phase==='place'?S.f.filter(f=>f.alive):S.order.map(id=>S.f.find(f=>f.id===id))).map(f=>`<span class="bw-tl ${f.team!==mt?'red':'blue'}${f===F.current(S)?' cur':''}${f.alive?'':' dead'}" data-id="${f.id}">${f.kind==='mob'?mobIcon(f.mob):D.CLASSES[f.cls].ic}${f.kind==='player'&&f.ready&&S.phase==='place'?'<u>✓</u>':''}<i style="width:${(100*f.hp/f.maxHp).toFixed(0)}%"></i></span>`).join('');
   box.querySelectorAll('.bw-tl').forEach(el=>c.listen(el,'click',()=>showFighter(S.f.find(f=>f.id===el.dataset.id))));
   const list=[...me.spells,...(me.weapon?['weapon']:[])];
-  box.querySelector('.bw-spells').innerHTML=list.map(id=>{const sp=F.spellOf(me,id),cd=me.cds[id]||0,used=sp.perTurn&&(me.uses[id]||0)>=sp.perTurn,off=!myTurnNow()||sp.pa>me.pa||cd>0||used;
-   return `<button class="bw-sp${F_.sel===id?' on':''}${off?' off':''}" data-s="${id}"><span>${sp.ic}</span><b>${sp.pa}</b>${cd>0?`<i>${cd}</i>`:''}</button>`}).join('');
+  box.querySelector('.bw-spells').innerHTML=list.map(id=>{const sp=F.spellOf(me,id),cd=me.cds[id]||0,used=sp.perTurn&&(me.uses[id]||0)>=sp.perTurn,off=S.phase!=='fight'||F.current(S)!==me||sp.pa>me.pa||cd>0||used;
+   return `<button class="bw-sp${F_.sel===id?' on':''}${off?' off':''}" data-s="${id}"><span>${sp.ic}</span><b>${sp.pa}</b>${cd>0?`<i>${cd}</i>`:sp.perTurn>1?`<em>${Math.max(0,sp.perTurn-(me.uses[id]||0))}</em>`:''}</button>`}).join('');
   box.querySelectorAll('.bw-sp').forEach(b=>{let lp=null;c.listen(b,'pointerdown',()=>{lp=setTimeout(()=>{lp=null;spellInfo(b.dataset.s,me)},500)});
    c.listen(b,'pointerup',()=>{if(!lp)return;clearTimeout(lp);lp=null;const id=b.dataset.s;if(b.classList.contains('off')){spellInfo(id,me);return}F_.sel=F_.sel===id?null:id;SFX.click();fightUI()})})}
  const mobIcon=id=>({moutoufou:'🐑',poultoss:'🐤',vermichelle:'🐛',crabouillon:'🦀',champi:'🍄',moustikouille:'🦟',sanglier:'🐗',araknee:'🕷️',moutonroyal:'👑'})[id]||'👾';
  function fightHud(){const box=ui.querySelector('.bw-fight');if(!box||!fight)return;const S=fight.S,me=meF();if(!me)return;
-  box.querySelector('.bw-pa').textContent=`⭐ ${me.pa} ${T('PA','AP')}`;box.querySelector('.bw-pm').textContent=`👟 ${me.pm} ${T('PM','MP')}`;
+  box.querySelector('.bw-pa').textContent=`⭐ ${me.pa} ${T('PA','AP')}`;const minPa=Math.min(99,...[...me.spells,...(me.weapon?['weapon']:[])].map(id=>{const sp=F.spellOf(me,id);return sp&&!(me.cds[id]>0)&&!(sp.perTurn&&(me.uses[id]||0)>=sp.perTurn)?sp.pa:99}));box.querySelector('.bw-end').classList.toggle('pulse',myTurnNow()&&me.pm===0&&me.pa<minPa);box.querySelector('.bw-pm').textContent=`👟 ${me.pm} ${T('PM','MP')}`;
   const c2=F.current(S);box.querySelector('.bw-timer').textContent=S.phase==='place'?(fight.online&&fight.kind==='pve'?`${T('Placement','Placement')} · ${Math.max(0,Math.ceil(32-(t-F_.t0)))}`:T('Placement','Placement')):c2===me?`⏱ ${Math.ceil(F_.timer)}`:`${T('Tour de','Turn:')} ${esc(c2?fname(c2):'')}`;
   if(!fightHud.n||fightHud.n++%10===0){fightHud.n=1;const tl=[...box.querySelectorAll('.bw-tl')];tl.forEach(el=>{const f=S.f.find(o=>o.id===el.dataset.id);if(!f)return;el.querySelector('i').style.width=(100*f.hp/f.maxHp).toFixed(0)+'%';el.classList.toggle('cur',f===c2);el.classList.toggle('dead',!f.alive)})}}
- function showFighter(f){if(!f)return;const isMob=f.kind==='mob',M2=isMob?D.MOBS[f.mob]:null;
-  panel(`<h3>${isMob?mobIcon(f.mob):D.CLASSES[f.cls].ic} ${esc(isMob?nm(M2):f.name)} <small>${T('niv.','lvl')} ${f.lvl}</small></h3>${isMob?`<p class="bw-flav">${esc(X(M2.d))}</p>`:''}
-   <div class="bw-kv"><span>❤️ ${f.hp}/${f.maxHp}</span><span>⭐ ${f.pa0} PA</span><span>👟 ${f.pm0} PM</span>${Object.entries(f.res).filter(([,v])=>v).map(([e,v])=>`<span>${D.EL[e].ic} ${v>0?'+':''}${v}%</span>`).join('')}</div>
-   ${f.buffs.length?`<p>${f.buffs.map(b=>b.dot?`☠️ ${b.v}/${T('tour','turn')}`:b.hot?`🌿 ${b.v}/${T('tour','turn')}`:`${b.v>0?'+':''}${b.v} ${nm(D.STATS[b.stat])} (${b.dur})`).join(' · ')}</p>`:''}
-   <button class="bw-b" data-close>${T('Fermer','Close')}</button>`)}
- function spellInfo(id,f){const sp=F.spellOf(f,id),[a,b]=F.spellRange(f,sp);
+ function showFighter(f){if(!f)return;const isMob=f.kind==='mob',M2=isMob?D.MOBS[f.mob]:null,ally=fight&&f.team===myTeam();
+  const list=[...f.spells,...(f.weapon?['weapon']:[])].map(id=>[id,F.spellOf(f,id)]).filter(([,sp])=>sp);
+  const card=panel(`<h3>${isMob?mobIcon(f.mob):D.CLASSES[f.cls].ic} ${esc(isMob?nm(M2):f.name)} <small>${isMob?'':nm(D.CLASSES[f.cls])+' · '}${T('niv.','lvl')} ${f.lvl}${f.boss?' · 👑 boss':''}</small></h3>
+   <div class="bw-fhp ${ally?'ally':'foe'}"><i style="width:${(100*f.hp/f.maxHp).toFixed(0)}%"></i><span>❤️ ${f.hp} / ${f.maxHp}</span></div>${isMob?`<p class="bw-flav">${esc(X(M2.d))}</p>`:''}
+   <div class="bw-kv"><span>⭐ ${f.pa0} PA</span><span>👟 ${f.pm0} PM</span><span>⚡ ${f.init} init.</span>${Object.entries(f.res).filter(([,v])=>v).map(([e,v])=>`<span class="${v>0?'':'bw-red'}">${D.EL[e].ic} ${v>0?'+':''}${v}%</span>`).join('')}</div>
+   ${f.buffs.length?`<p class="bw-small">${T('Effets','Effects')} : ${f.buffs.map(b=>b.dot?`☠️ ${b.v}/${T('tour','turn')} (${b.dur})`:b.hot?`🌿 +${b.v}/${T('tour','turn')} (${b.dur})`:`${b.v>0?'+':''}${b.v} ${nm(D.STATS[b.stat])} (${b.dur})`).join(' · ')}</p>`:''}${f.invis?`<p class="bw-small">👻 ${T('Invisible','Invisible')} (${f.invis})</p>`:''}
+   <div class="bw-fsp">${list.map(([id,sp])=>{const [a,b]=F.spellRange(f,sp);return `<button data-s="${id}"><span>${sp.ic}</span><b>${esc(nm(sp))}</b><small>${sp.pa} PA · 🎯 ${a}-${b}${sp.perTurn?` · ${sp.perTurn}/${T('tour','turn')}`:''}</small><em>${sp.fx.map(e=>fxText(e,f)).filter(Boolean).join(' · ')}</em></button>`}).join('')}</div>
+   <button class="bw-b" data-close>${T('Fermer','Close')}</button>`,'fighter');
+  card.querySelectorAll('[data-s]').forEach(b=>c.listen(b,'click',()=>spellInfo(b.dataset.s,f,()=>showFighter(f))))}
+ function spellInfo(id,f,back){const sp=F.spellOf(f,id),[a,b]=F.spellRange(f,sp);
   panel(`<h3>${sp.ic} ${esc(nm(sp))}</h3>${sp.d?`<p class="bw-flav">${esc(X(sp.d))}</p>`:''}<div class="bw-kv"><span>⭐ ${sp.pa} PA</span><span>🎯 ${a}-${b}</span>${sp.line?`<span>➖ ${T('en ligne','in line')}</span>`:''}${sp.los?`<span>👁️ ${T('ligne de vue','line of sight')}</span>`:''}${sp.cd?`<span>⏳ ${sp.cd} ${T('tours','turns')}</span>`:''}${sp.perTurn?`<span>🔁 ${sp.perTurn}/${T('tour','turn')}</span>`:''}</div>
-   <ul class="bw-fx">${sp.fx.map(e=>fxText(e,f)).filter(Boolean).map(s=>`<li>${s}</li>`).join('')}</ul><button class="bw-b" data-close>${T('Fermer','Close')}</button>`)}
+   <ul class="bw-fx">${sp.fx.map(e=>fxText(e,f)).filter(Boolean).map(s=>`<li>${s}</li>`).join('')}</ul>${sp.aoe?`<p class="bw-small">💥 ${T('Zone','Area')} : ${({cross:T('croix','cross'),circle:T('cercle','circle'),line:T('ligne','line'),ring:T('anneau','ring'),cell:T('case','cell')})[sp.aoe.s]||sp.aoe.s} ${sp.aoe.r||''}</p>`:''}
+   ${sp.lvl&&ch&&!sp.mob&&C.level(ch)<sp.lvl?`<p class="bw-small bw-red">🔒 ${T('Débloqué au niveau','Unlocked at level')} ${sp.lvl}</p>`:''}<div class="bw-btns">${back?`<button class="bw-b" data-back>${T('Retour','Back')}</button>`:''}<button class="bw-b" data-close>${T('Fermer','Close')}</button></div>`,'spell');
+  if(back)c.listen(ui.querySelector('.bw-panel [data-back]'),'click',back)}
  function fxText(e,f){const k=f?F.rank(f):1,r=(a,b)=>`${Math.round(a*k)}-${Math.round(b*k)}`;switch(e.t){case 'dmg':return `${D.EL[e.el].ic} ${r(e.min,e.max)} ${T('dégâts','damage')} ${nm(D.EL[e.el])}`;case 'heal':return `💚 ${T('soigne','heals')} ${r(e.min,e.max)}`;
   case 'push':return `💨 ${T('repousse de','pushes')} ${e.n}`;case 'tp':return `🦘 ${T('téléporte sur la case','teleports to the cell')}`;case 'dmgAround':return `${D.EL[e.el].ic} ${r(e.min,e.max)} ${T('autour de l’arrivée','around landing')}`;
   case 'buff':return `⬆️ +${e.v} ${nm(D.STATS[e.stat])} (${e.dur} ${T('tours','turns')})`;case 'debuff':return `⬇️ −${e.v} ${nm(D.STATS[e.stat])} (${e.dur} ${T('tour(s)','turn(s)')})`;
@@ -370,7 +392,8 @@ export function bagaworld(c){
   case 'trap':return `🪤 ${T('piège','trap')} : ${e.fx.map(q=>fxText(q,f)).join(', ')}`;default:return ''}}
 
  // ---- panneaux
- function panel(html,cls=''){const el=ui.querySelector('.bw-panel');el.className='bw-panel '+cls;el.innerHTML=`<div class="bw-card">${html}</div>`;el.hidden=false;panelOpen=cls||'panel';
+ const FULL=new Set(['bag','stats','jobs','spells','quests','map','craft','fighter','spell']);
+ function panel(html,cls=''){const el=ui.querySelector('.bw-panel');el.className='bw-panel '+cls+(FULL.has(cls)?' full':'');el.innerHTML=`<div class="bw-card">${html}</div>`;el.hidden=false;panelOpen=cls||'panel';
   el.querySelectorAll('[data-close]').forEach(b=>c.listen(b,'click',closePanel));c.listen(el,'click',e=>{if(e.target===el)closePanel()});return el.querySelector('.bw-card')}
  function closePanel(){const el=ui.querySelector('.bw-panel');if(el){el.hidden=true;el.innerHTML=''}panelOpen=null;dialogOpen=false;hud();setTimeout(nextInvite,50)}
  function openPanel(p){({bag,stats,spells,quests,map,chat:chatPanel,group:groupPanel})[p]?.()}
@@ -391,22 +414,47 @@ export function bagaworld(c){
    <div class="bw-stats">${['vit','wis','str','int','cha','agi'].map(k=>`<div><span>${D.STATS[k].ic} ${nm(D.STATS[k])}</span><b>${d.stats[k]??d.vit}</b><small>${ch.base[k]?`(${ch.base[k]} ${T('investis','spent')})`:''}</small><button data-k="${k}" ${ch.points>=C.COST[k]?'':'disabled'}>+</button><button data-k10="${k}" ${ch.points>=C.COST[k]*10?'':'disabled'}>+10</button></div>`).join('')}</div>
    <div class="bw-kv"><span>❤️ ${d.maxHp} PV</span><span>⭐ ${d.pa} PA</span><span>👟 ${d.pm} PM</span><span>⚡ ${d.init} init.</span>${d.range?`<span>🎯 +${d.range}</span>`:''}</div>
    <p class="bw-small">${T('Force : Terre · Intelligence : Feu et soins · Chance : Eau · Agilité : Air, fuite et tacle · Sagesse : XP et butin.','Strength: Earth · Intelligence: Fire and heals · Chance: Water · Agility: Air, escape and tackle · Wisdom: XP and drops.')}</p>
-   <button class="bw-b" data-close>${T('Fermer','Close')}</button>`);
+   <button class="bw-b" data-close>${T('Fermer','Close')}</button>`,'stats');
   card.querySelectorAll('[data-k],[data-k10]').forEach(b=>c.listen(b,'click',()=>{const k=b.dataset.k||b.dataset.k10;if(C.spend(ch,k,b.dataset.k10?10:1)){SFX.click();store();stats()}}));c.listen(card.querySelector('[data-tab]'),'click',jobsPanel)}
  function spells(){const L=C.level(ch);const card=panel(`<h3>✨ ${T('Sorts','Spells')} <small>${nm(D.CLASSES[ch.cls])}</small></h3><div class="bw-splist">${D.classSpells(ch.cls).map(id=>{const sp=D.SPELLS[id],ok=sp.lvl<=L;
-   return `<button class="bw-spl${ok?'':' lock'}" data-s="${id}"><span>${sp.ic}</span><b>${esc(nm(sp))}</b><small>${ok?`${sp.pa} PA · ${sp.range.join('-')} ${T('PO','range')}`:`${T('niveau','level')} ${sp.lvl}`}</small></button>`}).join('')}</div><button class="bw-b" data-close>${T('Fermer','Close')}</button>`);
-  card.querySelectorAll('.bw-spl').forEach(b=>c.listen(b,'click',()=>spellInfo(b.dataset.s,C.fighterOf(ch,'x'))))}
+   return `<button class="bw-spl${ok?'':' lock'}" data-s="${id}"><span>${sp.ic}</span><b>${esc(nm(sp))}</b><small>${ok?`${sp.pa} PA · ${sp.range.join('-')} ${T('PO','range')}`:`${T('niveau','level')} ${sp.lvl}`}</small></button>`}).join('')}</div><button class="bw-b" data-close>${T('Fermer','Close')}</button>`,'spells');
+  card.querySelectorAll('.bw-spl').forEach(b=>c.listen(b,'click',()=>spellInfo(b.dataset.s,C.fighterOf(ch,'x'),spells)))}
  function quests(){const rows=Object.entries(D.QUESTS).map(([id,q])=>{const s=C.questState(ch,id);if(s==='locked')return '';const prog=ch.quests[id];
    return `<div class="bw-q ${s}"><b>${s==='done'?'✅':s==='ready'?'❓':s==='active'?'📜':'❗'} ${esc(nm(q))}</b><small>${esc(nm(D.NPCS[q.giver]))}</small>${s==='active'||s==='ready'?`<p>${[...Object.entries(q.kill||{}).map(([m,n])=>`${mobIcon(m)} ${esc(nm(D.MOBS[m]))} ${Math.min(n,prog[m]||0)}/${n}`),...Object.entries(q.bring||{}).map(([i,n])=>`${D.ITEMS[i].ic} ${esc(nm(D.ITEMS[i]))} ${Math.min(n,ch.inv[i]||0)}/${n}`)].join(' · ')}</p>`:s==='available'?`<p class="bw-small">${T('À demander à','Ask')} ${esc(nm(D.NPCS[q.giver]))}</p>`:''}</div>`}).join('');
-  panel(`<h3>📜 ${T('Quêtes','Quests')}</h3><div class="bw-qs">${rows}</div><button class="bw-b" data-close>${T('Fermer','Close')}</button>`)}
- function map(){const card=panel(`<h3>🗺️ ${T('Carte du monde','World map')}</h3><canvas class="bw-map" width="224" height="224"></canvas><div class="bw-legend">${Object.entries(D.ZONES).map(([k,z])=>`<span><i class="z-${k}"></i>${esc(nm(z))} ${z.lvl!=='—'?`(${z.lvl})`:''}</span>`).join('')}</div><button class="bw-b" data-close>${T('Fermer','Close')}</button>`,'map');
-  const x=card.querySelector('canvas').getContext('2d'),N=W.N,s=224/N,col={0:'#7cc45a',1:'#4f8f45',2:'#ecd9a0',3:'#3f97d8',4:'#b9935f',5:'#c9c3b6',6:'#86c95e',7:'#9a6b3e',8:'#8ab069'};
-  for(let z=0;z<N;z++)for(let xx=0;xx<N;xx++){const k=z*N+xx;x.fillStyle=W.prop[k]===WW.P.wall?'#8a5e35':[WW.P.tree,WW.P.pine,WW.P.shroom].includes(W.prop[k])?'#3b7a35':col[W.type[k]];x.fillRect(xx*s,z*s,s+.5,s+.5)}
-  for(const zp of W.zaaps){x.fillStyle=disc.has(zp.id)?'#8c7cd9':'#666';x.beginPath();x.arc(zp.x*s,zp.z*s,4,0,7);x.fill()}
-  for(const o of NET.others.values()){x.fillStyle=o.d.mate?'#3fdc6a':'#ffffff';x.beginPath();x.arc(o.x*s,o.z*s,3.5,0,7);x.fill()}
-  for(const m of NET.group)if(m.id!==NET.pub&&m.online&&!NET.others.has(m.id)){x.fillStyle='#3fdc6a';x.beginPath();x.arc(m.x*s,m.z*s,3.5,0,7);x.fill()}
-  x.fillStyle='#8a3bd9';x.fillRect(W.cave.x*s-4,W.cave.z*s-6,8,8);
-  x.fillStyle='#e2453c';x.beginPath();x.arc(P.x*s,P.z*s,5,0,7);x.fill();x.strokeStyle='#fff';x.lineWidth=2;x.stroke()}
+  panel(`<h3>📜 ${T('Quêtes','Quests')}</h3><div class="bw-qs">${rows}</div><button class="bw-b" data-close>${T('Fermer','Close')}</button>`,'quests')}
+ // carte du monde : points d'intérêt ; toucher = nom, toucher deux fois = y aller à pied
+ function pois(){const out=[],npcIc=id=>{const n=D.NPCS[id];const m=questMark(id).trim();return m||(n.job?D.JOBS[n.job].ic:n.shop?'🛒':n.reset?'🎓':'💬')};
+  for(const zp of W.zaaps)out.push({x:zp.x,z:zp.z,ic:disc.has(zp.id)?'🌀':'🔒',label:'Bagaap · '+nm(D.ZONES[zp.id]),goal:{k:'zaap',o:zp,x:zp.x,z:zp.z}});
+  for(const n of W.npcs){const N=D.NPCS[n.id];out.push({x:n.x,z:n.z,ic:npcIc(n.id),label:nm(N)+(N.job?` · ${nm(D.JOBS[N.job])}`:N.shop?` · ${T('boutique','shop')}`:''),goal:{k:'npc',o:n,x:n.x,z:n.z},quest:/[❗❓]/.test(npcIc(n.id))})}
+  out.push({x:W.cave.x,z:W.cave.z,ic:'🍄',label:`${T('Donjon','Dungeon')} · ${nm(D.DUNGEON)} (${D.DUNGEON.lvl})`,goal:{k:'cave',o:W.cave,x:W.cave.x,z:W.cave.z-1.4}});
+  out.push({x:W.throne.x,z:W.throne.z,ic:'👑',label:T('Trône du Mouton Royal (boss 20)','Royal Sheep’s Throne (boss 20)'),goal:null});
+  out.push({x:W.phoenix.x,z:W.phoenix.z,ic:'🔥',label:T('Statue du Bagaphénix (réveil après une défaite)','Bagaphoenix statue (respawn)'),goal:null});
+  for(const m of NET.group)if(m.id!==NET.pub&&m.online)out.push({x:m.x,z:m.z,ic:'👥',label:m.cname||m.name,goal:null});
+  return out}
+ function map(){const card=panel(`<h3>🗺️ ${T('Carte du monde','World map')}</h3><div class="bw-mapwrap"><canvas class="bw-map" width="448" height="448"></canvas></div>
+   <div class="bw-mapinfo">${T('Touche un lieu pour son nom, touche deux fois pour y aller à pied.','Tap a place for its name, double-tap to walk there.')}</div>
+   <div class="bw-legend">${Object.entries(D.ZONES).map(([k,z])=>`<span>${esc(nm(z))}${z.lvl!=='—'?` <b>${z.lvl}</b>`:''}</span>`).join('')}</div>
+   <div class="bw-legend">❗ ${T('quête à prendre','quest to take')} · ❓ ${T('quête à rendre','quest to hand in')} · 🌀 Bagaap · 🍄 ${T('donjon','dungeon')} · 🛒 ${T('boutique','shop')} · 🪓⛏️🌿🎣 ${T('métiers','jobs')}</div>
+   <button class="bw-b" data-close>${T('Fermer','Close')}</button>`,'map');
+  const cvm=card.querySelector('canvas'),x=cvm.getContext('2d'),N=W.N,s=448/N,col={0:'#7cc45a',1:'#4f8f45',2:'#ecd9a0',3:'#3f97d8',4:'#c9a36a',5:'#c9c3b6',6:'#8fd06a',7:'#9a6b3e',8:'#8ab069'};
+  const list=pois();let sel=null,lastTap=0;
+  const draw=()=>{for(let z=0;z<N;z++)for(let xx=0;xx<N;xx++){const k=z*N+xx,pr=W.prop[k];x.fillStyle=pr===WW.P.wall?'#8a5e35':[WW.P.tree,WW.P.pine,WW.P.palm,WW.P.shroom].includes(pr)?'#3b7a35':pr===WW.P.rock?'#9a9a9a':col[W.type[k]];x.fillRect(xx*s,z*s,s+.5,s+.5)}
+   x.font='15px sans-serif';x.textAlign='center';x.textBaseline='middle';
+   for(const o of NET.others.values()){x.fillStyle=o.d.mate?'#3fdc6a':'#ffffff';x.beginPath();x.arc(o.x*s,o.z*s,4,0,7);x.fill()}
+   for(const p of list){x.fillStyle='rgba(255,255,255,.85)';x.beginPath();x.arc(p.x*s,p.z*s,p===sel?13:10,0,7);x.fill();if(p===sel){x.strokeStyle='#e2453c';x.lineWidth=2.5;x.stroke()}x.fillText(p.ic,p.x*s,p.z*s+1)}
+   x.fillStyle='#e2453c';x.beginPath();x.arc(P.x*s,P.z*s,6,0,7);x.fill();x.strokeStyle='#fff';x.lineWidth=2.5;x.stroke();
+   if(P.path.length){x.strokeStyle='rgba(226,69,60,.8)';x.setLineDash([4,4]);x.beginPath();x.moveTo(P.x*s,P.z*s);for(const [a,b2] of P.path)x.lineTo(a*s,b2*s);x.stroke();x.setLineDash([])}};
+  draw();const info=card.querySelector('.bw-mapinfo');
+  c.listen(cvm,'click',e=>{const r=cvm.getBoundingClientRect(),mx=(e.clientX-r.left)/r.width*N,mz=(e.clientY-r.top)/r.height*N;let best=null;for(const p of list){const d=Math.hypot(p.x-mx,p.z-mz);if(d<4.5&&(!best||d<best.d))best={p,d}}
+   const now=performance.now(),dbl=now-lastTap<380;lastTap=now;sel=best?.p||null;draw();
+   if(dbl){const tgt=sel?(sel.goal||{x:sel.x,z:sel.z}):{x:mx,z:mz};closePanel();if(mode!=='world')return;P.sit=false;goTo(tgt.x,tgt.z,sel?.goal||null);if(P.path.length){toastMsg(T('En route !','On my way!'),'good');SFX.click()}return}
+   info.textContent=sel?sel.label:T('Touche deux fois pour aller ici.','Double-tap to walk here.')})}
+ function groupCard(g){const L=C.level(ch),lvl=WW.groupLevel(g),danger=lvl>L*1.8?'hard':lvl>L*1.1?'mid':'easy';
+  const card=panel(`<h3>${g.aggro?'😡 ':''}${T('Groupe de monstres','Monster group')} <small>${T('niveau total','total level')} <b class="bw-${danger}">${lvl}</b></small></h3>
+   <div class="bw-glist">${g.members.map(([id,l])=>{const M2=D.MOBS[id];return `<div><span>${mobIcon(id)}</span><b>${esc(nm(M2))}</b><small>${T('niv.','lvl')} ${l} · ❤️ ${M2.hp0+M2.hp*l} · ⭐ ${M2.pa} · 👟 ${M2.pm}${Object.entries(M2.res).filter(([,v])=>v).map(([e,v])=>` · ${D.EL[e].ic}${v>0?'+':''}${v}%`).join('')}</small></div>`}).join('')}</div>
+   <p class="bw-small">${danger==='hard'?T('Très dangereux pour ton niveau. Viens en groupe.','Very dangerous for your level. Bring a group.'):danger==='mid'?T('Costaud. Prépare des potions.','Tough. Bring potions.'):T('Ça devrait aller.','Should be fine.')}</p>
+   <div class="bw-btns"><button class="bw-b primary" data-atk>⚔️ ${T('Attaquer','Attack')}</button><button class="bw-b" data-close>${T('Fermer','Close')}</button></div>`,'group-mob');
+  c.listen(card.querySelector('[data-atk]'),'click',()=>{closePanel();goTo(g.x,g.z,{k:'mob',o:g,x:g.x,z:g.z})})}
  function zaapPanel(zp){const list=W.zaaps.filter(z=>z.id!==zp.id);const card=panel(`<h3>🌀 Bagaap · ${esc(nm(D.ZONES[zp.id]))}</h3><p class="bw-small">${T('Voyage instantané vers un Bagaap déjà découvert. 10 kamas (gratuit vers Bagatown).','Instant travel to a Bagaap you already found. 10 kamas (free to Bagatown).')}</p>
    <div class="bw-zlist">${list.map(z=>`<button class="bw-b" data-z="${z.id}" ${disc.has(z.id)?'':'disabled'}>${disc.has(z.id)?'🌀':'🔒'} ${esc(nm(D.ZONES[z.id]))} <small>${D.ZONES[z.id].lvl}</small></button>`).join('')}</div><button class="bw-b" data-close>${T('Fermer','Close')}</button>`);
   card.querySelectorAll('[data-z]').forEach(b=>c.listen(b,'click',()=>{const z=W.zaaps.find(q=>q.id===b.dataset.z),cost=z.id==='town'?0:10;if(ch.kamas<cost){toastMsg(T('Pas assez de kamas','Not enough kamas'));return}
@@ -490,7 +538,7 @@ export function bagaworld(c){
     const hv=Object.values(D.HARVEST).filter(h=>h.job===id);
     return `<div class="${L?'':'off'}"><b>${J.ic} ${nm(J)}</b>${L?`<small>${T('niveau','level')} ${L}</small><div class="bw-xp jx"><i style="width:${L>=D.JOB_MAX?100:(100*(xp-x0)/Math.max(1,x1-x0)).toFixed(0)}%"></i></div>`:`<small>${T('Pas appris','Not learned')}</small>`}
      <p>${hv.map(h=>`<span class="${L>=h.lvl?'':'lk'}">${D.ITEMS[h.item].ic} ${esc(nm(D.ITEMS[h.item]))}${L>=h.lvl?'':` (${h.lvl})`}</span>`).join(' ')}</p><p class="bw-small">${L?T(`Atelier : ${D.NPCS[J.master].fr}`,`Workshop: ${D.NPCS[J.master].en}`):T(`À apprendre auprès de ${D.NPCS[J.master].fr}`,`Learn it from ${D.NPCS[J.master].en}`)}</p></div>`}).join('')}</div>
-   ${sets.length?`<p class="bw-small">🧩 ${sets.map(s=>`<b>${esc(nm(D.SETS[s.id]))}</b> (${s.count})`).join(' · ')}</p>`:''}<button class="bw-b" data-close>${T('Fermer','Close')}</button>`);
+   ${sets.length?`<p class="bw-small">🧩 ${sets.map(s=>`<b>${esc(nm(D.SETS[s.id]))}</b> (${s.count})`).join(' · ')}</p>`:''}<button class="bw-b" data-close>${T('Fermer','Close')}</button>`,'jobs');
   c.listen(card.querySelector('[data-tab]'),'click',stats)}
  // la grotte
  function dungeonPanel(){const key=ch.inv[D.DUNGEON.key]||0,L=C.level(ch),mates=NET.group.filter(m=>m.online&&m.id!==NET.pub);
@@ -602,9 +650,9 @@ export function bagaworld(c){
  // ================= BOUCLE =================
  function frameDraw(){const w=wrap.clientWidth,h=wrap.clientHeight,dpr=Math.min(window.devicePixelRatio||1,1.75);const W2=Math.round(w*dpr),H2=Math.round(h*dpr);if(cv.width!==W2||cv.height!==H2){cv.width=W2;cv.height=H2}
   if(mode==='create'){drawCreate();return}
-  cam.el+=((mode==='fight'?1.08:.92)-cam.el)*Math.min(1,dt*3);camera();const cave=mode==='fight'&&fight?.A.dungeon,sky=cave?[.05,.04,.07]:zoneNow==='woods'?[.55,.72,.62]:zoneNow==='hills'?[.7,.8,.92]:[.62,.82,.95];R.frame(cv.width,cv.height,view.VP,view.eye,sky,cave?[cam.dist+2,cam.dist+16]:[cam.dist+10,cam.dist+26]);
+  cam.el+=((mode==='fight'?1.0:.74)-cam.el)*Math.min(1,dt*3);camera();const cave=mode==='fight'&&fight?.A.dungeon,board=mode==='fight'&&fight?.A.board,sky=cave?[.05,.04,.07]:board?({woods:[.42,.58,.48],hills:[.66,.78,.9],beach:[.6,.82,.95]}[fight.A.theme]||[.6,.8,.93]):zoneNow==='woods'?[.55,.72,.62]:zoneNow==='hills'?[.7,.8,.92]:[.62,.82,.95];R.frame(cv.width,cv.height,view.VP,view.eye,sky,cave?[(cam.fd||20)/(cam.fzoom||1)+4,(cam.fd||20)/(cam.fzoom||1)+22]:board?[60,140]:[cam.dist+10,cam.dist+26]);
   if(mode==='fight'&&fight)drawFight();else drawWorld();
-  M.water??=MD.waterMesh(R,W);if(!cave)R.draw(M.water,M4.t(0,Math.sin(t*1.2)*.02,0),null,.82);drawFx();cam.shake=Math.max(0,cam.shake-dt*2)}
+  M.water??=MD.waterMesh(R,W);if(!cave&&!board)R.draw(M.water,M4.t(0,Math.sin(t*1.2)*.02,0),null,.82);drawFx();cam.shake=Math.max(0,cam.shake-dt*2)}
  function tick(d){dt=Math.min(d,.05);t+=dt;if(!alive)return;
   if(mode==='world'&&ch)worldTick();else if(mode==='fight'&&fight)fightTick();netTick();frameDraw()}
  // test automatique

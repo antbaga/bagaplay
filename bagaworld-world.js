@@ -84,13 +84,16 @@ export function walkable(W,x,z){x=Math.floor(x);z=Math.floor(z);if(x<0||z<0||x>=
 // passage d'une case à une voisine : marche d'une hauteur au plus
 export const canStep=(W,x0,z0,x1,z1)=>walkable(W,x1,z1)&&Math.abs(tileH(W,x0,z0)-tileH(W,x1,z1))<=1;
 
-// chemin (A*) entre deux cases, en 8 directions sans couper les coins
+// chemin (A*) entre deux cases, en 8 directions sans couper les coins (file de priorité en tas : rapide même à travers tout le monde)
 export function findPath(W,sx,sz,tx,tz,max=4000){sx=Math.floor(sx);sz=Math.floor(sz);tx=Math.floor(tx);tz=Math.floor(tz);if(!walkable(W,tx,tz))return null;
- const N=W.N,key=(x,z)=>z*N+x,open=[[sx,sz]],g=new Map([[key(sx,sz),0]]),prev=new Map(),hh=(x,z)=>Math.hypot(tx-x,tz-z);const f=new Map([[key(sx,sz),hh(sx,sz)]]);const closed=new Set();let n=0;
- while(open.length&&n++<max){let bi=0;for(let i=1;i<open.length;i++)if(f.get(key(...open[i]))<f.get(key(...open[bi])))bi=i;const [x,z]=open.splice(bi,1)[0],kk=key(x,z);if(closed.has(kk))continue;closed.add(kk);
-  if(x===tx&&z===tz){const out=[];let k=kk;while(k!==key(sx,sz)){out.unshift([k%N,Math.floor(k/N)]);k=prev.get(k)}return out}
+ const N=W.N,key=(x,z)=>z*N+x,hh=(x,z)=>Math.hypot(tx-x,tz-z),g=new Float32Array(N*N).fill(Infinity),prev=new Int32Array(N*N).fill(-1),closed=new Uint8Array(N*N);
+ const heap=[];const push=(f,k)=>{heap.push([f,k]);let i=heap.length-1;while(i>0){const p=(i-1)>>1;if(heap[p][0]<=heap[i][0])break;[heap[p],heap[i]]=[heap[i],heap[p]];i=p}};
+ const pop=()=>{const top=heap[0],last=heap.pop();if(heap.length){heap[0]=last;let i=0;for(;;){const l=2*i+1,r=l+1;let m=i;if(l<heap.length&&heap[l][0]<heap[m][0])m=l;if(r<heap.length&&heap[r][0]<heap[m][0])m=r;if(m===i)break;[heap[m],heap[i]]=[heap[i],heap[m]];i=m}}return top};
+ const s0=key(sx,sz);g[s0]=0;push(hh(sx,sz),s0);let n=0;
+ while(heap.length&&n++<max){const [,kk]=pop();if(closed[kk])continue;closed[kk]=1;const x=kk%N,z=(kk/N)|0;
+  if(x===tx&&z===tz){const out=[];let k=kk;while(k!==s0){out.unshift([k%N,(k/N)|0]);k=prev[k]}return out}
   for(let dz=-1;dz<=1;dz++)for(let dx=-1;dx<=1;dx++){if(!dx&&!dz)continue;const nx=x+dx,nz=z+dz;if(!canStep(W,x,z,nx,nz))continue;if(dx&&dz&&(!canStep(W,x,z,x+dx,z)||!canStep(W,x,z,x,z+dz)))continue;
-   const ng=g.get(kk)+(dx&&dz?1.414:1),k2=key(nx,nz);if(ng<(g.get(k2)??Infinity)){g.set(k2,ng);f.set(k2,ng+hh(nx,nz));prev.set(k2,kk);open.push([nx,nz])}}}
+   const k2=key(nx,nz),ng=g[kk]+(dx&&dz?1.414:1);if(ng<g[k2]){g[k2]=ng;prev[k2]=kk;push(ng+hh(nx,nz),k2)}}}
  return null}
 
 // ---- groupes de monstres qui se promènent autour de leur point d'apparition
@@ -137,3 +140,28 @@ export function harvestAt(W,x,z){x=Math.floor(x);z=Math.floor(z);if(x<0||z<0||x>
  if(W.type[k]===T.water&&W.h[k]===0)return {...HARVEST[zn==='beach'?'sea':'river'],k,x,z,fish:true};
  const name=pr===P.tree?'tree':pr===P.pine?'pine':pr===P.palm?'palm':pr===P.rock?(zn==='hills'?'rock_hills':'rock'):pr===P.bush?'bush':pr===P.deco?'deco':pr===P.shroom?'shroom':null;
  return name&&zn!=='town'?{...HARVEST[name],k,x,z,prop:pr}:null}
+
+// ---- carte de combat tactique (comme dans Dofus : on est transporté sur un plateau au thème de la zone)
+// 11 × 15 cases (taillé pour un téléphone en portrait), obstacles et trous selon le thème, toujours d'un seul tenant.
+export const BW=11,BHGT=15;
+const THEMES={
+ meadow:{obst:[[P.tree,.035],[P.bush,.035],[P.rock,.025]],holes:.02,hole:'water'},
+ beach:{obst:[[P.palm,.03],[P.rock,.04]],holes:.05,hole:'water'},
+ woods:{obst:[[P.tree,.06],[P.shroom,.03],[P.stump,.02]],holes:0,hole:'void'},
+ hills:{obst:[[P.pine,.05],[P.rock,.05]],holes:.03,hole:'void'},
+ throne:{obst:[[P.statue,.02],[P.barrel,.03]],holes:0,hole:'void'},
+ town:{obst:[[P.barrel,.03],[P.lamp,.02]],holes:0,hole:'void'}};
+export function fieldArena(theme,seed){const Th=THEMES[theme]||THEMES.meadow,w=BW,h=BHGT;
+ for(let tries=0;tries<40;tries++){const r=rng((seed+tries*7919)>>>0),grid=new Array(w*h).fill(0),props=new Array(w*h).fill(0);
+  for(let y=1;y<h-1;y++)for(let x=0;x<w;x++){if(y>=h-4||y<=3){if(r()<.03){grid[y*w+x]=1;props[y*w+x]=Th.obst[0][0]}continue}
+   let v=r(),acc=0;for(const [pp,pr] of Th.obst){acc+=pr*1.6;if(v<acc){grid[y*w+x]=1;props[y*w+x]=pp;break}}
+   if(!grid[y*w+x]&&r()<Th.holes*2.2){grid[y*w+x]=2;if(r()<.6&&x+1<w&&!grid[y*w+x+1])grid[y*w+x+1]=2}}
+  // départs : 3 rangées du bas pour les joueurs, 3 du haut pour les monstres
+  const pick=(y0,y1)=>{const c=[];for(let y=y0;y<=y1;y++)for(let x=0;x<w;x++)if(!grid[y*w+x])c.push([x,y]);for(let i=c.length-1;i>0;i--){const j=Math.floor(r()*(i+1));[c[i],c[j]]=[c[j],c[i]]}return c.slice(0,8)};
+  const start=[pick(h-3,h-1),pick(0,2)];
+  // tout doit être relié : départs et au moins 80 % des cases libres
+  const seen=new Set([start[0][0]+'']),q=[start[0][0]];for(let i=0;i<q.length;i++){const [x,y]=q[i];for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){const nx=x+dx,ny=y+dy;if(nx<0||ny<0||nx>=w||ny>=h||grid[ny*w+nx])continue;const k=nx+','+ny;if(seen.has(k))continue;seen.add(k);q.push([nx,ny])}}
+  const free=grid.filter(v=>v===0).length;if(start.flat().every(c=>seen.has(c+''))&&seen.size>=free*.8){
+   for(let i=0;i<grid.length;i++)if(!grid[i]&&!seen.has((i%w)+','+Math.floor(i/w))){grid[i]=1;props[i]=Th.obst[0][0]}
+   return {w,h,grid,props,hs:grid.map(()=>0),ox:600,oz:600,h0:0,start,board:true,theme,hole:Th.hole}}}
+ const grid=new Array(w*h).fill(0);return {w,h,grid,props:grid.slice(),hs:grid.map(()=>0),ox:600,oz:600,h0:0,start:[[[3,13],[5,13],[7,13],[4,12],[6,12],[5,14]],[[3,1],[5,1],[7,1],[4,2],[6,2],[5,0]]],board:true,theme,hole:Th.hole}}

@@ -1,3 +1,20 @@
+# 5.18.0 — 17 novembre 2026
+
+- BagaWorld, combats :
+  - Nouvelle carte de combat tactique, comme dans Dofus : on est transporté sur un plateau au thème de la zone (prairie, plage, bois, collines, trône, ville), en damier, avec son décor autour. 11 × 15 cases, cadré automatiquement entre le haut de l’écran et la barre de sorts. Pincer pour zoomer, glisser pour se déplacer quand on a zoomé.
+  - Corrigé : le personnage faisait un aller-retour en se déplaçant.
+  - Corrigé : après un premier lancer, toute la barre de sorts restait grisée ; les sorts à 2 ou 3 lancers par tour se relancent bien (le nombre de lancers restants s’affiche sur le bouton).
+  - Avec un sort sélectionné, toucher en dehors de la zone de tir annule le sort.
+  - Toucher un combattant ouvre sa fiche : PV, PA, PM, résistances, effets en cours, et ses sorts (qu’on peut ouvrir un par un).
+  - Les monstres contournent les obstacles au lieu de rester bloqués derrière.
+  - Le bouton « Fin du tour » clignote quand il ne reste plus rien à jouer.
+- BagaWorld, exploration :
+  - Vue moins plongeante, toujours de dessus.
+  - Toucher un groupe de monstres affiche sa composition (niveaux, PV, PA, PM, résistances) et sa dangerosité, avec un bouton « Attaquer ».
+  - Sac, caractéristiques, métiers, sorts, quêtes, carte et ateliers s’ouvrent en plein écran.
+  - Carte du monde avec les points d’intérêt (quêtes à prendre et à rendre, Bagaaps, donjon, boutiques, maîtres de métier, trône, statue, membres du groupe). Toucher un lieu donne son nom, le toucher deux fois y emmène à pied.
+  - Les fiches de sorts (onglet Sorts et fiches de combattants) ont un bouton Retour, la zone d’effet et le niveau de déblocage.
+
 # 5.17.0 — 17 novembre 2026
 
 - BagaWorld, étape 3 :

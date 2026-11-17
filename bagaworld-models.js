@@ -161,3 +161,23 @@ export function dungeonMesh(R,A){const b=new Builder(),ox=A.ox,oz=A.oz;
    for(const [dx,dz,c] of [[.32,.3,'#b48cff'],[-.3,.28,'#7ad9ff'],[.25,-.32,'#ffd36a']]){if(hash(k,dx*9+dz*7)<.5)continue;b.cbox(wx+.5+dx,.0,wz+.5+dz,.08,.25,.08,'#efe7d8');b.cbox(wx+.5+dx,.24,wz+.5+dz,.26,.1,.26,c)}}
   else if(hash(k,6)<.08){b.cbox(wx+.3+hash(k,7)*.4,0,wz+.3+hash(k,8)*.4,.1,.2,.1,'#efe7d8');b.cbox(wx+.3+hash(k,7)*.4,.2,wz+.3+hash(k,8)*.4,.22,.08,.22,hash(k,9)<.5?'#b48cff':'#7ad9ff')}}
  return R.mesh(b)}
+
+// ---- plateau de combat tactique : damier au thème de la zone, bord du plateau, décor tout autour (hors jeu)
+const BOARD={meadow:{a:'#86c95e',b:'#79bd52',side:'#8a6a45',out:'#5f9e45',deco:[P.tree,P.bush,P.rock,P.deco]},
+ beach:{a:'#ecd9a0',b:'#e2cd8f',side:'#b89a62',out:'#d8c487',deco:[P.palm,P.rock],water:'#3f97d8'},
+ woods:{a:'#5f8f4a',b:'#557f42',side:'#5a4632',out:'#3f6b35',deco:[P.tree,P.shroom,P.tree,P.stump]},
+ hills:{a:'#9bbf77',b:'#8db06a',side:'#7d7a72',out:'#7a9b5e',deco:[P.pine,P.rock,P.pine]},
+ throne:{a:'#d8d0c0',b:'#c9c0ae',side:'#9a9284',out:'#7cc45a',deco:[P.tree,P.bush,P.statue]},
+ town:{a:'#cfc8bb',b:'#c3bcad',side:'#9a9284',out:'#7cc45a',deco:[P.lamp,P.barrel,P.bush]}};
+export function arenaMesh(R,A){const b=new Builder(),T=BOARD[A.theme]||BOARD.meadow,ox=A.ox,oz=A.oz,M=4;
+ for(let y=-M;y<A.h+M;y++)for(let x=-M;x<A.w+M;x++){const wx=ox+x,wz=oz+y,inside=x>=0&&y>=0&&x<A.w&&y<A.h,k=(x+50)*977+(y+50)*131;
+  if(!inside){// décor autour : un peu plus bas, plus sombre, quelques éléments du thème
+   const yy=-.35;b.box(wx,yy-.05,wz,wx+1,yy,wz+1,shade(hex(T.out),.9+hash(k,1)*.12),'t');
+   const edge=Math.min(Math.abs(x<0?x:x-A.w+1),Math.abs(y<0?y:y-A.h+1));if(hash(k,2)<.32&&edge>=1)propMesh(b,T.deco[Math.floor(hash(k,3)*T.deco.length)],wx,yy,wz,k,0);continue}
+  const g=A.grid[y*A.w+x];
+  if(g===2){if(A.hole==='water'){b.box(wx,-.75,wz,wx+1,-.7,wz+1,T.water||'#3f97d8','t');b.box(wx,-.7,wz,wx+1,-.02,wz+1,'#6b5a45','nsew')}continue}
+  const c=(x+y)%2?T.a:T.b;for(let j=0;j<2;j++)for(let i=0;i<2;i++)b.box(wx+i*.5,-.04,wz+j*.5,wx+i*.5+.5,0,wz+j*.5+.5,shade(hex(c),.96+hash(x*2+i,y*2+j,7)*.07),'t');
+  // bord du plateau
+  for(const [dx,dy,f] of [[1,0,'e'],[-1,0,'w'],[0,1,'s'],[0,-1,'n']]){const nx=x+dx,ny=y+dy,out=nx<0||ny<0||nx>=A.w||ny>=A.h||A.grid[ny*A.w+nx]===2;if(out)b.box(wx,-.7,wz,wx+1,-.04,wz+1,T.side,f,shade(hex(T.side),.85))}
+  if(g===1)propMesh(b,A.props?.[y*A.w+x]||P.rock,wx,0,wz,k,0)}
+ return R.mesh(b)}

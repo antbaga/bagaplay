@@ -132,3 +132,13 @@ test('métiers : récolte, niveaux, fabrication, panoplies, quêtes à rapporter
  const W=WW.genWorld();for(const j of Object.values(D.JOBS))assert.ok(W.npcs.some(n=>n.id===j.master),j.master);
  const items=new Set();for(let z=0;z<W.N;z++)for(let x=0;x<W.N;x++){const h=WW.harvestAt(W,x,z);if(h)items.add(h.item)}for(const h of Object.values(D.HARVEST))assert.ok(items.has(h.item),'récoltable quelque part : '+h.item);
 });
+
+test('IA : un monstre contourne un mur au lieu de rester coincé derrière', async()=>{
+ const F=await import('../bagaworld-fight.js'),C=await import('../bagaworld-char.js');
+ // mur horizontal entre le monstre (en haut) et le joueur (en bas), ouvert seulement sur la droite
+ const w=9,h=9,grid=new Array(w*h).fill(0);for(let x=0;x<8;x++)grid[4*w+x]=1;
+ const A={w,h,grid,start:[[[2,7]],[[2,1]]]};const hero=C.fighterOf(C.newChar('H','viseur'),'me');const mob=C.mobFighter('sanglier',12,'m0');mob.pm=6;
+ const S=F.newFight(A,[[hero],[mob]],5);F.act(S,{a:'ready',id:'me'});if(F.current(S).id==='me')F.act(S,{a:'end'});
+ const m=S.f.find(f=>f.id==='m0'),y0=m.y;let moved=false;for(let i=0;i<6;i++){const a=F.aiAction(S);if(!a||a.a==='end')break;if(a.a==='move')moved=true;F.act(S,a)}
+ assert.ok(moved,'il bouge');assert.ok(m.x>=5||m.y>y0,'il part vers l’ouverture du mur (droite) : '+m.x+','+m.y);
+});
